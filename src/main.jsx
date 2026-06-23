@@ -194,10 +194,10 @@ const DOCUMENT_PAGE_SIZE = 18;
 const MAX_DOCUMENT_UPLOAD_BYTES = 6 * 1024 * 1024;
 
 const BRAND_ASSETS = {
-  vilaLogo: "/brand/logo-vilanova-transparent.png",
-  vilaLogoOnDark: "/brand/logo-vilanova-on-dark.png",
-  pafLogo: "/brand/logo-paf-transparent.png",
-  pafIcon: "/brand/paf-icon-transparent.png"
+  vilaLogo: "/brand/logo-vilanova.png",
+  vilaLogoOnDark: "/brand/logo-vilanova.png",
+  pafLogo: "/brand/logo-paf-card.png",
+  pafIcon: "/brand/paf-icon-card.png"
 };
 
 const INSTITUTIONAL_METRICS = [
