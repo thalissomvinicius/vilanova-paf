@@ -303,15 +303,11 @@ const PARTNER_GROUPS = [
 function App() {
   const path = window.location.pathname;
 
-  if (path.startsWith("/admin")) {
-    return <AdminGate />;
-  }
-
   if (path.startsWith("/produtor")) {
     return <ProducerPortal />;
   }
 
-  return <InstitutionalHome />;
+  return <AdminGate />;
 }
 
 function InstitutionalHome() {
