@@ -425,7 +425,7 @@ async function route(context: RouteContext): Promise<Response | null> {
   }
 
   if (method === "GET" && path === "/api/technical/me") {
-    const technical = await requireAccess(repository, auth, "canManageVisits");
+    const technical = await requireAccess(repository, auth, "canManageVisits", ["TECNICO", "ORGANIZACAO"]);
     if (technical instanceof Response) return technical;
     const producers = await repository.getScopedProducers(technical.id);
     const result = await repository.listVisits({}, producers.map((producer) => producer.id));
@@ -433,7 +433,7 @@ async function route(context: RouteContext): Promise<Response | null> {
   }
 
   if (method === "POST" && path === "/api/technical/visits") {
-    const technical = await requireAccess(repository, auth, "canManageVisits");
+    const technical = await requireAccess(repository, auth, "canManageVisits", ["TECNICO", "ORGANIZACAO"]);
     if (technical instanceof Response) return technical;
     const body = await readBody(request);
     const producerId = toIntegerOrNull(body.producerId);
@@ -446,7 +446,7 @@ async function route(context: RouteContext): Promise<Response | null> {
 
   const technicalVisitMatch = path.match(/^\/api\/technical\/visits\/(\d+)$/);
   if (method === "PATCH" && technicalVisitMatch) {
-    const technical = await requireAccess(repository, auth, "canManageVisits");
+    const technical = await requireAccess(repository, auth, "canManageVisits", ["TECNICO", "ORGANIZACAO"]);
     if (technical instanceof Response) return technical;
     const current = await repository.getVisitById(Number(technicalVisitMatch[1]));
     if (!current) return apiError("Visita técnica não encontrada.", 404);
@@ -457,7 +457,7 @@ async function route(context: RouteContext): Promise<Response | null> {
   }
 
   if (method === "GET" && path === "/api/producer/me") {
-    const producerAccess = await requireAccess(repository, auth, "canSubmitReports");
+    const producerAccess = await requireAccess(repository, auth, "canSubmitReports", ["PRODUTOR"]);
     if (producerAccess instanceof Response) return producerAccess;
     const producer = (await repository.getScopedProducers(producerAccess.id))[0] || null;
     if (!producer) return apiError("Produtor não encontrado.", 404);
@@ -465,7 +465,7 @@ async function route(context: RouteContext): Promise<Response | null> {
   }
 
   if (method === "POST" && path === "/api/producer/reports") {
-    const producerAccess = await requireAccess(repository, auth, "canSubmitReports");
+    const producerAccess = await requireAccess(repository, auth, "canSubmitReports", ["PRODUTOR"]);
     if (producerAccess instanceof Response) return producerAccess;
     const producer = (await repository.getScopedProducers(producerAccess.id))[0] || null;
     if (!producer) return apiError("Produtor não encontrado.", 404);
@@ -543,10 +543,17 @@ function isStrongPassword(value: string) {
   return value.length >= 12 && /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value);
 }
 
-async function requireAccess(repository: PafRepository, auth: Awaited<ReturnType<typeof authenticate>>, permission: "canManageVisits" | "canSubmitReports") {
+async function requireAccess(
+  repository: PafRepository,
+  auth: Awaited<ReturnType<typeof authenticate>>,
+  permission: "canManageVisits" | "canSubmitReports",
+  accountTypes: string[] = []
+) {
   if (!auth || auth.role !== "access" || !auth.account?.active) return apiError("Sessão inválida ou expirada.", 401);
   const account = await repository.getAccessAccountById(auth.account.id);
-  if (!account || !account[permission]) return apiError("Seu acesso não possui permissão para esta operação.", 403);
+  if (!account || !account[permission] || (accountTypes.length && !accountTypes.includes(account.accountType))) {
+    return apiError("Seu acesso não possui permissão para esta operação.", 403);
+  }
   return account;
 }
 

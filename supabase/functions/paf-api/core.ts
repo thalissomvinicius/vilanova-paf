@@ -117,7 +117,9 @@ export function clearSessionCookie() {
 }
 
 export function clientIp(request: Request) {
-  return normalizeText(request.headers.get("x-forwarded-for")?.split(",")[0] || request.headers.get("cf-connecting-ip") || "unknown").slice(0, 80);
+  const trustedIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-real-ip");
+  const forwardedChain = request.headers.get("x-forwarded-for")?.split(",").map((value) => value.trim()).filter(Boolean) || [];
+  return normalizeText(trustedIp || forwardedChain.at(-1) || "unknown").slice(0, 80);
 }
 
 export function randomHex(bytes = 32) {

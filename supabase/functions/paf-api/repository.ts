@@ -249,8 +249,8 @@ export class PafRepository {
       technician_id: toIntegerOrNull(payload.technicianId),
       organization: nullableText(payload.organization, 180),
       active: payload.active !== false,
-      can_submit_reports: payload.canSubmitReports === undefined ? accountType === "PRODUTOR" : Boolean(payload.canSubmitReports),
-      can_manage_visits: payload.canManageVisits === undefined ? accountType !== "PRODUTOR" : Boolean(payload.canManageVisits),
+      can_submit_reports: accountType === "PRODUTOR" && payload.canSubmitReports !== false,
+      can_manage_visits: accountType !== "PRODUTOR" && payload.canManageVisits !== false,
       notes: nullableText(payload.notes, 1000)
     }).select("*").single();
     assertNoError(error, duplicateMessage(error, "Esse login já está cadastrado."));
@@ -279,8 +279,8 @@ export class PafRepository {
       technician_id: payload.technicianId === undefined ? current.technician_id : toIntegerOrNull(payload.technicianId),
       organization: payload.organization === undefined ? current.organization : nullableText(payload.organization, 180),
       active: payload.active === undefined ? current.active : Boolean(payload.active),
-      can_submit_reports: payload.canSubmitReports === undefined ? current.can_submit_reports : Boolean(payload.canSubmitReports),
-      can_manage_visits: payload.canManageVisits === undefined ? current.can_manage_visits : Boolean(payload.canManageVisits),
+      can_submit_reports: accountType === "PRODUTOR" && (payload.canSubmitReports === undefined ? current.can_submit_reports : Boolean(payload.canSubmitReports)),
+      can_manage_visits: accountType !== "PRODUTOR" && (payload.canManageVisits === undefined ? current.can_manage_visits : Boolean(payload.canManageVisits)),
       notes: payload.notes === undefined ? current.notes : nullableText(payload.notes, 1000)
     };
     if (!update.login || update.login.length < 3) throw new Error("Informe um login válido.");
@@ -303,7 +303,12 @@ export class PafRepository {
       p_can_manage_visits: update.can_manage_visits,
       p_notes: update.notes,
       p_producer_ids: producerIds,
-      p_revoke_sessions: !update.active || Boolean(accessCode)
+      p_revoke_sessions: Boolean(accessCode)
+        || accountType !== current.account_type
+        || update.active !== current.active
+        || update.can_submit_reports !== current.can_submit_reports
+        || update.can_manage_visits !== current.can_manage_visits
+        || JSON.stringify([...producerIds].sort((a, b) => a - b)) !== JSON.stringify([...currentHydrated.producerIds].sort((a: number, b: number) => a - b))
     }).maybeSingle();
     assertNoError(error, duplicateMessage(error, "Esse login já está cadastrado."));
     return data ? this.hydrateAccessAccount(data) : null;
@@ -645,10 +650,20 @@ export class PafRepository {
     const title = normalizeText(payload.title).slice(0, 240);
     if (!title) throw new Error("Informe o título da pendência.");
     const status = normalizeEnum(payload.status, TASK_STATUSES, "ABERTA");
+    const reportId = toIntegerOrNull(payload.reportId);
+    const visitId = toIntegerOrNull(payload.visitId);
+    const [report, visit] = await Promise.all([
+      reportId ? this.getReportById(reportId) : null,
+      visitId ? this.getVisitById(visitId) : null
+    ]);
+    if (reportId && !report) throw new Error("Relatório vinculado não encontrado.");
+    if (visitId && !visit) throw new Error("Visita vinculada não encontrada.");
+    const relatedProducerIds = [toIntegerOrNull(payload.producerId), report?.producerId, visit?.producerId].filter(Boolean);
+    if (new Set(relatedProducerIds).size > 1) throw new Error("Os vínculos da pendência devem pertencer ao mesmo produtor.");
     const { data, error } = await this.db.from("paf_operational_tasks").insert({
-      producer_id: toIntegerOrNull(payload.producerId),
-      report_id: toIntegerOrNull(payload.reportId),
-      visit_id: toIntegerOrNull(payload.visitId),
+      producer_id: relatedProducerIds[0] || null,
+      report_id: reportId,
+      visit_id: visitId,
       title,
       type: normalizeEnum(payload.type, TASK_TYPES, "OUTRO"),
       status,
@@ -711,11 +726,24 @@ export class PafRepository {
   async createDocument(payload: Row, actorName: string, file: Row = {}) {
     const title = normalizeText(payload.title).slice(0, 240);
     if (!title) throw new Error("Informe o título do documento.");
+    const reportId = toIntegerOrNull(payload.reportId);
+    const visitId = toIntegerOrNull(payload.visitId);
+    const taskId = toIntegerOrNull(payload.taskId);
+    const [report, visit, task] = await Promise.all([
+      reportId ? this.getReportById(reportId) : null,
+      visitId ? this.getVisitById(visitId) : null,
+      taskId ? this.getTaskById(taskId) : null
+    ]);
+    if (reportId && !report) throw new Error("Relatório vinculado não encontrado.");
+    if (visitId && !visit) throw new Error("Visita vinculada não encontrada.");
+    if (taskId && !task) throw new Error("Pendência vinculada não encontrada.");
+    const relatedProducerIds = [toIntegerOrNull(payload.producerId), report?.producerId, visit?.producerId, task?.producerId].filter(Boolean);
+    if (new Set(relatedProducerIds).size > 1) throw new Error("Os vínculos do documento devem pertencer ao mesmo produtor.");
     const { data, error } = await this.db.from("paf_documents").insert({
-      producer_id: toIntegerOrNull(payload.producerId),
-      report_id: toIntegerOrNull(payload.reportId),
-      visit_id: toIntegerOrNull(payload.visitId),
-      task_id: toIntegerOrNull(payload.taskId),
+      producer_id: relatedProducerIds[0] || null,
+      report_id: reportId,
+      visit_id: visitId,
+      task_id: taskId,
       title,
       category: normalizeEnum(payload.category, DOCUMENT_CATEGORIES, "OUTRO"),
       status: normalizeEnum(payload.status, DOCUMENT_STATUSES, "PENDENTE"),

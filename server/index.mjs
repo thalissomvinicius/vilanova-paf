@@ -1,7 +1,7 @@
 import express from "express";
 import http from "node:http";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
@@ -383,22 +383,26 @@ app.get("/api/admin/tasks", requireRole("admin"), (req, res) => {
 });
 
 app.post("/api/admin/tasks", requireRole("admin"), (req, res) => {
-  const task = createTask(req.body || {}, process.env.PAF_ADMIN_USER || "admin");
+  try {
+    const task = createTask(req.body || {}, process.env.PAF_ADMIN_USER || "admin");
 
-  if (!task) {
-    res.status(400).json({ error: "Não foi possível criar a pendência." });
-    return;
+    if (!task) {
+      res.status(400).json({ error: "Não foi possível criar a pendência." });
+      return;
+    }
+
+    io.emit("task:updated", {
+      task,
+      producerId: task.producerId,
+      reportId: task.reportId,
+      visitId: task.visitId,
+      at: new Date().toISOString()
+    });
+
+    res.status(201).json({ task });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível criar a pendência." });
   }
-
-  io.emit("task:updated", {
-    task,
-    producerId: task.producerId,
-    reportId: task.reportId,
-    visitId: task.visitId,
-    at: new Date().toISOString()
-  });
-
-  res.status(201).json({ task });
 });
 
 app.patch("/api/admin/tasks/:id", requireRole("admin"), (req, res) => {
@@ -429,8 +433,9 @@ app.get("/api/admin/documents", requireRole("admin"), (req, res) => {
 });
 
 app.post("/api/admin/documents", requireRole("admin"), (req, res) => {
+  let fileData = {};
   try {
-    const fileData = saveUploadedFile(req.body || {});
+    fileData = saveUploadedFile(req.body || {});
     const document = createDocumentRecord(
       {
         ...(req.body || {}),
@@ -450,6 +455,13 @@ app.post("/api/admin/documents", requireRole("admin"), (req, res) => {
 
     res.status(201).json({ document });
   } catch (error) {
+    if (fileData.filePath && existsSync(fileData.filePath)) {
+      try {
+        unlinkSync(fileData.filePath);
+      } catch {
+        // The validation error is still more useful to the operator.
+      }
+    }
     res.status(400).json({ error: error.message || "Não foi possível salvar o documento." });
   }
 });
@@ -618,7 +630,7 @@ app.post("/api/admin/fuel/import", requireRole("admin"), async (req, res) => {
   }
 });
 
-app.get("/api/technical/me", requireAccessPermission("canManageVisits"), (req, res) => {
+app.get("/api/technical/me", requireAccessPermission("canManageVisits", ["TECNICO", "ORGANIZACAO"]), (req, res) => {
   const producers = getProducersForAccessAccount(req.access.id);
   const producerIds = new Set(producers.map((producer) => producer.id));
   const visits = listVisits().filter((visit) => producerIds.has(visit.producerId));
@@ -626,7 +638,7 @@ app.get("/api/technical/me", requireAccessPermission("canManageVisits"), (req, r
   res.json({ account: req.access, producers, visits, summary: buildVisitSummary(visits) });
 });
 
-app.post("/api/technical/visits", requireAccessPermission("canManageVisits"), (req, res) => {
+app.post("/api/technical/visits", requireAccessPermission("canManageVisits", ["TECNICO", "ORGANIZACAO"]), (req, res) => {
   const producerId = Number(req.body?.producerId);
   if (!accessAccountCanUseProducer(req.access.id, producerId)) {
     res.status(403).json({ error: "Esse produtor não está vinculado ao seu acesso." });
@@ -648,7 +660,7 @@ app.post("/api/technical/visits", requireAccessPermission("canManageVisits"), (r
   res.status(201).json({ visit });
 });
 
-app.patch("/api/technical/visits/:id", requireAccessPermission("canManageVisits"), (req, res) => {
+app.patch("/api/technical/visits/:id", requireAccessPermission("canManageVisits", ["TECNICO", "ORGANIZACAO"]), (req, res) => {
   const visitId = Number(req.params.id);
   const current = listVisits().find((visit) => visit.id === visitId);
 
@@ -672,7 +684,7 @@ app.patch("/api/technical/visits/:id", requireAccessPermission("canManageVisits"
   res.json({ visit });
 });
 
-app.get("/api/producer/me", requireAccessPermission("canSubmitReports"), (req, res) => {
+app.get("/api/producer/me", requireAccessPermission("canSubmitReports", ["PRODUTOR"]), (req, res) => {
   const producer = getProducersForAccessAccount(req.access.id)[0] || null;
 
   if (!producer) {
@@ -687,7 +699,7 @@ app.get("/api/producer/me", requireAccessPermission("canSubmitReports"), (req, r
   });
 });
 
-app.post("/api/producer/reports", requireAccessPermission("canSubmitReports"), (req, res) => {
+app.post("/api/producer/reports", requireAccessPermission("canSubmitReports", ["PRODUTOR"]), (req, res) => {
   const scopedProducer = getProducersForAccessAccount(req.access.id)[0] || null;
   const producer = scopedProducer ? createReportForProducer(scopedProducer.id, req.body || {}) : null;
 
@@ -971,7 +983,7 @@ function handleAccessLogin(req, res, portal) {
   res.json({ user: { role: "technical", name: account.name }, account, producers });
 }
 
-function requireAccessPermission(permission) {
+function requireAccessPermission(permission, accountTypes = []) {
   return (req, res, next) => {
     const auth = readAuth(req);
     if (!auth || auth.role !== "access" || !auth.accessAccountId) {
@@ -980,7 +992,7 @@ function requireAccessPermission(permission) {
     }
 
     const account = getAccessAccountById(auth.accessAccountId);
-    if (!account?.active || !account[permission]) {
+    if (!account?.active || !account[permission] || (accountTypes.length && !accountTypes.includes(account.accountType))) {
       res.status(403).json({ error: "Acesso não autorizado para esta operação." });
       return;
     }

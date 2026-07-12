@@ -1,6 +1,6 @@
 begin;
 
-select plan(10);
+select plan(14);
 
 insert into public.paf_producers (id, token, name, cpf, cpf_digits)
 values
@@ -43,6 +43,20 @@ select is(
   (select account_type from public.paf_access_accounts where id = -9101),
   'PRODUTOR',
   'atualiza o tipo da conta'
+);
+
+select is(
+  (select can_manage_visits from public.paf_access_accounts where id = -9101),
+  false,
+  'acesso de produtor não recebe permissão de visitas'
+);
+
+select throws_ok(
+  $$
+    update public.paf_access_accounts
+    set can_manage_visits = true
+    where id = -9101
+  $$
 );
 
 select is(
@@ -93,6 +107,26 @@ select is(
   (select count(*) from public.paf_auth_sessions where access_account_id = -9101),
   0::bigint,
   'revoga sessões ao trocar segredo'
+);
+
+insert into public.paf_reports (id, producer_id)
+values (-9101, -9101);
+
+insert into public.paf_technical_visits (id, producer_id)
+values (-9102, -9102);
+
+select throws_ok(
+  $$
+    insert into public.paf_operational_tasks (producer_id, visit_id, title)
+    values (-9101, -9102, 'Vínculo inválido')
+  $$
+);
+
+select throws_ok(
+  $$
+    insert into public.paf_documents (producer_id, report_id, visit_id, title)
+    values (-9101, -9101, -9102, 'Vínculo inválido')
+  $$
 );
 
 select * from finish();

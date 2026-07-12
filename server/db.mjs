@@ -1352,7 +1352,11 @@ export function createTask(payload = {}, createdBy = "admin") {
   const visitId = toIntegerOrNull(payload.visitId);
   const report = reportId ? getReportById(reportId) : null;
   const visit = visitId ? getVisitById(visitId) : null;
-  const producerId = toIntegerOrNull(payload.producerId) || report?.producerId || visit?.producerId || null;
+  if (reportId && !report) throw new Error("Relatório vinculado não encontrado.");
+  if (visitId && !visit) throw new Error("Visita vinculada não encontrada.");
+  const relatedProducerIds = [toIntegerOrNull(payload.producerId), report?.producerId, visit?.producerId].filter(Boolean);
+  if (new Set(relatedProducerIds).size > 1) throw new Error("Os vínculos da pendência devem pertencer ao mesmo produtor.");
+  const producerId = relatedProducerIds[0] || null;
   const now = nowIso();
   const status = normalizeTaskStatus(payload.status || "ABERTA");
 
@@ -1528,7 +1532,12 @@ export function createDocumentRecord(payload = {}, uploadedBy = "admin") {
   const report = reportId ? getReportById(reportId) : null;
   const visit = visitId ? getVisitById(visitId) : null;
   const task = taskId ? getTaskById(taskId) : null;
-  const producerId = toIntegerOrNull(payload.producerId) || report?.producerId || visit?.producerId || task?.producerId || null;
+  if (reportId && !report) throw new Error("Relatório vinculado não encontrado.");
+  if (visitId && !visit) throw new Error("Visita vinculada não encontrada.");
+  if (taskId && !task) throw new Error("Pendência vinculada não encontrada.");
+  const relatedProducerIds = [toIntegerOrNull(payload.producerId), report?.producerId, visit?.producerId, task?.producerId].filter(Boolean);
+  if (new Set(relatedProducerIds).size > 1) throw new Error("Os vínculos do documento devem pertencer ao mesmo produtor.");
+  const producerId = relatedProducerIds[0] || null;
   const now = nowIso();
   const title = normalizeText(payload.title).slice(0, 180) || normalizeText(payload.fileName).slice(0, 180) || "Documento PAF";
 
@@ -1914,8 +1923,8 @@ export function createAccessAccount(payload = {}) {
         $technicianId: toIntegerOrNull(payload.technicianId),
         $organization: normalizeText(payload.organization).slice(0, 160) || null,
         $active: payload.active === false ? 0 : 1,
-        $canSubmitReports: payload.canSubmitReports === undefined ? (accountType === "PRODUTOR" ? 1 : 0) : payload.canSubmitReports ? 1 : 0,
-        $canManageVisits: payload.canManageVisits === undefined ? (accountType === "PRODUTOR" ? 0 : 1) : payload.canManageVisits ? 1 : 0,
+        $canSubmitReports: accountType === "PRODUTOR" && payload.canSubmitReports !== false ? 1 : 0,
+        $canManageVisits: accountType !== "PRODUTOR" && payload.canManageVisits !== false ? 1 : 0,
         $notes: normalizeText(payload.notes).slice(0, 800) || null,
         $createdAt: now,
         $updatedAt: now
@@ -1998,8 +2007,8 @@ export function updateAccessAccount(accessAccountId, payload = {}) {
         $technicianId: payload.technicianId === undefined ? current.technicianId : toIntegerOrNull(payload.technicianId),
         $organization: payload.organization === undefined ? current.organization : normalizeText(payload.organization).slice(0, 160) || null,
         $active: payload.active === undefined ? (current.active ? 1 : 0) : payload.active ? 1 : 0,
-        $canSubmitReports: payload.canSubmitReports === undefined ? (current.canSubmitReports ? 1 : 0) : payload.canSubmitReports ? 1 : 0,
-        $canManageVisits: payload.canManageVisits === undefined ? (current.canManageVisits ? 1 : 0) : payload.canManageVisits ? 1 : 0,
+        $canSubmitReports: accountType === "PRODUTOR" && (payload.canSubmitReports === undefined ? current.canSubmitReports : payload.canSubmitReports) ? 1 : 0,
+        $canManageVisits: accountType !== "PRODUTOR" && (payload.canManageVisits === undefined ? current.canManageVisits : payload.canManageVisits) ? 1 : 0,
         $notes: payload.notes === undefined ? current.notes : normalizeText(payload.notes).slice(0, 800) || null,
         $updatedAt: updatedAt,
         $id: accessAccountId
@@ -2009,7 +2018,12 @@ export function updateAccessAccount(accessAccountId, payload = {}) {
       replaceAccessProducerScope(database, accessAccountId, producerIds, updatedAt);
     }
 
-    if (payload.active === false || accessCode) {
+    const authorizationChanged = accountType !== current.accountType
+      || payload.producerIds !== undefined
+      || payload.canSubmitReports !== undefined
+      || payload.canManageVisits !== undefined
+      || payload.active !== undefined;
+    if (authorizationChanged || accessCode) {
       database.prepare("DELETE FROM auth_sessions WHERE access_account_id = $id").run({ $id: accessAccountId });
     }
 

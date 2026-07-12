@@ -9,6 +9,146 @@ begin
 end;
 $$;
 
+-- Each portal has a single responsibility. Reconcile any old mixed permission
+-- rows before enforcing that invariant at the database boundary.
+update public.paf_access_accounts
+set can_submit_reports = false
+where account_type in ('TECNICO', 'ORGANIZACAO')
+  and can_submit_reports;
+
+update public.paf_access_accounts
+set can_manage_visits = false
+where account_type = 'PRODUTOR'
+  and can_manage_visits;
+
+alter table public.paf_access_accounts
+drop constraint if exists paf_access_permissions_match_type;
+
+alter table public.paf_access_accounts
+add constraint paf_access_permissions_match_type check (
+  account_type = 'ADMIN'
+  or (account_type = 'PRODUTOR' and not can_manage_visits)
+  or (account_type in ('TECNICO', 'ORGANIZACAO') and not can_submit_reports)
+);
+
+create or replace function public.paf_enforce_task_producer_links()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  linked_producer_id bigint;
+begin
+  if new.report_id is not null then
+    select producer_id into linked_producer_id
+    from public.paf_reports
+    where id = new.report_id;
+    if not found then
+      raise exception 'Relatório vinculado não encontrado.';
+    end if;
+    if new.producer_id is null then
+      new.producer_id := linked_producer_id;
+    elsif new.producer_id <> linked_producer_id then
+      raise exception 'Os vínculos da pendência devem pertencer ao mesmo produtor.';
+    end if;
+  end if;
+
+  if new.visit_id is not null then
+    select producer_id into linked_producer_id
+    from public.paf_technical_visits
+    where id = new.visit_id;
+    if not found then
+      raise exception 'Visita vinculada não encontrada.';
+    end if;
+    if new.producer_id is null then
+      new.producer_id := linked_producer_id;
+    elsif new.producer_id <> linked_producer_id then
+      raise exception 'Os vínculos da pendência devem pertencer ao mesmo produtor.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists paf_enforce_task_producer_links
+on public.paf_operational_tasks;
+
+create trigger paf_enforce_task_producer_links
+before insert or update of producer_id, report_id, visit_id
+on public.paf_operational_tasks
+for each row execute function public.paf_enforce_task_producer_links();
+
+create or replace function public.paf_enforce_document_producer_links()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  linked_producer_id bigint;
+begin
+  if new.report_id is not null then
+    select producer_id into linked_producer_id
+    from public.paf_reports
+    where id = new.report_id;
+    if not found then
+      raise exception 'Relatório vinculado não encontrado.';
+    end if;
+    if new.producer_id is null then
+      new.producer_id := linked_producer_id;
+    elsif new.producer_id <> linked_producer_id then
+      raise exception 'Os vínculos do documento devem pertencer ao mesmo produtor.';
+    end if;
+  end if;
+
+  if new.visit_id is not null then
+    select producer_id into linked_producer_id
+    from public.paf_technical_visits
+    where id = new.visit_id;
+    if not found then
+      raise exception 'Visita vinculada não encontrada.';
+    end if;
+    if new.producer_id is null then
+      new.producer_id := linked_producer_id;
+    elsif new.producer_id <> linked_producer_id then
+      raise exception 'Os vínculos do documento devem pertencer ao mesmo produtor.';
+    end if;
+  end if;
+
+  if new.task_id is not null then
+    select producer_id into linked_producer_id
+    from public.paf_operational_tasks
+    where id = new.task_id;
+    if not found then
+      raise exception 'Pendência vinculada não encontrada.';
+    end if;
+    if new.producer_id is null then
+      new.producer_id := linked_producer_id;
+    elsif new.producer_id <> linked_producer_id then
+      raise exception 'Os vínculos do documento devem pertencer ao mesmo produtor.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists paf_enforce_document_producer_links
+on public.paf_documents;
+
+create trigger paf_enforce_document_producer_links
+before insert or update of producer_id, report_id, visit_id, task_id
+on public.paf_documents
+for each row execute function public.paf_enforce_document_producer_links();
+
+revoke all on function public.paf_enforce_task_producer_links()
+from public, anon, authenticated;
+
+revoke all on function public.paf_enforce_document_producer_links()
+from public, anon, authenticated;
+
 create or replace function public.paf_replace_access_scope(
   p_access_account_id bigint,
   p_producer_ids bigint[]
@@ -101,8 +241,8 @@ begin
       technician_id = p_technician_id,
       organization = p_organization,
       active = p_active,
-      can_submit_reports = p_can_submit_reports,
-      can_manage_visits = p_can_manage_visits,
+      can_submit_reports = p_account_type = 'PRODUTOR' and p_can_submit_reports,
+      can_manage_visits = p_account_type in ('TECNICO', 'ORGANIZACAO') and p_can_manage_visits,
       notes = p_notes
   where id = p_access_account_id
     and account_type <> 'ADMIN'

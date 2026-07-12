@@ -1,5 +1,6 @@
 import {
   DOCUMENT_CATEGORIES,
+  clientIp,
   hashSecret,
   makeAccessCode,
   normalizeApiPath,
@@ -22,6 +23,20 @@ Deno.test("normaliza entradas vindas dos formulários", () => {
 Deno.test("normaliza rotas diretas e rotas do Edge Function", () => {
   assert(normalizeApiPath("/functions/v1/paf-api/api/health") === "/api/health", "rota do Edge incorreta");
   assert(normalizeApiPath("/api/admin/producers/") === "/api/admin/producers", "rota da aplicação incorreta");
+});
+
+Deno.test("prioriza o IP fornecido pela infraestrutura", () => {
+  const trustedRequest = new Request("https://example.com", {
+    headers: {
+      "cf-connecting-ip": "203.0.113.10",
+      "x-forwarded-for": "198.51.100.4, 192.0.2.8"
+    }
+  });
+  const forwardedRequest = new Request("https://example.com", {
+    headers: { "x-forwarded-for": "198.51.100.4, 192.0.2.8" }
+  });
+  assert(clientIp(trustedRequest) === "203.0.113.10", "IP confiável não foi priorizado");
+  assert(clientIp(forwardedRequest) === "192.0.2.8", "cadeia encaminhada não foi tratada com segurança");
 });
 
 Deno.test("gera códigos sem caracteres ambíguos", () => {

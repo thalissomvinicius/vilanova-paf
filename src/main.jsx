@@ -1808,9 +1808,12 @@ function AdminDashboard({ user, onLogout }) {
           </div>
 
           <div className="header-actions">
-            <span className={`live-pill ${liveAt ? "live-pill-on" : ""}`}>
+            <span
+              className={`live-pill ${liveAt ? "live-pill-on" : ""}`}
+              title="Dados atualizados automaticamente a cada 30 segundos"
+            >
               <span className="live-dot" />
-              Ao vivo
+              Atualização 30s
             </span>
             {activeView === "reports" ? (
               <button className="icon-text-button" type="button" onClick={exportReports}>
@@ -3658,7 +3661,11 @@ function AccessRegistrationForm({ access, credential, onCancel, onCopyCredential
     setError("");
 
     try {
-      await onSubmit(form);
+      await onSubmit({
+        ...form,
+        canSubmitReports: form.accountType === "PRODUTOR" ? form.canSubmitReports : false,
+        canManageVisits: form.accountType === "PRODUTOR" ? false : form.canManageVisits
+      });
     } catch (requestError) {
       setError(requestError.message || "Não foi possível salvar o acesso.");
     } finally {
@@ -3767,14 +3774,17 @@ function AccessRegistrationForm({ access, credential, onCancel, onCopyCredential
             content: (
               <>
                 <div className="access-permission-list">
-                  <label>
-                    <input type="checkbox" checked={form.canSubmitReports} onChange={(event) => updateField("canSubmitReports", event.target.checked)} />
-                    <span><strong>Enviar relatórios</strong><small>Permite preencher dados de produção.</small></span>
-                  </label>
-                  <label>
-                    <input type="checkbox" checked={form.canManageVisits} onChange={(event) => updateField("canManageVisits", event.target.checked)} />
-                    <span><strong>Cadastrar visitas</strong><small>Permite registrar e atualizar visitas técnicas.</small></span>
-                  </label>
+                  {form.accountType === "PRODUTOR" ? (
+                    <label>
+                      <input type="checkbox" checked={form.canSubmitReports} onChange={(event) => updateField("canSubmitReports", event.target.checked)} />
+                      <span><strong>Enviar relatórios</strong><small>Permite preencher dados de produção no Portal do Produtor.</small></span>
+                    </label>
+                  ) : (
+                    <label>
+                      <input type="checkbox" checked={form.canManageVisits} onChange={(event) => updateField("canManageVisits", event.target.checked)} />
+                      <span><strong>Cadastrar visitas</strong><small>Permite registrar e atualizar visitas dos produtores vinculados.</small></span>
+                    </label>
+                  )}
                   <label>
                     <input type="checkbox" checked={form.active} onChange={(event) => updateField("active", event.target.checked)} />
                     <span><strong>Acesso ativo</strong><small>Desmarque para bloquear imediatamente.</small></span>
@@ -7151,7 +7161,7 @@ function ProducerLogin({ onLogin }) {
               <input value={login} onChange={(event) => setLogin(event.target.value)} autoComplete="username" required />
             </Field>
             <Field label="Código de acesso">
-              <input value={accessCode} onChange={(event) => setAccessCode(event.target.value)} autoComplete="one-time-code" required />
+              <input type="password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} autoComplete="current-password" required />
             </Field>
             {error && <p className="form-error">{error}</p>}
             <button className="primary-button wide" type="submit" disabled={loading}>
@@ -7197,6 +7207,24 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function clearReportForm() {
+    setForm({
+      reportDate: new Date().toISOString().slice(0, 10),
+      contactPhone: "",
+      areaStatus: "Sem alteração",
+      address: producer.address || "",
+      areaHa: producer.areaHa || "",
+      plantingYear: producer.plantingYear || "",
+      crop: "",
+      plantingDate: "",
+      productionNote: "",
+      needsVisit: false,
+      notes: ""
+    });
+    setError("");
+    setSent(false);
   }
 
   async function logout() {
@@ -7296,7 +7324,7 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
               cancelLabel="Limpar"
               className="producer-report-wizard"
               error={error}
-              onCancel={() => setForm((current) => ({ ...current, notes: "", productionNote: "", needsVisit: false }))}
+              onCancel={clearReportForm}
               resetKey={reports.length}
               saving={submitting}
               submitLabel="Enviar relatório"
