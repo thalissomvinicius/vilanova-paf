@@ -173,3 +173,6 @@ grant execute on function public.paf_update_access_account(
 
 grant execute on function public.paf_change_access_secret(bigint, text, text)
 to service_role;
+
+create index if not exists paf_login_attempts_reset_idx
+  on public.paf_login_attempts (reset_at);

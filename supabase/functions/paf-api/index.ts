@@ -482,6 +482,7 @@ async function route(context: RouteContext): Promise<Response | null> {
 }
 
 async function login(repository: PafRepository, ipAddress: string, loginValue: unknown, secret: unknown, mode: "admin" | "producer" | "technical") {
+  await repository.cleanupAuthenticationState();
   const normalized = normalizeLogin(loginValue);
   const attemptKey = await sha256Hex(`${ipAddress}|${normalized}`);
   const attempt = await repository.getLoginAttempt(attemptKey);

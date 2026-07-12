@@ -364,6 +364,16 @@ export class PafRepository {
     return { token, expiresAt };
   }
 
+  async cleanupAuthenticationState() {
+    const now = new Date().toISOString();
+    const [sessions, attempts] = await Promise.all([
+      this.db.from("paf_auth_sessions").delete().lte("expires_at", now),
+      this.db.from("paf_login_attempts").delete().lte("reset_at", now)
+    ]);
+    if (sessions.error) console.error("Não foi possível limpar sessões expiradas.", sessions.error.message);
+    if (attempts.error) console.error("Não foi possível limpar tentativas expiradas.", attempts.error.message);
+  }
+
   async getSession(token: string) {
     if (!token) return null;
     const tokenHash = await sha256Hex(token);
@@ -376,7 +386,10 @@ export class PafRepository {
     }
     const { data: account, error: accountError } = await this.db.from("paf_access_accounts").select("*").eq("id", data.access_account_id).maybeSingle();
     assertNoError(accountError, "Não foi possível validar a conta.");
-    if (!account?.active) return null;
+    if (!account?.active) {
+      await this.db.from("paf_auth_sessions").delete().eq("id", data.id);
+      return null;
+    }
     return { id: data.id, role: data.role, expiresAt: data.expires_at, account };
   }
 
