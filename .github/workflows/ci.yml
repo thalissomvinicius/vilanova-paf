@@ -32,6 +32,8 @@ jobs:
         run: supabase start
       - name: Reaplicar schema do zero
         run: supabase db reset
+      - name: Testar transações do banco
+        run: supabase test db
       - name: Encerrar serviços locais
         if: always()
         run: supabase stop --no-backup
