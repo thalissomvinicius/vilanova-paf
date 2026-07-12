@@ -36,7 +36,7 @@ Este guia descreve o uso diário do sistema da Vila Nova Agroindustrial. Ele nã
 ## Implantação inicial
 
 1. Entre como administrador e altere a senha temporária em **Alterar senha**.
-2. Abra **Cadastros** e revise os 365 produtores importados.
+2. Abra **Cadastros** e revise os produtores importados.
 3. Cadastre os técnicos responsáveis.
 4. Abra **Acessos** e crie primeiro os acessos da equipe técnica e das organizações.
 5. Vincule a cada técnico ou organização apenas os produtores sob sua responsabilidade.
@@ -117,4 +117,3 @@ O GitHub Actions valida a aplicação, recria um Supabase limpo, reaplica todas 
 - [ ] Equipe orientada a bloquear acessos desligados.
 - [ ] Primeiro relatório e primeira visita validados de ponta a ponta.
 - [ ] Rotina de revisão semanal dos indicadores combinada.
-
