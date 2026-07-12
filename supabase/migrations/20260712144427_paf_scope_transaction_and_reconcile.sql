@@ -1,7 +1,13 @@
 -- The first version of the hardening migration touched a shared helper in the
 -- existing project. Restore its previous configuration without assuming that
 -- the helper exists in a clean PAF-only database.
-alter function if exists public.set_updated_at() reset search_path;
+do $$
+begin
+  if to_regprocedure('public.set_updated_at()') is not null then
+    execute 'alter function public.set_updated_at() reset search_path';
+  end if;
+end;
+$$;
 
 create or replace function public.paf_replace_access_scope(
   p_access_account_id bigint,
@@ -37,8 +43,8 @@ begin
   where access_account_id = p_access_account_id;
 
   insert into public.paf_access_account_producers (access_account_id, producer_id)
-  select p_access_account_id, producer_id
-  from unnest(coalesce(p_producer_ids, '{}'::bigint[])) as producer_id;
+  select p_access_account_id, scope.producer_id
+  from unnest(coalesce(p_producer_ids, '{}'::bigint[])) as scope(producer_id);
 end;
 $$;
 
