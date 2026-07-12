@@ -2820,6 +2820,16 @@ tbody tr:hover {
   }
 }
 
+@media (min-width: 901px) and (max-height: 820px) {
+  .premium-login-screen {
+    padding: 16px;
+  }
+
+  .login-shell {
+    min-height: min(700px, calc(100svh - 32px));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
