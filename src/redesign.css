@@ -304,7 +304,7 @@ code {
   box-shadow: var(--app-shadow-sm);
 }
 
-.login-brand h1 {
+.login-brand h2 {
   margin: 0;
   color: var(--app-green-800);
   font-size: clamp(1.55rem, 3vw, 2rem);

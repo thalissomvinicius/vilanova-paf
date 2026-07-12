@@ -720,7 +720,7 @@ function AdminLogin({ onLogin }) {
             </div>
             <div>
               <p className="eyebrow">Equipe Vila Nova</p>
-              <h1>Painel administrativo</h1>
+              <h2>Painel administrativo</h2>
               <p className="login-panel-text">Gerencie o PAF com clareza, segurança e controle operacional.</p>
             </div>
           </div>
@@ -6779,7 +6779,7 @@ function TechnicalLogin({ onLogin }) {
             <div className="brand-mark login-brand-mark"><img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" /></div>
             <div>
               <p className="eyebrow">Equipe de campo</p>
-              <h1>Acesso técnico</h1>
+              <h2>Acesso técnico</h2>
               <p className="login-panel-text">Use o login criado pela gestão do PAF.</p>
             </div>
           </div>
@@ -7151,7 +7151,7 @@ function ProducerLogin({ onLogin }) {
             </div>
             <div>
               <p className="eyebrow">Vila Nova Agroindustrial</p>
-              <h1>Acesso do produtor</h1>
+              <h2>Acesso do produtor</h2>
               <p className="login-panel-text">Entre com o login e o código enviados pela equipe PAF.</p>
             </div>
           </div>

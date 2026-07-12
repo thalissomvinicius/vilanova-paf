@@ -2480,7 +2480,7 @@ tbody tr:hover,
   box-shadow: 0 10px 24px rgba(95, 147, 60, 0.14);
 }
 
-.premium-login-panel h1 {
+.premium-login-panel h2 {
   margin: 0;
   color: var(--login-green-dark);
   font-size: clamp(1.55rem, 2.6vw, 2rem);
@@ -2687,7 +2687,7 @@ tbody tr:hover,
     flex-basis: 52px;
   }
 
-  .premium-login-panel h1 {
+  .premium-login-panel h2 {
     font-size: 1.65rem;
   }
 
