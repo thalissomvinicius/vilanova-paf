@@ -289,23 +289,37 @@ export class PafRepository {
       update.access_code_hash = await hashSecret(accessCode);
       update.code_hint = accessCode.slice(-4);
     }
-    const { data, error } = await this.db.from("paf_access_accounts").update(update).eq("id", id).select("*").single();
+    const { data, error } = await this.db.rpc("paf_update_access_account", {
+      p_access_account_id: id,
+      p_name: update.name,
+      p_login: update.login,
+      p_access_code_hash: update.access_code_hash || current.access_code_hash,
+      p_code_hint: update.code_hint === undefined ? current.code_hint : update.code_hint,
+      p_account_type: update.account_type,
+      p_technician_id: update.technician_id,
+      p_organization: update.organization,
+      p_active: update.active,
+      p_can_submit_reports: update.can_submit_reports,
+      p_can_manage_visits: update.can_manage_visits,
+      p_notes: update.notes,
+      p_producer_ids: producerIds,
+      p_revoke_sessions: !update.active || Boolean(accessCode)
+    }).maybeSingle();
     assertNoError(error, duplicateMessage(error, "Esse login já está cadastrado."));
-    if (payload.producerIds !== undefined) await this.replaceAccessScope(id, producerIds);
-    if (payload.active === false || accessCode) await this.revokeSessionsForAccess(id);
-    return this.hydrateAccessAccount(data);
+    return data ? this.hydrateAccessAccount(data) : null;
   }
 
   async resetAccessCode(id: number) {
     const current = await this.getAccessAccountById(id, false);
     if (!current) return null;
     const accessCode = makeAccessCode();
-    const { data, error } = await this.db.from("paf_access_accounts").update({
-      access_code_hash: await hashSecret(accessCode),
-      code_hint: accessCode.slice(-4)
-    }).eq("id", id).select("*").single();
+    const { data, error } = await this.db.rpc("paf_change_access_secret", {
+      p_access_account_id: id,
+      p_access_code_hash: await hashSecret(accessCode),
+      p_code_hint: accessCode.slice(-4)
+    }).maybeSingle();
     assertNoError(error, "Não foi possível redefinir o código.");
-    await this.revokeSessionsForAccess(id);
+    if (!data) return null;
     return { account: await this.hydrateAccessAccount(data), temporaryCode: accessCode };
   }
 
@@ -377,12 +391,13 @@ export class PafRepository {
   }
 
   async changeAccessSecret(id: number, accessCodeHash: string, codeHint: string) {
-    const { error } = await this.db.from("paf_access_accounts").update({
-      access_code_hash: accessCodeHash,
-      code_hint: codeHint
-    }).eq("id", id);
+    const { data, error } = await this.db.rpc("paf_change_access_secret", {
+      p_access_account_id: id,
+      p_access_code_hash: accessCodeHash,
+      p_code_hint: codeHint
+    }).maybeSingle();
     assertNoError(error, "Não foi possível alterar a senha.");
-    await this.revokeSessionsForAccess(id);
+    if (!data) throw new Error("Acesso não encontrado.");
   }
 
   async recordSuccessfulLogin(id: number) {
