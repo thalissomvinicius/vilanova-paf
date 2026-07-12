@@ -7,38 +7,61 @@ import { fileURLToPath } from "node:url";
 import { Server } from "socket.io";
 import { createServer as createViteServer } from "vite";
 import {
+  accessAccountCanUseProducer,
+  buildFuelSummary,
+  changeAdminPassword,
   cleanupExpiredSessions,
+  createAccessAccount,
   createAuthSession,
   createDocumentRecord,
+  createFuelDriver,
+  createFuelRecord,
   createProducer,
   createReport,
   createReportForProducer,
   createTask,
   createTechnician,
   createVisit,
+  deleteAccessAccount,
   deleteAuthSession,
+  deleteFuelDriver,
+  deleteFuelVehicle,
+  getAccessAccountById,
   getAuthSession,
   getDocumentById,
+  getFuelOptions,
   getOptions,
+  getProducersForAccessAccount,
   getProducerById,
   getProducerByToken,
   getReportsForProducer,
   getVisitsForProducer,
+  listAccessAccounts,
   listDocuments,
+  listFuelDrivers,
+  listFuelRecords,
+  listFuelVehicles,
   listReports,
   listProducers,
   listTasks,
   listTechnicians,
   listVisits,
-  updateReportReview,
+  resetAccessAccountCode,
+  updateAccessAccount,
   updateDocument,
+  updateFuelDriver,
+  updateFuelVehicle,
+  updateProducer,
+  updateReportReview,
   updateTechnician,
   updateTask,
   updateVisit,
-  updateProducer,
+  upsertFuelVehicle,
+  verifyAccessAccountCredentials,
   verifyAdminCredentials,
   verifyProducerCredentials
 } from "./db.mjs";
+import { importFuelWorkbook } from "./importFuelExcel.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -53,7 +76,7 @@ const io = new Server(server);
 const loginAttempts = new Map();
 
 app.set("trust proxy", 1);
-app.use(express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "10mb" }));
 
 cleanupExpiredSessions();
 setInterval(cleanupExpiredSessions, 60 * 60 * 1000).unref();
@@ -70,13 +93,32 @@ app.get("/api/auth/me", (req, res) => {
     return;
   }
 
-  if (auth.role === "producer") {
-    const producer = getProducerById(auth.producerId);
+  if (auth.role === "access") {
+    const account = getAccessAccountById(auth.accessAccountId);
+
+    if (!account?.active) {
+      clearSessionCookie(res);
+      res.json({ user: null });
+      return;
+    }
+
+    const producers = getProducersForAccessAccount(account.id);
+    if (account.accountType === "PRODUTOR") {
+      const producer = producers[0] || null;
+      res.json({
+        user: { role: "producer", name: account.name },
+        account,
+        producer,
+        reports: producer ? getReportsForProducer(producer.id) : [],
+        visits: producer ? getVisitsForProducer(producer.id) : []
+      });
+      return;
+    }
+
     res.json({
-      user: { role: "producer" },
-      producer,
-      reports: producer ? getReportsForProducer(producer.id) : [],
-      visits: producer ? getVisitsForProducer(producer.id) : []
+      user: { role: "technical", name: account.name },
+      account,
+      producers
     });
     return;
   }
@@ -105,37 +147,33 @@ app.post("/api/auth/admin-login", (req, res) => {
   res.json({ user: { role: "admin", name: process.env.PAF_ADMIN_USER || "admin" } });
 });
 
-app.post("/api/auth/producer-login", (req, res) => {
-  const { login, accessCode } = req.body || {};
-  const key = loginKey(req, login || "producer");
-
-  if (isRateLimited(key)) {
-    res.status(429).json({ error: "Muitas tentativas. Aguarde alguns minutos." });
-    return;
-  }
-
-  const producer = verifyProducerCredentials(login, accessCode);
-
-  if (!producer) {
-    recordLoginFailure(key);
-    res.status(401).json({ error: "Login ou código inválidos." });
-    return;
-  }
-
-  clearLoginFailures(key);
-  const session = createAuthSession({ role: "producer", producerId: producer.id, ttlHours: 24 * 14 });
-  setSessionCookie(res, session);
-  res.json({
-    user: { role: "producer" },
-    producer,
-    reports: getReportsForProducer(producer.id),
-    visits: getVisitsForProducer(producer.id)
-  });
-});
+app.post("/api/auth/producer-login", (req, res) => handleAccessLogin(req, res, "producer"));
+app.post("/api/auth/access-login", (req, res) => handleAccessLogin(req, res, "technical"));
 
 app.post("/api/auth/logout", (req, res) => {
   const token = getCookie(req, COOKIE_NAME);
   deleteAuthSession(token);
+  clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.post("/api/auth/change-password", requireRole("admin"), (req, res) => {
+  const currentPassword = String(req.body?.currentPassword ?? "");
+  const newPassword = String(req.body?.newPassword ?? "");
+
+  if (newPassword.length < 12 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
+    res.status(400).json({ error: "Use pelo menos 12 caracteres, com letras maiúsculas, minúsculas e números." });
+    return;
+  }
+  if (currentPassword === newPassword) {
+    res.status(400).json({ error: "A nova senha deve ser diferente da senha atual." });
+    return;
+  }
+  if (!changeAdminPassword(currentPassword, newPassword)) {
+    res.status(401).json({ error: "A senha atual não confere." });
+    return;
+  }
+
   clearSessionCookie(res);
   res.json({ ok: true });
 });
@@ -234,6 +272,57 @@ app.patch("/api/admin/technicians/:id", requireRole("admin"), (req, res) => {
   res.json({ technician });
 });
 
+app.get("/api/admin/accesses", requireRole("admin"), (req, res) => {
+  res.json({ accesses: listAccessAccounts(req.query) });
+});
+
+app.post("/api/admin/accesses", requireRole("admin"), (req, res) => {
+  try {
+    const result = createAccessAccount(req.body || {});
+    io.emit("access:updated", { access: result.account, at: new Date().toISOString() });
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível cadastrar o acesso." });
+  }
+});
+
+app.patch("/api/admin/accesses/:id", requireRole("admin"), (req, res) => {
+  try {
+    const access = updateAccessAccount(Number(req.params.id), req.body || {});
+    if (!access) {
+      res.status(404).json({ error: "Acesso não encontrado." });
+      return;
+    }
+
+    io.emit("access:updated", { access, at: new Date().toISOString() });
+    res.json({ access });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível atualizar o acesso." });
+  }
+});
+
+app.post("/api/admin/accesses/:id/reset-code", requireRole("admin"), (req, res) => {
+  const result = resetAccessAccountCode(Number(req.params.id));
+  if (!result) {
+    res.status(404).json({ error: "Acesso não encontrado." });
+    return;
+  }
+
+  io.emit("access:updated", { access: result.account, at: new Date().toISOString() });
+  res.json(result);
+});
+
+app.delete("/api/admin/accesses/:id", requireRole("admin"), (req, res) => {
+  const access = deleteAccessAccount(Number(req.params.id));
+  if (!access) {
+    res.status(404).json({ error: "Acesso não encontrado." });
+    return;
+  }
+
+  io.emit("access:updated", { accessId: access.id, deleted: true, at: new Date().toISOString() });
+  res.json({ ok: true, access });
+});
+
 app.get("/api/admin/reports", requireRole("admin"), (req, res) => {
   const reports = listReports(req.query);
   res.json({
@@ -265,24 +354,6 @@ app.get("/api/admin/visits", requireRole("admin"), (req, res) => {
     visits,
     summary: buildVisitSummary(visits)
   });
-});
-
-app.post("/api/admin/visits", requireRole("admin"), (req, res) => {
-  const visit = createVisit(req.body || {}, process.env.PAF_ADMIN_USER || "admin");
-
-  if (!visit) {
-    res.status(404).json({ error: "Não foi possível criar a visita para o produtor informado." });
-    return;
-  }
-
-  io.emit("visit:updated", {
-    visit,
-    producerId: visit.producerId,
-    reportId: visit.reportId,
-    at: new Date().toISOString()
-  });
-
-  res.status(201).json({ visit });
 });
 
 app.patch("/api/admin/visits/:id", requireRole("admin"), (req, res) => {
@@ -414,8 +485,195 @@ app.get("/api/admin/documents/:id/download", requireRole("admin"), (req, res) =>
   res.download(document.filePath, document.fileName || `documento-${document.id}`);
 });
 
-app.get("/api/producer/me", requireRole("producer"), (req, res) => {
-  const producer = getProducerById(req.auth.producerId);
+app.get("/api/admin/fuel", requireRole("admin"), (req, res) => {
+  const records = listFuelRecords(req.query);
+  const vehicles = listFuelVehicles(req.query.plate ? { plate: req.query.plate } : {});
+  const drivers = listFuelDrivers();
+
+  res.json({
+    records,
+    vehicles,
+    drivers,
+    summary: buildFuelSummary(records, vehicles),
+    options: getFuelOptions()
+  });
+});
+
+app.post("/api/admin/fuel", requireRole("admin"), (req, res) => {
+  try {
+    const record = createFuelRecord(req.body || {});
+
+    io.emit("fuel:updated", {
+      record,
+      at: new Date().toISOString()
+    });
+
+    res.status(201).json({ record });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível lançar o abastecimento." });
+  }
+});
+
+app.post("/api/admin/fuel/vehicles", requireRole("admin"), (req, res) => {
+  try {
+    const vehicle = upsertFuelVehicle(req.body || {});
+
+    if (!vehicle) {
+      res.status(400).json({ error: "Informe a placa do veículo." });
+      return;
+    }
+
+    io.emit("fuel:updated", {
+      vehicle,
+      at: new Date().toISOString()
+    });
+
+    res.status(201).json({ vehicle });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível cadastrar o veículo." });
+  }
+});
+
+app.patch("/api/admin/fuel/vehicles/:id", requireRole("admin"), (req, res) => {
+  try {
+    const vehicle = updateFuelVehicle(Number(req.params.id), req.body || {});
+    if (!vehicle) {
+      res.status(404).json({ error: "Veículo não encontrado." });
+      return;
+    }
+
+    io.emit("fuel:updated", { vehicle, at: new Date().toISOString() });
+    res.json({ vehicle });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível atualizar o veículo." });
+  }
+});
+
+app.delete("/api/admin/fuel/vehicles/:id", requireRole("admin"), (req, res) => {
+  const vehicle = deleteFuelVehicle(Number(req.params.id));
+  if (!vehicle) {
+    res.status(404).json({ error: "Veículo não encontrado." });
+    return;
+  }
+
+  io.emit("fuel:updated", { vehicleId: vehicle.id, deleted: true, at: new Date().toISOString() });
+  res.json({ ok: true, vehicle });
+});
+
+app.post("/api/admin/fuel/drivers", requireRole("admin"), (req, res) => {
+  try {
+    const driver = createFuelDriver(req.body || {});
+    io.emit("fuel:updated", { driver, at: new Date().toISOString() });
+    res.status(201).json({ driver });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível cadastrar o motorista." });
+  }
+});
+
+app.patch("/api/admin/fuel/drivers/:id", requireRole("admin"), (req, res) => {
+  const driver = updateFuelDriver(Number(req.params.id), req.body || {});
+  if (!driver) {
+    res.status(404).json({ error: "Motorista não encontrado." });
+    return;
+  }
+
+  io.emit("fuel:updated", { driver, at: new Date().toISOString() });
+  res.json({ driver });
+});
+
+app.delete("/api/admin/fuel/drivers/:id", requireRole("admin"), (req, res) => {
+  const driver = deleteFuelDriver(Number(req.params.id));
+  if (!driver) {
+    res.status(404).json({ error: "Motorista não encontrado." });
+    return;
+  }
+
+  io.emit("fuel:updated", { driverId: driver.id, deleted: true, at: new Date().toISOString() });
+  res.json({ ok: true, driver });
+});
+
+app.post("/api/admin/fuel/import", requireRole("admin"), async (req, res) => {
+  try {
+    const fileData = saveUploadedFile(req.body || {});
+
+    if (!fileData.filePath) {
+      throw new Error("Envie um arquivo .xlsx ou .xlsm para importar.");
+    }
+
+    const extension = path.extname(fileData.fileName || "").toLowerCase();
+    if (![".xlsx", ".xlsm"].includes(extension)) {
+      throw new Error("Formato inválido. Use .xlsx ou .xlsm.");
+    }
+
+    const result = await importFuelWorkbook(fileData.filePath, { sourceFile: fileData.fileName });
+
+    io.emit("fuel:updated", {
+      import: result,
+      at: new Date().toISOString()
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Não foi possível importar a planilha de abastecimento." });
+  }
+});
+
+app.get("/api/technical/me", requireAccessPermission("canManageVisits"), (req, res) => {
+  const producers = getProducersForAccessAccount(req.access.id);
+  const producerIds = new Set(producers.map((producer) => producer.id));
+  const visits = listVisits().filter((visit) => producerIds.has(visit.producerId));
+
+  res.json({ account: req.access, producers, visits, summary: buildVisitSummary(visits) });
+});
+
+app.post("/api/technical/visits", requireAccessPermission("canManageVisits"), (req, res) => {
+  const producerId = Number(req.body?.producerId);
+  if (!accessAccountCanUseProducer(req.access.id, producerId)) {
+    res.status(403).json({ error: "Esse produtor não está vinculado ao seu acesso." });
+    return;
+  }
+
+  const visit = createVisit(req.body || {}, req.access.name);
+  if (!visit) {
+    res.status(400).json({ error: "Não foi possível cadastrar a visita." });
+    return;
+  }
+
+  io.emit("visit:updated", {
+    visit,
+    producerId: visit.producerId,
+    reportId: visit.reportId,
+    at: new Date().toISOString()
+  });
+  res.status(201).json({ visit });
+});
+
+app.patch("/api/technical/visits/:id", requireAccessPermission("canManageVisits"), (req, res) => {
+  const visitId = Number(req.params.id);
+  const current = listVisits().find((visit) => visit.id === visitId);
+
+  if (!current) {
+    res.status(404).json({ error: "Visita técnica não encontrada." });
+    return;
+  }
+
+  if (!accessAccountCanUseProducer(req.access.id, current.producerId)) {
+    res.status(403).json({ error: "Essa visita não pertence ao seu escopo de produtores." });
+    return;
+  }
+
+  const visit = updateVisit(visitId, req.body || {}, req.access.name);
+  io.emit("visit:updated", {
+    visit,
+    producerId: visit.producerId,
+    reportId: visit.reportId,
+    at: new Date().toISOString()
+  });
+  res.json({ visit });
+});
+
+app.get("/api/producer/me", requireAccessPermission("canSubmitReports"), (req, res) => {
+  const producer = getProducersForAccessAccount(req.access.id)[0] || null;
 
   if (!producer) {
     res.status(404).json({ error: "Produtor não encontrado." });
@@ -429,8 +687,9 @@ app.get("/api/producer/me", requireRole("producer"), (req, res) => {
   });
 });
 
-app.post("/api/producer/reports", requireRole("producer"), (req, res) => {
-  const producer = createReportForProducer(req.auth.producerId, req.body || {});
+app.post("/api/producer/reports", requireAccessPermission("canSubmitReports"), (req, res) => {
+  const scopedProducer = getProducersForAccessAccount(req.access.id)[0] || null;
+  const producer = scopedProducer ? createReportForProducer(scopedProducer.id, req.body || {}) : null;
 
   if (!producer) {
     res.status(404).json({ error: "Produtor não encontrado." });
@@ -468,7 +727,7 @@ app.post("/api/reports/:token", requireRole("admin"), (req, res) => {
 if (isProduction) {
   const distDir = path.join(rootDir, "dist");
   app.use(express.static(distDir));
-  app.get("*", (_req, res) => {
+  app.get("/{*splat}", (_req, res) => {
     res.sendFile(path.join(distDir, "index.html"));
   });
 } else {
@@ -663,6 +922,73 @@ function sanitizeFileName(name) {
     .trim();
 
   return cleaned.slice(0, 180) || "documento.bin";
+}
+
+function handleAccessLogin(req, res, portal) {
+  const { login, accessCode } = req.body || {};
+  const key = loginKey(req, login || portal);
+
+  if (isRateLimited(key)) {
+    res.status(429).json({ error: "Muitas tentativas. Aguarde alguns minutos." });
+    return;
+  }
+
+  const account = verifyAccessAccountCredentials(login, accessCode);
+  const isProducerPortal = portal === "producer";
+  const allowed = account && (
+    isProducerPortal
+      ? account.accountType === "PRODUTOR" && account.canSubmitReports
+      : account.accountType !== "PRODUTOR" && account.canManageVisits
+  );
+
+  if (!allowed) {
+    recordLoginFailure(key);
+    res.status(401).json({ error: "Login ou código inválidos para este portal." });
+    return;
+  }
+
+  clearLoginFailures(key);
+  const session = createAuthSession({
+    role: "access",
+    accessAccountId: account.id,
+    ttlHours: isProducerPortal ? 24 * 14 : 12
+  });
+  setSessionCookie(res, session);
+
+  const producers = getProducersForAccessAccount(account.id);
+  if (isProducerPortal) {
+    const producer = producers[0] || null;
+    res.json({
+      user: { role: "producer", name: account.name },
+      account,
+      producer,
+      reports: producer ? getReportsForProducer(producer.id) : [],
+      visits: producer ? getVisitsForProducer(producer.id) : []
+    });
+    return;
+  }
+
+  res.json({ user: { role: "technical", name: account.name }, account, producers });
+}
+
+function requireAccessPermission(permission) {
+  return (req, res, next) => {
+    const auth = readAuth(req);
+    if (!auth || auth.role !== "access" || !auth.accessAccountId) {
+      res.status(401).json({ error: "Acesso não autenticado." });
+      return;
+    }
+
+    const account = getAccessAccountById(auth.accessAccountId);
+    if (!account?.active || !account[permission]) {
+      res.status(403).json({ error: "Acesso não autorizado para esta operação." });
+      return;
+    }
+
+    req.auth = auth;
+    req.access = account;
+    next();
+  };
 }
 
 function requireRole(role) {

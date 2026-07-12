@@ -4,10 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server/index.mjs",
-    "start": "node server/index.mjs",
+    "dev": "node --env-file-if-exists=.env server/index.mjs",
+    "start": "node --env-file-if-exists=.env server/index.mjs",
     "build": "vite build",
-    "import": "node server/importExcel.mjs \"../PROJETOS INTERNALIZADOS PAF 26_27.xlsx\""
+    "test": "npx -y deno-bin test --config supabase/functions/paf-api/deno.json supabase/functions/paf-api/core.test.ts",
+    "typecheck:edge": "npx -y deno-bin check --config supabase/functions/paf-api/deno.json supabase/functions/paf-api/index.ts",
+    "check": "npm run test && npm run typecheck:edge && npm run build",
+    "audit": "npm audit --audit-level=high",
+    "bootstrap:admin": "node --env-file-if-exists=.env scripts/bootstrapAdmin.mjs",
+    "import": "node server/importExcel.mjs \"../PROJETOS INTERNALIZADOS PAF 26_27.xlsx\"",
+    "import:fuel": "node server/importFuelExcel.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",
@@ -17,7 +23,6 @@
     "react-dom": "^19.2.3",
     "read-excel-file": "^9.2.0",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1",
     "vite": "^7.3.0"
   },
   "overrides": {

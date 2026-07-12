@@ -1,0 +1,3 @@
+-- O schema de produção é versionado exclusivamente em supabase/migrations/.
+-- Não execute um schema avulso: use `supabase db push` ou aplique as migrations
+-- na ordem registrada para preservar RLS, índices, constraints e storage.

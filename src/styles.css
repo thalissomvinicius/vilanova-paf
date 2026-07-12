@@ -1798,6 +1798,399 @@ tbody tr:hover,
   border-top: 0;
 }
 
+.form-success {
+  margin: 0;
+  border: 1px solid #b9d9c6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f1fbf4;
+  color: var(--green-dark);
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.fuel-cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  margin-bottom: 16px;
+  border: 1px solid rgba(191, 159, 104, 0.32);
+  border-radius: 8px;
+  padding: 22px;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 222, 0.94), rgba(255, 255, 255, 0.94)),
+    var(--surface);
+}
+
+.fuel-cockpit-copy {
+  max-width: 760px;
+}
+
+.fuel-cockpit-copy h2 {
+  max-width: 680px;
+  margin-bottom: 14px;
+  color: var(--green-dark);
+  font-size: clamp(1.65rem, 2vw, 2.45rem);
+  line-height: 1.08;
+}
+
+.fuel-cockpit-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fuel-cockpit-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  border: 1px solid rgba(95, 147, 60, 0.18);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.fuel-cockpit-strip strong {
+  color: var(--green-dark);
+}
+
+.fuel-cockpit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fuel-summary-band {
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+}
+
+.fuel-command-grid {
+  display: grid;
+  grid-template-columns: minmax(430px, 1.25fr) minmax(340px, 0.85fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.fuel-decision-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(320px, 1fr) minmax(320px, 1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.fuel-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgba(63, 107, 42, 0.07);
+}
+
+.fuel-card h2 {
+  margin-bottom: 7px;
+  color: var(--green-dark);
+}
+
+.fuel-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.fuel-chart-card {
+  min-height: 342px;
+}
+
+.fuel-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: var(--green);
+}
+
+.fuel-command-card {
+  display: grid;
+  align-content: space-between;
+  gap: 18px;
+  background:
+    linear-gradient(135deg, rgba(63, 107, 42, 0.96), rgba(95, 147, 60, 0.9)),
+    var(--green-dark);
+  color: #fffdf2;
+}
+
+.fuel-command-card h2,
+.fuel-command-card .eyebrow {
+  color: #fffdf2;
+}
+
+.fuel-command-card p {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.fuel-import-form {
+  display: grid;
+  gap: 10px;
+}
+
+.fuel-import-form input[type="file"] {
+  width: 100%;
+  min-height: 44px;
+  border: 1px dashed rgba(255, 255, 255, 0.34);
+  border-radius: 8px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fffdf2;
+}
+
+.fuel-bars,
+.fuel-ranking-list {
+  display: grid;
+  gap: 10px;
+}
+
+.fuel-bar-row {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.8fr) minmax(120px, 1.5fr) minmax(72px, auto);
+  align-items: center;
+  gap: 10px;
+}
+
+.fuel-bar-row span,
+.fuel-ranking-item span,
+.fuel-insight-strip span,
+.fuel-insight-strip small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.fuel-bar-row > div,
+.fuel-ranking-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf0ed;
+}
+
+.fuel-bar-row i,
+.fuel-ranking-bar i {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--green), var(--amber));
+}
+
+.fuel-bar-row strong,
+.fuel-ranking-item b {
+  color: var(--green-dark);
+  font-size: 0.84rem;
+  text-align: right;
+}
+
+.fuel-ranking-item {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(90px, 0.75fr) minmax(74px, auto);
+  align-items: center;
+  gap: 12px;
+}
+
+.fuel-ranking-item.quota,
+.fuel-ranking-item.efficiency {
+  grid-template-columns: minmax(150px, 1fr) minmax(110px, 0.8fr) minmax(88px, auto);
+}
+
+.fuel-ranking-item strong {
+  display: block;
+  color: var(--ink);
+  line-height: 1.15;
+}
+
+.fuel-alert-list {
+  display: grid;
+  gap: 10px;
+}
+
+.fuel-alert-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  border: 1px solid rgba(225, 76, 37, 0.18);
+  border-radius: 8px;
+  padding: 11px 12px;
+  background: #fff7ea;
+}
+
+.fuel-alert-item strong {
+  color: var(--green-dark);
+  line-height: 1.15;
+}
+
+.fuel-alert-item span {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.fuel-alert-item b {
+  color: var(--amber);
+  white-space: nowrap;
+}
+
+.danger-text {
+  color: var(--red) !important;
+}
+
+.fuel-table-shell {
+  margin-bottom: 18px;
+}
+
+.fuel-vehicle-shell {
+  margin-bottom: 18px;
+}
+
+.fuel-vehicle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+  padding: 14px 18px 18px;
+}
+
+.fuel-vehicle-card,
+.fuel-empty-card {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fffdf8;
+}
+
+.fuel-vehicle-card div {
+  min-width: 0;
+}
+
+.fuel-vehicle-card strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--ink);
+  line-height: 1.18;
+}
+
+.fuel-vehicle-card span,
+.fuel-vehicle-card small,
+.fuel-empty-card span {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.fuel-vehicle-card b {
+  display: block;
+  color: var(--green-dark);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fuel-empty-card {
+  align-items: center;
+  justify-content: flex-start;
+  color: var(--green-dark);
+}
+
+.fuel-insight-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 18px;
+  background: #fffdf8;
+}
+
+.fuel-insight-strip div {
+  min-width: 0;
+  border: 1px solid rgba(191, 159, 104, 0.28);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.fuel-insight-strip strong {
+  display: block;
+  margin: 4px 0 2px;
+  color: var(--green-dark);
+  font-size: 1.08rem;
+}
+
+.fuel-table-wrap table {
+  min-width: 1100px;
+  table-layout: fixed;
+}
+
+.fuel-table-wrap th,
+.fuel-table-wrap td {
+  padding: 12px 10px;
+}
+
+.fuel-table-wrap th:nth-child(1),
+.fuel-table-wrap td:nth-child(1) {
+  width: 12%;
+}
+
+.fuel-table-wrap th:nth-child(2),
+.fuel-table-wrap td:nth-child(2) {
+  width: 20%;
+}
+
+.fuel-table-wrap th:nth-child(3),
+.fuel-table-wrap td:nth-child(3) {
+  width: 13%;
+}
+
+.fuel-table-wrap th:nth-child(4),
+.fuel-table-wrap td:nth-child(4),
+.fuel-table-wrap th:nth-child(5),
+.fuel-table-wrap td:nth-child(5) {
+  width: 13%;
+}
+
+.fuel-table-wrap th:nth-child(6),
+.fuel-table-wrap td:nth-child(6),
+.fuel-table-wrap th:nth-child(7),
+.fuel-table-wrap td:nth-child(7),
+.fuel-table-wrap th:nth-child(8),
+.fuel-table-wrap td:nth-child(8) {
+  width: 9%;
+}
+
+.fuel-entry-form {
+  display: grid;
+  gap: 14px;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+.fuel-entry-form .modal-actions {
+  margin-top: 0;
+}
+
 .task-editor .inline-grid {
   grid-template-columns: 1fr;
 }
@@ -2620,6 +3013,104 @@ tbody tr:hover,
   margin: 0;
   color: var(--red);
   font-weight: 900;
+}
+
+.step-form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.step-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  border: 1px solid rgba(191, 159, 104, 0.26);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fffdf8;
+}
+
+.step-nav button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 950;
+  text-align: left;
+}
+
+.step-nav button span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: #f4efe4;
+  color: var(--green-dark);
+  font-size: 0.72rem;
+}
+
+.step-nav button.active {
+  border-color: rgba(95, 147, 60, 0.22);
+  background: #eef6e8;
+  color: var(--green-dark);
+}
+
+.step-nav button.done span {
+  background: var(--green-dark);
+  color: #fff;
+}
+
+.step-viewport {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.step-track {
+  display: flex;
+  transition: transform 0.28s ease;
+  will-change: transform;
+}
+
+.step-panel {
+  flex: 0 0 100%;
+  min-width: 0;
+}
+
+.step-description {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.step-fields {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  min-height: 260px;
+}
+
+.step-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.step-actions .ghost-button,
+.step-actions .primary-button {
+  min-width: 150px;
 }
 
 .history-panel {
@@ -4023,6 +4514,7 @@ tbody tr:hover,
 }
 
 .registration-form > .field:has(textarea),
+.registration-form > .step-form,
 .registration-form > .registration-success-card,
 .registration-form > .form-error,
 .registration-form > .form-actions {
@@ -4129,6 +4621,9 @@ tbody tr:hover,
   .executive-hero,
   .executive-chart-grid,
   .executive-bottom-grid,
+  .fuel-cockpit,
+  .fuel-command-grid,
+  .fuel-decision-grid,
   .registration-hero,
   .registration-directory-grid,
   .registration-aux-panel {
@@ -4153,6 +4648,10 @@ tbody tr:hover,
   }
 
   .registration-hero-actions {
+    justify-content: flex-start;
+  }
+
+  .fuel-cockpit-actions {
     justify-content: flex-start;
   }
 
@@ -4260,6 +4759,16 @@ tbody tr:hover,
   .executive-hero-actions,
   .executive-hero-actions .primary-button,
   .executive-hero-actions .icon-text-button {
+    width: 100%;
+  }
+
+  .fuel-cockpit {
+    padding: 16px;
+  }
+
+  .fuel-cockpit-actions,
+  .fuel-cockpit-actions .primary-button,
+  .fuel-cockpit-actions .icon-text-button {
     width: 100%;
   }
 
@@ -4402,7 +4911,8 @@ tbody tr:hover,
   .overview-band,
   .producer-summary,
   .compact-band,
-  .report-summary-band {
+  .report-summary-band,
+  .fuel-summary-band {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -4540,6 +5050,11 @@ tbody tr:hover,
   .producer-summary,
   .compact-band,
   .report-summary-band,
+  .fuel-summary-band,
+  .fuel-cockpit-actions,
+  .fuel-command-grid,
+  .fuel-decision-grid,
+  .fuel-insight-strip,
   .filters,
   .filters-compact,
   .report-filters,
@@ -4561,8 +5076,20 @@ tbody tr:hover,
   .admin-main .document-upload-panel,
   .admin-main .visit-editor,
   .admin-main .task-editor,
-  .admin-main .document-editor {
+  .admin-main .document-editor,
+  .fuel-entry-form {
     grid-template-columns: 1fr;
+  }
+
+  .fuel-ranking-item,
+  .fuel-bar-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .fuel-bar-row strong,
+  .fuel-ranking-item b {
+    text-align: left;
   }
 
   .filters > .search-field,

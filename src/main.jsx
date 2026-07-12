@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { io } from "socket.io-client";
 import {
   Activity,
   ArrowRight,
   BarChart3,
+  Building2,
   Boxes,
   CalendarDays,
   Check,
@@ -26,6 +27,7 @@ import {
   LogIn,
   LogOut,
   MapPin,
+  Menu,
   PackageCheck,
   Pencil,
   Plus,
@@ -37,6 +39,7 @@ import {
   ShieldCheck,
   Sprout,
   TreePalm,
+  Trash2,
   Truck,
   UserCheck,
   UserRound,
@@ -44,6 +47,7 @@ import {
   X
 } from "lucide-react";
 import "./styles.css";
+import "./redesign.css";
 
 const AREA_STATUSES = [
   "Sem alteração",
@@ -158,12 +162,19 @@ const DOCUMENT_TONE = {
   VENCIDO: "visit"
 };
 
+const ACCESS_TYPES = [
+  { value: "PRODUTOR", label: "Produtor", description: "Envia relatórios do próprio cadastro." },
+  { value: "TECNICO", label: "Técnico", description: "Registra visitas dos produtores vinculados." },
+  { value: "ORGANIZACAO", label: "Organização", description: "Gerencia vários produtores, como uma cooperativa." }
+];
+
 const NAV_ITEMS = [
   { id: "dashboard", label: "Painel", path: "/admin/dashboard", icon: BarChart3 },
   { id: "producers", label: "Produtores", path: "/admin/produtores", icon: Users },
   { id: "registrations", label: "Cadastros", path: "/admin/cadastros", icon: Plus },
   { id: "logins", label: "Acessos", path: "/admin/acessos", icon: KeyRound },
   { id: "reports", label: "Relatórios", path: "/admin/relatorios", icon: ClipboardList },
+  { id: "fuel", label: "Abastecimento", path: "/admin/abastecimento", icon: Droplets },
   { id: "visits", label: "Visitas", path: "/admin/visitas", icon: UserCheck },
   { id: "tasks", label: "Pendências", path: "/admin/pendencias", icon: Check },
   { id: "documents", label: "Documentos", path: "/admin/documentos", icon: FileText }
@@ -177,6 +188,7 @@ const ADMIN_ROUTE_BY_PATH = {
   "/admin/acessos": "logins",
   "/admin/logins": "logins",
   "/admin/relatorios": "reports",
+  "/admin/abastecimento": "fuel",
   "/admin/visitas": "visits",
   "/admin/pendencias": "tasks",
   "/admin/documentos": "documents"
@@ -191,6 +203,7 @@ const REPORT_PAGE_SIZE = 20;
 const VISIT_PAGE_SIZE = 18;
 const TASK_PAGE_SIZE = 18;
 const DOCUMENT_PAGE_SIZE = 18;
+const FUEL_PAGE_SIZE = 22;
 const MAX_DOCUMENT_UPLOAD_BYTES = 6 * 1024 * 1024;
 
 const BRAND_ASSETS = {
@@ -302,6 +315,10 @@ const PARTNER_GROUPS = [
 
 function App() {
   const path = window.location.pathname;
+
+  if (path.startsWith("/tecnico")) {
+    return <TechnicalPortal />;
+  }
 
   if (path.startsWith("/produtor")) {
     return <ProducerPortal />;
@@ -737,6 +754,9 @@ function AdminLogin({ onLogin }) {
             <a className="login-switch" href="/produtor">
               Sou produtor e quero preencher relatório
             </a>
+            <a className="login-switch" href="/tecnico">
+              Acesso da equipe técnica
+            </a>
           </form>
         </section>
       </section>
@@ -746,6 +766,7 @@ function AdminLogin({ onLogin }) {
 
 function AdminDashboard({ user, onLogout }) {
   const [activeView, setActiveView] = useState(() => getAdminViewFromPath());
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
     status: "",
@@ -782,6 +803,14 @@ function AdminDashboard({ user, onLogout }) {
     category: "",
     agency: ""
   });
+  const [fuelFilters, setFuelFilters] = useState({
+    search: "",
+    year: "",
+    month: "",
+    driver: "",
+    plate: "",
+    location: ""
+  });
   const [options, setOptions] = useState({
     statuses: [],
     agencies: [],
@@ -792,6 +821,7 @@ function AdminDashboard({ user, onLogout }) {
   const [producers, setProducers] = useState([]);
   const [summary, setSummary] = useState(null);
   const [technicians, setTechnicians] = useState([]);
+  const [accesses, setAccesses] = useState([]);
   const [reports, setReports] = useState([]);
   const [reportSummary, setReportSummary] = useState(null);
   const [visits, setVisits] = useState([]);
@@ -800,21 +830,42 @@ function AdminDashboard({ user, onLogout }) {
   const [taskSummary, setTaskSummary] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [documentSummary, setDocumentSummary] = useState(null);
+  const [fuelRecords, setFuelRecords] = useState([]);
+  const [fuelVehicles, setFuelVehicles] = useState([]);
+  const [fuelDrivers, setFuelDrivers] = useState([]);
+  const [fuelSummary, setFuelSummary] = useState(null);
+  const [fuelOptions, setFuelOptions] = useState({
+    years: [],
+    months: [],
+    drivers: [],
+    plates: [],
+    locations: [],
+    fleetTypes: [],
+    driverItems: []
+  });
   const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [techniciansLoading, setTechniciansLoading] = useState(false);
+  const [accessesLoading, setAccessesLoading] = useState(false);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [visitsLoading, setVisitsLoading] = useState(false);
   const [tasksLoading, setTasksLoading] = useState(false);
   const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [fuelLoading, setFuelLoading] = useState(false);
   const [toast, setToast] = useState("");
   const [liveAt, setLiveAt] = useState("");
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   const query = useMemo(() => buildQuery(filters), [filters]);
   const reportQuery = useMemo(() => buildQuery(reportFilters), [reportFilters]);
   const visitQuery = useMemo(() => buildQuery(visitFilters), [visitFilters]);
   const taskQuery = useMemo(() => buildQuery(taskFilters), [taskFilters]);
   const documentQuery = useMemo(() => buildQuery(documentFilters), [documentFilters]);
+  const fuelQuery = useMemo(() => buildQuery(fuelFilters), [fuelFilters]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
 
   useEffect(() => {
     if (window.location.pathname === "/admin") {
@@ -862,8 +913,21 @@ function AdminDashboard({ user, onLogout }) {
   }, [activeView, documentQuery]);
 
   useEffect(() => {
+    if (activeView === "fuel") {
+      refreshFuel();
+    }
+  }, [activeView, fuelQuery]);
+
+  useEffect(() => {
     if (activeView === "registrations") {
       refreshTechnicians();
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    if (activeView === "logins") {
+      refreshAccesses();
+      refreshTechnicians({ quiet: true });
     }
   }, [activeView]);
 
@@ -874,71 +938,40 @@ function AdminDashboard({ user, onLogout }) {
     refreshVisits({ quiet: true });
     refreshTasks({ quiet: true });
     refreshDocuments({ quiet: true });
+    refreshFuel({ quiet: true });
   }, [activeView]);
 
   useEffect(() => {
-    const socket = io();
+    let stopped = false;
 
-    socket.on("report:created", (event) => {
-      setLiveAt(event.at);
-      setToast(`Relatório recebido: ${event.producer.name}`);
-      refreshProducers({ quiet: true });
-      if (activeView === "reports") {
+    function refreshVisibleView() {
+      if (stopped || document.visibilityState !== "visible") return;
+      setLiveAt(new Date().toISOString());
+      if (activeView === "dashboard") {
+        refreshProducers({ quiet: true });
         refreshReports({ quiet: true });
-      }
-    });
-
-    socket.on("producer:updated", (event) => {
-      setLiveAt(event.at);
-      refreshProducers({ quiet: true });
-    });
-
-    socket.on("technician:updated", (event) => {
-      setLiveAt(event.at);
-      setToast(`Cadastro técnico atualizado: ${event.technician.name}`);
-      refreshOptions();
-      if (activeView === "registrations") {
-        refreshTechnicians({ quiet: true });
-      }
-    });
-
-    socket.on("report:reviewed", (event) => {
-      setLiveAt(event.at);
-      setToast(`Análise atualizada: ${event.report.producerName}`);
-      if (activeView === "reports") {
-        refreshReports({ quiet: true });
-      }
-    });
-
-    socket.on("visit:updated", (event) => {
-      setLiveAt(event.at);
-      setToast(`Visita atualizada: ${event.visit.producerName}`);
-      if (activeView === "visits") {
         refreshVisits({ quiet: true });
-      }
-      if (activeView === "reports") {
-        refreshReports({ quiet: true });
-      }
-    });
-
-    socket.on("task:updated", (event) => {
-      setLiveAt(event.at);
-      setToast(`Pendência atualizada: ${event.task.title}`);
-      if (activeView === "tasks") {
         refreshTasks({ quiet: true });
-      }
-    });
-
-    socket.on("document:updated", (event) => {
-      setLiveAt(event.at);
-      setToast(`Documento atualizado: ${event.document.title}`);
-      if (activeView === "documents") {
         refreshDocuments({ quiet: true });
-      }
-    });
+        refreshFuel({ quiet: true });
+      } else if (activeView === "producers") refreshProducers({ quiet: true });
+      else if (activeView === "registrations") refreshTechnicians({ quiet: true });
+      else if (activeView === "logins") refreshAccesses({ quiet: true });
+      else if (activeView === "reports") refreshReports({ quiet: true });
+      else if (activeView === "visits") refreshVisits({ quiet: true });
+      else if (activeView === "tasks") refreshTasks({ quiet: true });
+      else if (activeView === "documents") refreshDocuments({ quiet: true });
+      else if (activeView === "fuel") refreshFuel({ quiet: true });
+    }
 
-    return () => socket.close();
-  }, [activeView, query, reportQuery, visitQuery, taskQuery, documentQuery]);
+    const timer = window.setInterval(refreshVisibleView, 30000);
+    document.addEventListener("visibilitychange", refreshVisibleView);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshVisibleView);
+    };
+  }, [activeView, query, reportQuery, visitQuery, taskQuery, documentQuery, fuelQuery]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -988,6 +1021,17 @@ function AdminDashboard({ user, onLogout }) {
       .catch(handleAuthError)
       .finally(() => {
         if (!quiet) setTechniciansLoading(false);
+      });
+  }
+
+  function refreshAccesses({ quiet = false } = {}) {
+    if (!quiet) setAccessesLoading(true);
+
+    return fetchJson("/api/admin/accesses")
+      .then((data) => setAccesses(data.accesses || []))
+      .catch(handleAuthError)
+      .finally(() => {
+        if (!quiet) setAccessesLoading(false);
       });
   }
 
@@ -1047,6 +1091,23 @@ function AdminDashboard({ user, onLogout }) {
       });
   }
 
+  function refreshFuel({ quiet = false } = {}) {
+    if (!quiet) setFuelLoading(true);
+
+    return fetchJson(`/api/admin/fuel${fuelQuery ? `?${fuelQuery}` : ""}`)
+      .then((data) => {
+        setFuelRecords(data.records || []);
+        setFuelVehicles(data.vehicles || []);
+        setFuelDrivers(data.drivers || []);
+        setFuelSummary(data.summary || null);
+        setFuelOptions(data.options || { years: [], months: [], drivers: [], plates: [], locations: [], fleetTypes: [], driverItems: [] });
+      })
+      .catch(handleAuthError)
+      .finally(() => {
+        if (!quiet) setFuelLoading(false);
+      });
+  }
+
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }));
   }
@@ -1065,6 +1126,10 @@ function AdminDashboard({ user, onLogout }) {
 
   function updateDocumentFilter(key, value) {
     setDocumentFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateFuelFilter(key, value) {
+    setFuelFilters((current) => ({ ...current, [key]: value }));
   }
 
   function resetFilters() {
@@ -1118,23 +1183,29 @@ function AdminDashboard({ user, onLogout }) {
     });
   }
 
+  function resetFuelFilters() {
+    setFuelFilters({
+      search: "",
+      year: "",
+      month: "",
+      driver: "",
+      plate: "",
+      location: ""
+    });
+  }
+
   function navigateAdmin(item) {
     if (window.location.pathname !== item.path) {
       window.history.pushState({ adminView: item.id }, "", item.path);
     }
 
     setActiveView(item.id);
+    setSidebarOpen(false);
   }
 
   async function logout() {
     await fetchJson("/api/auth/logout", { method: "POST" }).catch(() => null);
     onLogout();
-  }
-
-  async function copyProducerAccess(producer) {
-    const message = buildCredentialMessage(producer);
-    await navigator.clipboard.writeText(message);
-    setToast("Login do produtor copiado.");
   }
 
   async function saveProducer(producerId, payload) {
@@ -1194,6 +1265,44 @@ function AdminDashboard({ user, onLogout }) {
     return data.technician;
   }
 
+  async function createAccessRegistration(payload) {
+    const data = await fetchJson("/api/admin/accesses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    setAccesses((current) => [data.account, ...current.filter((access) => access.id !== data.account.id)]);
+    setToast("Acesso cadastrado.");
+    refreshAccesses({ quiet: true });
+    return data;
+  }
+
+  async function saveAccessRegistration(accessId, payload) {
+    const data = await fetchJson(`/api/admin/accesses/${accessId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    setAccesses((current) => current.map((access) => (access.id === data.access.id ? data.access : access)));
+    setToast(data.access.active ? "Acesso atualizado." : "Acesso bloqueado.");
+    return data.access;
+  }
+
+  async function resetAccessRegistration(accessId) {
+    const data = await fetchJson(`/api/admin/accesses/${accessId}/reset-code`, { method: "POST" });
+    setAccesses((current) => current.map((access) => (access.id === data.account.id ? data.account : access)));
+    setToast("Novo código gerado. As sessões anteriores foram encerradas.");
+    return data;
+  }
+
+  async function removeAccessRegistration(accessId) {
+    await fetchJson(`/api/admin/accesses/${accessId}`, { method: "DELETE" });
+    setAccesses((current) => current.filter((access) => access.id !== accessId));
+    setToast("Acesso excluído.");
+  }
+
   async function saveReportReview(reportId, payload) {
     const data = await fetchJson(`/api/admin/reports/${reportId}/review`, {
       method: "PATCH",
@@ -1204,20 +1313,6 @@ function AdminDashboard({ user, onLogout }) {
     setReports((current) => current.map((report) => (report.id === data.report.id ? data.report : report)));
     setToast("Análise técnica salva.");
     refreshReports({ quiet: true });
-  }
-
-  async function createVisit(payload) {
-    const data = await fetchJson("/api/admin/visits", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    setVisits((current) => [data.visit, ...current.filter((visit) => visit.id !== data.visit.id)]);
-    setToast("Visita técnica programada.");
-    refreshVisits({ quiet: true });
-    refreshReports({ quiet: true });
-    return data.visit;
   }
 
   async function saveVisit(visitId, payload) {
@@ -1286,7 +1381,151 @@ function AdminDashboard({ user, onLogout }) {
     return data.document;
   }
 
-  function exportProducers({ credentials = false } = {}) {
+  async function createFuelEntry(payload) {
+    const data = await fetchJson("/api/admin/fuel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    setFuelRecords((current) => [data.record, ...current.filter((record) => record.id !== data.record.id)]);
+    setToast("Abastecimento lançado.");
+    refreshFuel({ quiet: true });
+    return data.record;
+  }
+
+  async function createFuelVehicle(payload) {
+    const data = await fetchJson("/api/admin/fuel/vehicles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    setFuelVehicles((current) => [data.vehicle, ...current.filter((vehicle) => vehicle.id !== data.vehicle.id)]);
+    setToast("Veículo cadastrado.");
+    refreshFuel({ quiet: true });
+    return data.vehicle;
+  }
+
+  async function saveFuelVehicleRegistration(vehicleId, payload) {
+    const data = await fetchJson(`/api/admin/fuel/vehicles/${vehicleId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    setFuelVehicles((current) => current.map((vehicle) => (vehicle.id === data.vehicle.id ? data.vehicle : vehicle)));
+    setToast("Veículo atualizado.");
+    refreshFuel({ quiet: true });
+    return data.vehicle;
+  }
+
+  async function removeFuelVehicleRegistration(vehicleId) {
+    await fetchJson(`/api/admin/fuel/vehicles/${vehicleId}`, { method: "DELETE" });
+    setFuelVehicles((current) => current.filter((vehicle) => vehicle.id !== vehicleId));
+    setToast("Veículo excluído. Os abastecimentos históricos foram preservados.");
+    refreshFuel({ quiet: true });
+  }
+
+  async function createFuelDriverRegistration(payload) {
+    const data = await fetchJson("/api/admin/fuel/drivers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    setFuelDrivers((current) => [data.driver, ...current.filter((driver) => driver.id !== data.driver.id)]);
+    setToast("Motorista cadastrado.");
+    refreshFuel({ quiet: true });
+    return data.driver;
+  }
+
+  async function saveFuelDriverRegistration(driverId, payload) {
+    const data = await fetchJson(`/api/admin/fuel/drivers/${driverId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    setFuelDrivers((current) => current.map((driver) => (driver.id === data.driver.id ? data.driver : driver)));
+    setToast("Motorista atualizado.");
+    refreshFuel({ quiet: true });
+    return data.driver;
+  }
+
+  async function removeFuelDriverRegistration(driverId) {
+    await fetchJson(`/api/admin/fuel/drivers/${driverId}`, { method: "DELETE" });
+    setFuelDrivers((current) => current.filter((driver) => driver.id !== driverId));
+    setToast("Motorista excluído.");
+    refreshFuel({ quiet: true });
+  }
+
+  async function importFuelFile(file) {
+    const fileBase64 = await fileToBase64(file);
+    const result = await fetchJson("/api/admin/fuel/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileBase64,
+        fileName: file.name,
+        fileMime: file.type || "application/vnd.ms-excel"
+      })
+    });
+
+    setToast(`Importados ${result.importedRecords || 0} abastecimentos.`);
+    refreshFuel({ quiet: true });
+    return result;
+  }
+
+  function exportFuel() {
+    const headers = [
+      "Data",
+      "Ano",
+      "Mês",
+      "Condutor",
+      "Placa",
+      "Veículo",
+      "Responsável",
+      "Litros solicitados",
+      "Litros atendidos",
+      "KM inicial",
+      "KM final",
+      "KM rodado",
+      "Média KM/L",
+      "Local",
+      "Requisição",
+      "Cota",
+      "Observações"
+    ];
+
+    const lines = fuelRecords.map((record) =>
+      [
+        record.servedDate,
+        record.year,
+        record.month,
+        record.driver,
+        record.plate,
+        record.vehicleName,
+        record.vehicleResponsible || record.assignedTo,
+        formatDecimal(record.requestedLiters),
+        formatDecimal(record.suppliedLiters),
+        formatDecimal(record.kmStart),
+        formatDecimal(record.kmEnd),
+        formatDecimal(record.kmDriven),
+        formatDecimal(record.kmPerLiter),
+        record.location,
+        record.requisition,
+        formatDecimal(record.quotaLiters),
+        record.notes
+      ]
+        .map(csvCell)
+        .join(";")
+    );
+
+    downloadCsv([headers.join(";"), ...lines].join("\n"), `paf-abastecimento-${new Date().toISOString().slice(0, 10)}.csv`);
+  }
+
+  function exportProducers() {
     const headers = [
       "Nome",
       "CPF",
@@ -1300,10 +1539,6 @@ function AdminDashboard({ user, onLogout }) {
       "Situacao area",
       "Precisa visita"
     ];
-
-    if (credentials) {
-      headers.push("Login produtor", "Codigo de acesso", "Link");
-    }
 
     const lines = producers.map((producer) => {
       const row = [
@@ -1320,18 +1555,12 @@ function AdminDashboard({ user, onLogout }) {
         producer.latestReport?.needsVisit ? "Sim" : "Nao"
       ];
 
-      if (credentials) {
-        row.push(producer.accessLogin, producer.accessCode, `${window.location.origin}/produtor`);
-      }
-
       return row.map(csvCell).join(";");
     });
 
     downloadCsv(
       [headers.join(";"), ...lines].join("\n"),
-      credentials
-        ? `paf-logins-produtores-${new Date().toISOString().slice(0, 10)}.csv`
-        : `paf-produtores-${new Date().toISOString().slice(0, 10)}.csv`
+      `paf-produtores-${new Date().toISOString().slice(0, 10)}.csv`
     );
   }
 
@@ -1485,26 +1714,38 @@ function AdminDashboard({ user, onLogout }) {
     dashboard: "Painel PAF 2026/2027",
     producers: "Produtores e áreas",
     registrations: "Cadastros",
-    logins: "Acessos dos produtores",
+    logins: "Gestão de acessos",
     reports: "Triagem de relatórios",
+    fuel: "Controle de abastecimento",
     visits: "Visitas técnicas",
     tasks: "Pendências internas",
     documents: "Documentos e anexos"
   }[activeView];
 
   return (
-    <div className="admin-layout">
+    <div className={`admin-layout ${sidebarOpen ? "nav-open" : ""}`}>
+      <button
+        className="sidebar-scrim"
+        type="button"
+        aria-label="Fechar menu"
+        onClick={() => setSidebarOpen(false)}
+      />
+
       <aside className="sidebar">
         <div className="sidebar-brand">
           <div className="brand-mark">
             <img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" />
           </div>
           <div>
-            <p className="eyebrow">PAF</p>
-            <strong>Sistema</strong>
+            <p className="eyebrow">Vila Nova</p>
+            <strong>PAF Gestão Rural</strong>
           </div>
+          <button className="sidebar-close" type="button" title="Fechar menu" onClick={() => setSidebarOpen(false)}>
+            <X size={19} />
+          </button>
         </div>
 
+        <p className="sidebar-section-label">Operação</p>
         <nav className="side-nav" aria-label="Navegação">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -1524,19 +1765,46 @@ function AdminDashboard({ user, onLogout }) {
         </nav>
 
         <div className="sidebar-footer">
-          <span>{user.name}</span>
-          <button className="icon-text-button dark" type="button" onClick={logout}>
-            <LogOut size={17} />
-            Sair
-          </button>
+          <img src={BRAND_ASSETS.vilaLogoOnDark} alt="Vila Nova Agroindustrial" />
+          <div className="sidebar-user">
+            <span>Usuário conectado</span>
+            <strong>{user.name}</strong>
+          </div>
+          <div className="sidebar-footer-actions">
+            <button
+              className="icon-text-button dark"
+              type="button"
+              title="Alterar senha"
+              aria-label="Alterar senha"
+              onClick={() => setPasswordModalOpen(true)}
+            >
+              <KeyRound size={17} />
+              Alterar senha
+            </button>
+            <button className="icon-text-button dark" type="button" title="Sair" aria-label="Sair" onClick={logout}>
+              <LogOut size={17} />
+              Sair
+            </button>
+          </div>
         </div>
       </aside>
 
       <main className="admin-main">
         <header className="dashboard-header">
-          <div>
-            <p className="eyebrow">Gestão da agricultura familiar</p>
-            <h1>{viewTitle}</h1>
+          <div className="dashboard-title-group">
+            <button
+              className="mobile-menu-button"
+              type="button"
+              title="Abrir menu"
+              aria-label="Abrir menu"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu size={21} />
+            </button>
+            <div>
+              <p className="eyebrow">PAF / Gestão da agricultura familiar</p>
+              <h1>{viewTitle}</h1>
+            </div>
           </div>
 
           <div className="header-actions">
@@ -1548,6 +1816,11 @@ function AdminDashboard({ user, onLogout }) {
               <button className="icon-text-button" type="button" onClick={exportReports}>
                 <Download size={18} />
                 Relatórios
+              </button>
+            ) : activeView === "fuel" ? (
+              <button className="icon-text-button" type="button" onClick={exportFuel}>
+                <Download size={18} />
+                Abastecimento
               </button>
             ) : activeView === "visits" ? (
               <button className="icon-text-button" type="button" onClick={exportVisits}>
@@ -1564,20 +1837,21 @@ function AdminDashboard({ user, onLogout }) {
                 <Download size={18} />
                 Documentos
               </button>
-            ) : activeView === "registrations" ? null : (
+            ) : activeView === "registrations" || activeView === "logins" ? null : (
               <>
                 <button className="icon-text-button" type="button" onClick={() => exportProducers()}>
                   <Download size={18} />
                   Dados
                 </button>
-                <button className="icon-text-button" type="button" onClick={() => exportProducers({ credentials: true })}>
+                <button className="icon-text-button" type="button" onClick={() => navigateAdmin(NAV_ITEMS.find((item) => item.id === "logins"))}>
                   <KeyRound size={18} />
-                  Logins
+                  Acessos
                 </button>
               </>
             )}
             <button className="icon-text-button" type="button" onClick={() => {
               if (activeView === "reports") refreshReports();
+              else if (activeView === "fuel") refreshFuel();
               else if (activeView === "visits") refreshVisits();
               else if (activeView === "tasks") refreshTasks();
               else if (activeView === "documents") refreshDocuments();
@@ -1585,6 +1859,11 @@ function AdminDashboard({ user, onLogout }) {
                 refreshTechnicians();
                 refreshProducers({ quiet: true });
                 refreshOptions();
+              }
+              else if (activeView === "logins") {
+                refreshAccesses();
+                refreshTechnicians({ quiet: true });
+                refreshProducers({ quiet: true });
               }
               else refreshProducers();
               setToast("Painel atualizado.");
@@ -1632,7 +1911,6 @@ function AdminDashboard({ user, onLogout }) {
               selected={selected}
               selectedId={selectedId}
               setSelectedId={setSelectedId}
-              copyProducerAccess={copyProducerAccess}
               saveProducer={saveProducer}
             />
           </>
@@ -1640,7 +1918,6 @@ function AdminDashboard({ user, onLogout }) {
 
         {activeView === "registrations" && (
           <RegistrationsWorkspace
-            copyProducerAccess={copyProducerAccess}
             createProducer={createProducerRegistration}
             createTechnician={createTechnicianRegistration}
             loading={loading}
@@ -1653,28 +1930,20 @@ function AdminDashboard({ user, onLogout }) {
         )}
 
         {activeView === "logins" && (
-          <>
-            <ProducerFilters
-              filters={filters}
-              onChange={updateFilter}
-              onReset={resetFilters}
-              options={options}
-              compact
-            />
-            <LoginWorkspace
-              loading={loading}
-              producers={producers}
-              selected={selected}
-              selectedId={selectedId}
-              setSelectedId={setSelectedId}
-              copyProducerAccess={copyProducerAccess}
-            />
-          </>
+          <LoginWorkspace
+            accesses={accesses}
+            createAccess={createAccessRegistration}
+            deleteAccess={removeAccessRegistration}
+            loading={accessesLoading}
+            producers={producers}
+            resetAccessCode={resetAccessRegistration}
+            saveAccess={saveAccessRegistration}
+            technicians={technicians}
+          />
         )}
 
         {activeView === "reports" && (
           <ReportsWorkspace
-            createVisit={createVisit}
             createTask={createTask}
             filters={reportFilters}
             loading={reportsLoading}
@@ -1684,6 +1953,28 @@ function AdminDashboard({ user, onLogout }) {
             options={options}
             reports={reports}
             summary={reportSummary}
+          />
+        )}
+
+        {activeView === "fuel" && (
+          <FuelWorkspace
+            createFuelEntry={createFuelEntry}
+            createFuelDriver={createFuelDriverRegistration}
+            createFuelVehicle={createFuelVehicle}
+            deleteFuelDriver={removeFuelDriverRegistration}
+            deleteFuelVehicle={removeFuelVehicleRegistration}
+            drivers={fuelDrivers}
+            filters={fuelFilters}
+            importFuelFile={importFuelFile}
+            loading={fuelLoading}
+            onChange={updateFuelFilter}
+            onReset={resetFuelFilters}
+            options={fuelOptions}
+            records={fuelRecords}
+            summary={fuelSummary}
+            saveFuelDriver={saveFuelDriverRegistration}
+            saveFuelVehicle={saveFuelVehicleRegistration}
+            vehicles={fuelVehicles}
           />
         )}
 
@@ -1703,12 +1994,14 @@ function AdminDashboard({ user, onLogout }) {
 
         {activeView === "tasks" && (
           <TasksWorkspace
+            createTask={createTask}
             filters={taskFilters}
             loading={tasksLoading}
             onChange={updateTaskFilter}
             onReset={resetTaskFilters}
             onTaskSave={saveTask}
             options={options}
+            producers={producers}
             summary={taskSummary}
             tasks={tasks}
           />
@@ -1730,8 +2023,98 @@ function AdminDashboard({ user, onLogout }) {
         )}
       </main>
 
+      <ChangePasswordModal
+        open={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+        onChanged={onLogout}
+      />
       {toast && <div className="toast">{toast}</div>}
     </div>
+  );
+}
+
+function ChangePasswordModal({ open, onClose, onChanged }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmation("");
+    setError("");
+  }, [open]);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+
+    if (newPassword !== confirmation) {
+      setError("A confirmação não corresponde à nova senha.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await fetchJson("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      onChanged();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal eyebrow="Segurança da conta" open={open} onClose={submitting ? undefined : onClose} size="small" title="Alterar senha">
+      <form className="password-form" onSubmit={submit}>
+        <Field label="Senha atual">
+          <input
+            autoComplete="current-password"
+            type="password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            required
+          />
+        </Field>
+        <Field label="Nova senha">
+          <input
+            autoComplete="new-password"
+            minLength={12}
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            required
+          />
+        </Field>
+        <Field label="Confirmar nova senha">
+          <input
+            autoComplete="new-password"
+            minLength={12}
+            type="password"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+            required
+          />
+        </Field>
+        <p className="password-requirement">Use 12 ou mais caracteres, com letras maiúsculas, minúsculas e números.</p>
+        {error && <p className="form-error">{error}</p>}
+        <div className="form-actions password-actions">
+          <button className="ghost-button" type="button" disabled={submitting} onClick={onClose}>Cancelar</button>
+          <button className="primary-button" type="submit" disabled={submitting}>
+            {submitting ? <Loader2 className="spin" size={18} /> : <ShieldCheck size={18} />}
+            Salvar nova senha
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -1851,7 +2234,7 @@ function ExecutiveDashboard({
           </div>
           <div>
             <strong>{reported}</strong>
-            <span>relatórios recebidos</span>
+            <span>produtores com relatório</span>
           </div>
           <div>
             <strong>{pending}</strong>
@@ -2069,7 +2452,7 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
         />
       </label>
 
-      <SelectFilter icon={<Filter size={17} />} value={filters.status} onChange={(value) => onChange("status", value)}>
+      <SelectFilter ariaLabel="Filtrar produtores por status" icon={<Filter size={17} />} value={filters.status} onChange={(value) => onChange("status", value)}>
         <option value="">Todos os status</option>
         {options.statuses.map((status) => (
           <option key={status} value={status}>
@@ -2078,7 +2461,7 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
         ))}
       </SelectFilter>
 
-      <SelectFilter value={filters.agency} onChange={(value) => onChange("agency", value)}>
+      <SelectFilter ariaLabel="Filtrar produtores por agência" value={filters.agency} onChange={(value) => onChange("agency", value)}>
         <option value="">Todas as agências</option>
         {options.agencies.map((agency) => (
           <option key={agency} value={agency}>
@@ -2089,7 +2472,7 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
 
       {!compact && (
         <>
-          <SelectFilter value={filters.designer} onChange={(value) => onChange("designer", value)}>
+          <SelectFilter ariaLabel="Filtrar produtores por projetista" value={filters.designer} onChange={(value) => onChange("designer", value)}>
             <option value="">Todos os projetistas</option>
             {options.designers.map((designer) => (
               <option key={designer} value={designer}>
@@ -2098,7 +2481,7 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
             ))}
           </SelectFilter>
 
-          <SelectFilter value={filters.year} onChange={(value) => onChange("year", value)}>
+          <SelectFilter ariaLabel="Filtrar produtores por ano" value={filters.year} onChange={(value) => onChange("year", value)}>
             <option value="">Todos os anos</option>
             {options.years.map((year) => (
               <option key={year} value={year}>
@@ -2107,7 +2490,7 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
             ))}
           </SelectFilter>
 
-          <SelectFilter value={filters.reported} onChange={(value) => onChange("reported", value)}>
+          <SelectFilter ariaLabel="Filtrar produtores por envio de relatório" value={filters.reported} onChange={(value) => onChange("reported", value)}>
             <option value="">Todos os relatórios</option>
             <option value="yes">Recebidos</option>
             <option value="no">Pendentes</option>
@@ -2122,7 +2505,7 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
   );
 }
 
-function ProducerWorkspace({ copyProducerAccess, loading, producers, saveProducer, selected, selectedId, setSelectedId }) {
+function ProducerWorkspace({ loading, producers, saveProducer, selected, selectedId, setSelectedId }) {
   const [detailOpen, setDetailOpen] = useState(false);
 
   function openProducerDetail(producer) {
@@ -2152,7 +2535,6 @@ function ProducerWorkspace({ copyProducerAccess, loading, producers, saveProduce
           producers={producers}
           selectedId={selectedId}
           setSelectedId={setSelectedId}
-          copyProducerAccess={copyProducerAccess}
           onOpenDetail={openProducerDetail}
         />
       </section>
@@ -2165,7 +2547,6 @@ function ProducerWorkspace({ copyProducerAccess, loading, producers, saveProduce
       >
         <ProducerDetail
           producer={selected}
-          copyProducerAccess={copyProducerAccess}
           saveProducer={saveProducer}
         />
       </Modal>
@@ -2173,7 +2554,7 @@ function ProducerWorkspace({ copyProducerAccess, loading, producers, saveProduce
   );
 }
 
-function ProducerTable({ copyProducerAccess, onOpenDetail, producers, selectedId, setSelectedId }) {
+function ProducerTable({ onOpenDetail, producers, selectedId, setSelectedId }) {
   const pagination = usePagedItems(producers, TABLE_PAGE_SIZE);
 
   return (
@@ -2183,7 +2564,6 @@ function ProducerTable({ copyProducerAccess, onOpenDetail, producers, selectedId
           <thead>
             <tr>
               <th>Produtor</th>
-              <th>Login</th>
               <th>Agência</th>
               <th>Status</th>
               <th>Área</th>
@@ -2196,14 +2576,14 @@ function ProducerTable({ copyProducerAccess, onOpenDetail, producers, selectedId
               <tr
                 className={producer.id === selectedId ? "selected-row" : ""}
                 key={producer.id}
+                tabIndex="0"
+                aria-label={`Abrir cadastro de ${producer.name}`}
                 onClick={() => onOpenDetail(producer)}
+                onKeyDown={(event) => activateRow(event, () => onOpenDetail(producer))}
               >
                 <td>
                   <strong>{producer.name}</strong>
                   <span>{maskCpf(producer.cpf)} · {producer.plantingYear || "-"}</span>
-                </td>
-                <td>
-                  <code>{producer.accessLogin}</code>
                 </td>
                 <td>{producer.agency || "Sem agência"}</td>
                 <td>
@@ -2231,24 +2611,13 @@ function ProducerTable({ copyProducerAccess, onOpenDetail, producers, selectedId
                     >
                       <Pencil size={17} />
                     </button>
-                    <button
-                      className="icon-button"
-                      type="button"
-                      title="Copiar login"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        copyProducerAccess(producer);
-                      }}
-                    >
-                      <Copy size={17} />
-                    </button>
                   </div>
                 </td>
               </tr>
             ))}
             {!pagination.items.length && (
               <tr>
-                <td colSpan="7">
+                <td colSpan="6">
                   <span className="empty-row">Nenhum produtor encontrado.</span>
                 </td>
               </tr>
@@ -2261,7 +2630,7 @@ function ProducerTable({ copyProducerAccess, onOpenDetail, producers, selectedId
   );
 }
 
-function ProducerDetail({ copyProducerAccess, producer, saveProducer }) {
+function ProducerDetail({ producer, saveProducer }) {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -2319,9 +2688,7 @@ function ProducerDetail({ copyProducerAccess, producer, saveProducer }) {
           <p className="eyebrow">Selecionado</p>
           <h2>{producer.name}</h2>
         </div>
-        <button className="icon-button" type="button" title="Copiar login" onClick={() => copyProducerAccess(producer)}>
-          <Copy size={18} />
-        </button>
+        <StatusBadge status={producer.processStatus} />
       </div>
 
       <form className="detail-form" onSubmit={submit}>
@@ -2377,22 +2744,6 @@ function ProducerDetail({ copyProducerAccess, producer, saveProducer }) {
       </form>
 
       <div className="detail-section">
-        <h3>Login do produtor</h3>
-        <div className="credential-line">
-          <span>Usuário</span>
-          <code>{producer.accessLogin}</code>
-        </div>
-        <div className="credential-line">
-          <span>Código</span>
-          <code>{producer.accessCode}</code>
-        </div>
-        <button className="primary-button wide" type="button" onClick={() => copyProducerAccess(producer)}>
-          <Copy size={17} />
-          Copiar mensagem
-        </button>
-      </div>
-
-      <div className="detail-section">
         <h3>Último relatório</h3>
         {producer.latestReport ? (
           <>
@@ -2437,7 +2788,6 @@ function emptyTechnicianForm() {
 }
 
 function RegistrationsWorkspace({
-  copyProducerAccess,
   createProducer,
   createTechnician,
   loading,
@@ -2462,7 +2812,6 @@ function RegistrationsWorkspace({
         producer.phone,
         producer.agency,
         producer.designer,
-        producer.accessLogin,
         producer.processStatus
       ]
         .some((value) => normalizeForSearch(value).includes(normalizedSearch))
@@ -2488,8 +2837,7 @@ function RegistrationsWorkspace({
           <p className="eyebrow">Base operacional PAF</p>
           <h2>Cadastros centralizados para campo, técnica e gestão.</h2>
           <p>
-            Inclua produtores, gere credenciais de acesso e mantenha a equipe técnica organizada para visitas,
-            relatórios e acompanhamento.
+            Inclua produtores e mantenha a equipe técnica organizada para visitas, relatórios e acompanhamento.
           </p>
         </div>
         <div className="registration-hero-actions">
@@ -2517,7 +2865,7 @@ function RegistrationsWorkspace({
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar produtor, CPF, técnico, agência, telefone ou login"
+            placeholder="Buscar produtor, CPF, técnico, agência ou telefone"
           />
         </label>
         <button className="ghost-button" type="button" onClick={() => setSearch("")}>
@@ -2545,13 +2893,10 @@ function RegistrationsWorkspace({
                 <div>
                   <strong>{producer.name}</strong>
                   <small>
-                    {maskCpf(producer.cpf)} · {producer.agency || "Sem agência"} · {producer.accessLogin}
+                    {maskCpf(producer.cpf)} · {producer.agency || "Sem agência"}
                   </small>
                 </div>
                 <StatusBadge status={producer.processStatus} />
-                <button className="icon-button" type="button" title="Copiar login" onClick={() => copyProducerAccess(producer)}>
-                  <Copy size={17} />
-                </button>
               </article>
             ))}
             {!recentProducers.length && (
@@ -2610,8 +2955,8 @@ function RegistrationsWorkspace({
           <p className="eyebrow">Cadastros auxiliares</p>
           <h3>Dados que já alimentam filtros do sistema</h3>
           <p>
-            Agências, projetistas e técnicos ativos aparecem nos filtros operacionais. Depois, essa camada pode ser
-            vinculada a uma base corporativa.
+            Agências, projetistas e técnicos ativos ficam disponíveis em toda a operação e mantêm os registros
+            padronizados no banco central.
           </p>
         </div>
         <div className="registration-chip-grid">
@@ -2629,7 +2974,6 @@ function RegistrationsWorkspace({
         size="large"
       >
         <ProducerRegistrationForm
-          copyProducerAccess={copyProducerAccess}
           createProducer={createProducer}
           onCancel={() => setProducerModalOpen(false)}
           options={options}
@@ -2683,7 +3027,120 @@ function RegistrationChipGroup({ empty, title, values }) {
   );
 }
 
-function ProducerRegistrationForm({ copyProducerAccess, createProducer, onCancel, options }) {
+function StepWizard({ cancelLabel = "Cancelar", className = "", error, onCancel, resetKey, saving, steps, submitLabel }) {
+  const [stepIndex, setStepIndex] = useState(0);
+  const wizardRef = useRef(null);
+  const safeSteps = steps.filter(Boolean);
+  const currentStep = safeSteps[stepIndex] || safeSteps[0];
+  const isLast = stepIndex >= safeSteps.length - 1;
+
+  useEffect(() => {
+    setStepIndex(0);
+  }, [steps.length, resetKey]);
+
+  function canAdvance() {
+    const panel = wizardRef.current?.querySelector(`[data-step-panel="${currentStep?.id}"]`);
+    const fields = Array.from(panel?.querySelectorAll("input, select, textarea") || []);
+    const invalid = fields.find((field) => !field.checkValidity());
+
+    if (invalid) {
+      invalid.reportValidity();
+      return false;
+    }
+
+    return true;
+  }
+
+  function goToStep(index) {
+    if (index <= stepIndex) {
+      setStepIndex(index);
+      return;
+    }
+
+    if (index === stepIndex + 1 && canAdvance()) {
+      setStepIndex(index);
+    }
+  }
+
+  return (
+    <div className={`step-form ${className}`} ref={wizardRef}>
+      <div className="step-nav" aria-label="Etapas do formulário">
+        {safeSteps.map((step, index) => (
+          <button
+            className={index === stepIndex ? "active" : index < stepIndex ? "done" : ""}
+            aria-current={index === stepIndex ? "step" : undefined}
+            disabled={index > stepIndex + 1}
+            key={step.id}
+            type="button"
+            onClick={() => goToStep(index)}
+          >
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            {step.title}
+          </button>
+        ))}
+      </div>
+
+      <div className="step-progress-meta">
+        <span>Etapa {stepIndex + 1} de {safeSteps.length}</span>
+        <strong>{currentStep?.title}</strong>
+      </div>
+
+      <div className="step-viewport">
+        <div
+          className="step-track"
+          style={{
+            width: `${safeSteps.length * 100}%`,
+            transform: `translateX(-${(stepIndex * 100) / safeSteps.length}%)`
+          }}
+        >
+          {safeSteps.map((step, index) => (
+            <section
+              className="step-panel"
+              data-step-panel={step.id}
+              key={step.id}
+              aria-label={step.title}
+              aria-hidden={index !== stepIndex}
+              inert={index !== stepIndex}
+              style={{ flexBasis: `${100 / safeSteps.length}%` }}
+            >
+              {step.description && <p className="step-description">{step.description}</p>}
+              <div className="step-fields">
+                {step.content}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+
+      {error && <p className="form-error">{error}</p>}
+
+      <div className="step-actions">
+        <button className="ghost-button" type="button" onClick={isLast ? onCancel : () => setStepIndex(Math.max(stepIndex - 1, 0))}>
+          {stepIndex === 0 ? cancelLabel : "Voltar"}
+        </button>
+        {isLast ? (
+          <button className="primary-button" type="submit" disabled={saving}>
+            {saving ? <Loader2 className="spin" size={17} /> : <Save size={17} />}
+            {submitLabel}
+          </button>
+        ) : (
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => {
+              if (canAdvance()) setStepIndex((current) => Math.min(current + 1, safeSteps.length - 1));
+            }}
+          >
+            Avançar
+            <ArrowRight size={17} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProducerRegistrationForm({ createProducer, onCancel, options }) {
   const [form, setForm] = useState(() => emptyProducerRegistrationForm());
   const [created, setCreated] = useState(null);
   const [error, setError] = useState("");
@@ -2711,86 +3168,105 @@ function ProducerRegistrationForm({ copyProducerAccess, createProducer, onCancel
 
   return (
     <form className="registration-form" onSubmit={submit}>
-      <Field label="Nome do produtor">
-        <input required value={form.name} onChange={(event) => updateField("name", event.target.value)} />
-      </Field>
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel="Cadastrar produtor"
+        steps={[
+          {
+            id: "producer-personal",
+            title: "Produtor",
+            description: "Identifique o produtor e o contato principal.",
+            content: (
+              <>
+                <Field label="Nome do produtor">
+                  <input required value={form.name} onChange={(event) => updateField("name", event.target.value)} />
+                </Field>
 
-      <Field label="CPF">
-        <input value={form.cpf} onChange={(event) => updateField("cpf", event.target.value)} />
-      </Field>
+                <div className="inline-grid">
+                  <Field label="CPF">
+                    <input value={form.cpf} onChange={(event) => updateField("cpf", event.target.value)} />
+                  </Field>
 
-      <Field label="Telefone">
-        <input value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
-      </Field>
+                  <Field label="Telefone">
+                    <input value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "producer-operation",
+            title: "Operação",
+            description: "Informe status, agência e dados da área acompanhada.",
+            content: (
+              <>
+                <div className="inline-grid">
+                  <Field label="Agência">
+                    <input list="registration-agencies" value={form.agency} onChange={(event) => updateField("agency", event.target.value)} />
+                    <datalist id="registration-agencies">
+                      {options.agencies.map((agency) => <option key={agency} value={agency} />)}
+                    </datalist>
+                  </Field>
 
-      <Field label="Agência">
-        <input list="registration-agencies" value={form.agency} onChange={(event) => updateField("agency", event.target.value)} />
-        <datalist id="registration-agencies">
-          {options.agencies.map((agency) => <option key={agency} value={agency} />)}
-        </datalist>
-      </Field>
+                  <Field label="Status">
+                    <select value={form.processStatus} onChange={(event) => updateField("processStatus", event.target.value)}>
+                      {(options.statuses.length ? options.statuses : Object.keys(STATUS_TONE)).map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
 
-      <Field label="Status">
-        <select value={form.processStatus} onChange={(event) => updateField("processStatus", event.target.value)}>
-          {(options.statuses.length ? options.statuses : Object.keys(STATUS_TONE)).map((status) => (
-            <option key={status} value={status}>{status}</option>
-          ))}
-        </select>
-      </Field>
+                <div className="inline-grid">
+                  <Field label="Área (ha)">
+                    <input type="number" min="0" step="0.01" value={form.areaHa} onChange={(event) => updateField("areaHa", event.target.value)} />
+                  </Field>
+                  <Field label="Ano de plantio">
+                    <input type="number" value={form.plantingYear} onChange={(event) => updateField("plantingYear", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "producer-location",
+            title: "Localização",
+            description: "Complete com projetista e referência da propriedade.",
+            content: (
+              <>
+                <Field label="Projetista">
+                  <input list="registration-designers" value={form.designer} onChange={(event) => updateField("designer", event.target.value)} />
+                  <datalist id="registration-designers">
+                    {options.designers.map((designer) => <option key={designer} value={designer} />)}
+                  </datalist>
+                </Field>
 
-      <div className="inline-grid">
-        <Field label="Área (ha)">
-          <input type="number" min="0" step="0.01" value={form.areaHa} onChange={(event) => updateField("areaHa", event.target.value)} />
-        </Field>
-        <Field label="Ano de plantio">
-          <input type="number" value={form.plantingYear} onChange={(event) => updateField("plantingYear", event.target.value)} />
-        </Field>
-      </div>
-
-      <Field label="Projetista">
-        <input list="registration-designers" value={form.designer} onChange={(event) => updateField("designer", event.target.value)} />
-        <datalist id="registration-designers">
-          {options.designers.map((designer) => <option key={designer} value={designer} />)}
-        </datalist>
-      </Field>
-
-      <Field label="Endereço / localização">
-        <textarea rows="3" value={form.address} onChange={(event) => updateField("address", event.target.value)} />
-      </Field>
+                <Field label="Endereço / localização">
+                  <textarea rows="3" value={form.address} onChange={(event) => updateField("address", event.target.value)} />
+                </Field>
+              </>
+            )
+          }
+        ]}
+      />
 
       {created && (
         <div className="registration-success-card">
           <div>
-            <p className="eyebrow">Login gerado</p>
+            <p className="eyebrow">Cadastro concluído</p>
             <strong>{created.name}</strong>
-            <span>Envie este acesso para o produtor preencher relatórios no portal.</span>
+            <span>O produtor foi incluído na base. Crie a credencial dele na aba Acessos.</span>
           </div>
-          <div className="credential-line">
-            <span>Usuário</span>
-            <code>{created.accessLogin}</code>
-          </div>
-          <div className="credential-line">
-            <span>Código</span>
-            <code>{created.accessCode}</code>
-          </div>
-          <button className="primary-button wide" type="button" onClick={() => copyProducerAccess(created)}>
-            <Copy size={17} />
-            Copiar mensagem
+          <button className="primary-button" type="button" onClick={onCancel}>
+            <Check size={17} />
+            Concluir
           </button>
         </div>
       )}
 
-      {error && <p className="form-error">{error}</p>}
-
-      <div className="form-actions">
-        <button className="ghost-button" type="button" onClick={onCancel}>
-          Cancelar
-        </button>
-        <button className="primary-button" type="submit" disabled={saving}>
-          {saving ? <Loader2 className="spin" size={17} /> : <Save size={17} />}
-          Cadastrar produtor
-        </button>
-      </div>
     </form>
   );
 }
@@ -2829,174 +3305,500 @@ function TechnicianRegistrationForm({ initial, mode = "create", onCancel, onSubm
 
   return (
     <form className="registration-form technician-form" onSubmit={submit}>
-      <Field label="Nome do técnico">
-        <input required value={form.name} onChange={(event) => updateField("name", event.target.value)} />
-      </Field>
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel={mode === "edit" ? "Salvar técnico" : "Cadastrar técnico"}
+        steps={[
+          {
+            id: "technician-personal",
+            title: "Técnico",
+            description: "Dados de identificação e contato.",
+            content: (
+              <>
+                <Field label="Nome do técnico">
+                  <input required value={form.name} onChange={(event) => updateField("name", event.target.value)} />
+                </Field>
 
-      <Field label="Telefone">
-        <input value={form.phone || ""} onChange={(event) => updateField("phone", event.target.value)} />
-      </Field>
+                <div className="inline-grid">
+                  <Field label="Telefone">
+                    <input value={form.phone || ""} onChange={(event) => updateField("phone", event.target.value)} />
+                  </Field>
 
-      <Field label="E-mail">
-        <input type="email" value={form.email || ""} onChange={(event) => updateField("email", event.target.value)} />
-      </Field>
+                  <Field label="E-mail">
+                    <input type="email" value={form.email || ""} onChange={(event) => updateField("email", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "technician-role",
+            title: "Atuação",
+            description: "Defina função e região de atendimento.",
+            content: (
+              <>
+                <Field label="Função">
+                  <input value={form.role || ""} onChange={(event) => updateField("role", event.target.value)} />
+                </Field>
 
-      <Field label="Função">
-        <input value={form.role || ""} onChange={(event) => updateField("role", event.target.value)} />
-      </Field>
+                <Field label="Região / agência">
+                  <input value={form.region || ""} onChange={(event) => updateField("region", event.target.value)} />
+                </Field>
+              </>
+            )
+          },
+          {
+            id: "technician-status",
+            title: "Status",
+            description: "Controle se o técnico aparece como ativo no sistema.",
+            content: (
+              <>
+                <label className="checkbox-line registration-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.active)}
+                    onChange={(event) => updateField("active", event.target.checked)}
+                  />
+                  Técnico ativo no sistema
+                </label>
 
-      <Field label="Região / agência">
-        <input value={form.region || ""} onChange={(event) => updateField("region", event.target.value)} />
-      </Field>
-
-      <label className="checkbox-line registration-checkbox">
-        <input
-          type="checkbox"
-          checked={Boolean(form.active)}
-          onChange={(event) => updateField("active", event.target.checked)}
-        />
-        Técnico ativo no sistema
-      </label>
-
-      <Field label="Observações">
-        <textarea rows="3" value={form.notes || ""} onChange={(event) => updateField("notes", event.target.value)} />
-      </Field>
-
-      {error && <p className="form-error">{error}</p>}
-
-      <div className="form-actions">
-        <button className="ghost-button" type="button" onClick={onCancel}>
-          Cancelar
-        </button>
-        <button className="primary-button" type="submit" disabled={saving}>
-          {saving ? <Loader2 className="spin" size={17} /> : <Save size={17} />}
-          {mode === "edit" ? "Salvar técnico" : "Cadastrar técnico"}
-        </button>
-      </div>
+                <Field label="Observações">
+                  <textarea rows="3" value={form.notes || ""} onChange={(event) => updateField("notes", event.target.value)} />
+                </Field>
+              </>
+            )
+          }
+        ]}
+      />
     </form>
   );
 }
 
-function LoginWorkspace({ copyProducerAccess, loading, producers, selected, selectedId, setSelectedId }) {
-  const [detailOpen, setDetailOpen] = useState(false);
-  const pagination = usePagedItems(producers, TABLE_PAGE_SIZE);
+function LoginWorkspace({ accesses, createAccess, deleteAccess, loading, producers, resetAccessCode, saveAccess, technicians }) {
+  const [search, setSearch] = useState("");
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedAccess, setSelectedAccess] = useState(null);
+  const [issuedCredential, setIssuedCredential] = useState(null);
+  const normalizedSearch = normalizeForSearch(search);
+  const filtered = accesses.filter((access) => {
+    if (type && access.accountType !== type) return false;
+    if (status === "active" && !access.active) return false;
+    if (status === "blocked" && access.active) return false;
+    if (!normalizedSearch) return true;
+
+    return [
+      access.name,
+      access.login,
+      access.organization,
+      access.technicianName,
+      ...(access.producers || []).map((producer) => producer.name)
+    ].some((value) => normalizeForSearch(value).includes(normalizedSearch));
+  });
+  const pagination = usePagedItems(filtered, TABLE_PAGE_SIZE);
+  const activeCount = accesses.filter((access) => access.active).length;
+  const organizationCount = accesses.filter((access) => access.accountType === "ORGANIZACAO").length;
+  const technicalCount = accesses.filter((access) => access.accountType !== "PRODUTOR").length;
+
+  function openCreate() {
+    setSelectedAccess(null);
+    setIssuedCredential(null);
+    setModalOpen(true);
+  }
+
+  function openEdit(access) {
+    setSelectedAccess(access);
+    setIssuedCredential(null);
+    setModalOpen(true);
+  }
+
+  async function copyIssuedCredential(credential) {
+    const portal = credential.account.accountType === "PRODUTOR" ? "/produtor" : "/tecnico";
+    const message = [
+      "Acesso PAF - Vila Nova Agroindustrial",
+      `Nome: ${credential.account.name}`,
+      `Login: ${credential.account.login}`,
+      `Código: ${credential.temporaryCode}`,
+      `Portal: ${window.location.origin}${portal}`
+    ].join("\n");
+    await navigator.clipboard.writeText(message);
+  }
+
+  async function handleReset(access) {
+    const credential = await resetAccessCode(access.id);
+    setSelectedAccess(credential.account);
+    setIssuedCredential(credential);
+  }
 
   return (
-    <div className="content-grid">
-      <section className="table-shell" aria-label="Logins">
+    <section className="access-workspace">
+      <div className="access-hero">
+        <div>
+          <p className="eyebrow">Identidade e permissões</p>
+          <h2>Acessos controlados por perfil e produtores vinculados.</h2>
+          <p>Cadastre produtores, técnicos ou organizações e defina exatamente quais dados cada acesso pode utilizar.</p>
+        </div>
+        <button className="primary-button" type="button" onClick={openCreate}>
+          <Plus size={18} />
+          Cadastrar acesso
+        </button>
+      </div>
+
+      <section className="overview-band access-summary-band">
+        <Metric label="Acessos" value={accesses.length} icon={<KeyRound size={20} />} />
+        <Metric label="Ativos" value={activeCount} icon={<ShieldCheck size={20} />} />
+        <Metric label="Equipe técnica" value={technicalCount} icon={<UserCheck size={20} />} />
+        <Metric label="Organizações" value={organizationCount} icon={<Building2 size={20} />} />
+      </section>
+
+      <section className="filters access-filters" aria-label="Filtros de acessos">
+        <label className="search-field">
+          <Search size={18} />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar nome, login, organização ou produtor" />
+        </label>
+        <SelectFilter ariaLabel="Filtrar acessos por tipo" value={type} onChange={setType}>
+          <option value="">Todos os perfis</option>
+          {ACCESS_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </SelectFilter>
+        <SelectFilter ariaLabel="Filtrar acessos por situação" value={status} onChange={setStatus}>
+          <option value="">Todos os status</option>
+          <option value="active">Ativos</option>
+          <option value="blocked">Bloqueados</option>
+        </SelectFilter>
+        <button className="ghost-button" type="button" onClick={() => { setSearch(""); setType(""); setStatus(""); }}>
+          Limpar
+        </button>
+      </section>
+
+      <section className="table-shell" aria-label="Acessos cadastrados">
         <div className="table-heading">
           <div>
-            <h2>Logins</h2>
-            <p>{loading ? "Carregando..." : `${producers.length} acessos encontrados`}</p>
+            <h2>Central de acessos</h2>
+            <p>{loading ? "Carregando..." : `${filtered.length} acessos encontrados`}</p>
           </div>
           <div className="table-heading-actions">
             {loading && <Loader2 className="spin" size={20} />}
-            <button className="icon-text-button" type="button" disabled={!selected} onClick={() => setDetailOpen(true)}>
-              <KeyRound size={17} />
-              Abrir acesso
+            <button className="primary-button" type="button" onClick={openCreate}>
+              <Plus size={17} />
+              Novo acesso
             </button>
           </div>
         </div>
-        <div className="table-wrap">
+
+        <div className="table-wrap access-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Produtor</th>
-                <th>Usuário</th>
-                <th>Código</th>
-                <th>Agência</th>
-                <th>Relatório</th>
+                <th>Acesso</th>
+                <th>Perfil</th>
+                <th>Login</th>
+                <th>Escopo</th>
+                <th>Status</th>
+                <th>Último acesso</th>
                 <th aria-label="Ações" />
               </tr>
             </thead>
             <tbody>
-              {pagination.items.map((producer) => (
+              {pagination.items.map((access) => (
                 <tr
-                  className={producer.id === selectedId ? "selected-row" : ""}
-                  key={producer.id}
-                  onClick={() => {
-                    setSelectedId(producer.id);
-                    setDetailOpen(true);
-                  }}
+                  key={access.id}
+                  tabIndex="0"
+                  aria-label={`Editar acesso de ${access.name}`}
+                  onClick={() => openEdit(access)}
+                  onKeyDown={(event) => activateRow(event, () => openEdit(access))}
                 >
                   <td>
-                    <strong>{producer.name}</strong>
-                    <span>{maskCpf(producer.cpf)}</span>
+                    <strong>{access.name}</strong>
+                    <span>{access.organization || access.technicianName || "Acesso individual"}</span>
                   </td>
-                  <td><code>{producer.accessLogin}</code></td>
-                  <td><code>{producer.accessCode}</code></td>
-                  <td>{producer.agency || "-"}</td>
-                  <td>{producer.lastReportAt ? <span className="report-ok">{formatDateTime(producer.lastReportAt)}</span> : <span className="report-pending">Pendente</span>}</td>
+                  <td><AccessTypeBadge type={access.accountType} /></td>
+                  <td><code>{access.login}</code></td>
                   <td>
-                    <button
-                      className="icon-button"
-                      type="button"
-                      title="Copiar login"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        copyProducerAccess(producer);
-                      }}
-                    >
-                      <Copy size={17} />
+                    <strong>{access.producers.length}</strong>
+                    <span>{access.producers.length === 1 ? "produtor" : "produtores"}</span>
+                  </td>
+                  <td><span className={`review-badge ${access.active ? "done" : "returned"}`}>{access.active ? "ATIVO" : "BLOQUEADO"}</span></td>
+                  <td>{access.lastLoginAt ? formatDateTime(access.lastLoginAt) : "Nunca acessou"}</td>
+                  <td>
+                    <button className="icon-button" type="button" title="Editar acesso" onClick={(event) => { event.stopPropagation(); openEdit(access); }}>
+                      <Pencil size={17} />
                     </button>
                   </td>
                 </tr>
               ))}
-              {!pagination.items.length && (
+              {!loading && !pagination.items.length && (
                 <tr>
-                  <td colSpan="6">
-                    <span className="empty-row">Nenhum login encontrado.</span>
-                  </td>
+                  <td colSpan="7"><span className="empty-row">Nenhum acesso cadastrado. Use “Cadastrar acesso” para começar.</span></td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-        <PaginationControls pagination={pagination} label="logins" />
+        <PaginationControls pagination={pagination} label="acessos" />
       </section>
 
       <Modal
-        eyebrow="Credencial do produtor"
-        open={detailOpen && !!selected}
-        onClose={() => setDetailOpen(false)}
-        title={selected?.name || "Acesso"}
-        size="small"
+        eyebrow={selectedAccess ? "Editar permissões" : "Nova credencial"}
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={selectedAccess?.name || "Cadastrar acesso"}
+        size="large"
       >
-        <aside className="detail-panel" aria-label="Credencial">
-          {selected ? (
-            <>
-              <div className="detail-header">
-                <div>
-                  <p className="eyebrow">Acesso</p>
-                  <h2>{selected.name}</h2>
-                </div>
-                <KeyRound size={22} />
-              </div>
-              <div className="detail-section no-border">
-                <div className="credential-line">
-                  <span>Usuário</span>
-                  <code>{selected.accessLogin}</code>
-                </div>
-                <div className="credential-line">
-                  <span>Código</span>
-                  <code>{selected.accessCode}</code>
-                </div>
-                <button className="primary-button wide" type="button" onClick={() => copyProducerAccess(selected)}>
-                  <Copy size={17} />
-                  Copiar mensagem
-                </button>
-              </div>
-            </>
-          ) : (
-            <p>Nenhum produtor encontrado.</p>
-          )}
-        </aside>
+        <AccessRegistrationForm
+          access={selectedAccess}
+          credential={issuedCredential}
+          onCancel={() => setModalOpen(false)}
+          onCopyCredential={copyIssuedCredential}
+          onDelete={selectedAccess ? async () => {
+            if (!window.confirm(`Excluir definitivamente o acesso de ${selectedAccess.name}?`)) return;
+            await deleteAccess(selectedAccess.id);
+            setModalOpen(false);
+          } : null}
+          onResetCode={selectedAccess ? () => handleReset(selectedAccess) : null}
+          onSubmit={async (payload) => {
+            if (selectedAccess) {
+              const access = await saveAccess(selectedAccess.id, payload);
+              setSelectedAccess(access);
+              return { account: access };
+            }
+
+            const result = await createAccess(payload);
+            setSelectedAccess(result.account);
+            setIssuedCredential(result);
+            return result;
+          }}
+          producers={producers}
+          technicians={technicians}
+        />
       </Modal>
-    </div>
+    </section>
   );
 }
 
-function ReportsWorkspace({ createTask, createVisit, filters, loading, onChange, onReset, onReviewSave, options, reports, summary }) {
+function AccessTypeBadge({ type }) {
+  const item = ACCESS_TYPES.find((option) => option.value === type) || ACCESS_TYPES[0];
+  return <span className={`access-type-badge ${String(type || "").toLowerCase()}`}>{item.label}</span>;
+}
+
+function AccessRegistrationForm({ access, credential, onCancel, onCopyCredential, onDelete, onResetCode, onSubmit, producers, technicians }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [producerSearch, setProducerSearch] = useState("");
+  const [form, setForm] = useState(() => ({
+    name: access?.name || "",
+    login: access?.login || "",
+    accessCode: "",
+    accountType: access?.accountType || "PRODUTOR",
+    technicianId: access?.technicianId || "",
+    organization: access?.organization || "",
+    producerIds: access?.producerIds || [],
+    active: access?.active ?? true,
+    canSubmitReports: access?.canSubmitReports ?? true,
+    canManageVisits: access?.canManageVisits ?? false,
+    notes: access?.notes || ""
+  }));
+  const filteredProducers = producers
+    .filter((producer) => [producer.name, producer.cpf, producer.agency].some((value) => normalizeForSearch(value).includes(normalizeForSearch(producerSearch))))
+    .slice(0, 80);
+
+  useEffect(() => {
+    setForm({
+      name: access?.name || "",
+      login: access?.login || "",
+      accessCode: "",
+      accountType: access?.accountType || "PRODUTOR",
+      technicianId: access?.technicianId || "",
+      organization: access?.organization || "",
+      producerIds: access?.producerIds || [],
+      active: access?.active ?? true,
+      canSubmitReports: access?.canSubmitReports ?? true,
+      canManageVisits: access?.canManageVisits ?? false,
+      notes: access?.notes || ""
+    });
+    setError("");
+  }, [access?.id]);
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function changeType(accountType) {
+    setForm((current) => ({
+      ...current,
+      accountType,
+      producerIds: accountType === "PRODUTOR" ? current.producerIds.slice(0, 1) : current.producerIds,
+      canSubmitReports: accountType === "PRODUTOR",
+      canManageVisits: accountType !== "PRODUTOR"
+    }));
+  }
+
+  function toggleProducer(producerId) {
+    setForm((current) => {
+      if (current.accountType === "PRODUTOR") {
+        return { ...current, producerIds: [producerId] };
+      }
+
+      const selected = current.producerIds.includes(producerId);
+      return {
+        ...current,
+        producerIds: selected
+          ? current.producerIds.filter((id) => id !== producerId)
+          : [...current.producerIds, producerId]
+      };
+    });
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      await onSubmit(form);
+    } catch (requestError) {
+      setError(requestError.message || "Não foi possível salvar o acesso.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="detail-panel access-registration-form" onSubmit={submit}>
+      {credential?.temporaryCode && (
+        <div className="issued-credential">
+          <div>
+            <p className="eyebrow">Código gerado</p>
+            <strong>{credential.account.login}</strong>
+            <code>{credential.temporaryCode}</code>
+            <small>Guarde este código agora. Ele não ficará visível novamente.</small>
+          </div>
+          <button className="primary-button" type="button" onClick={() => onCopyCredential(credential)}>
+            <Copy size={17} />
+            Copiar acesso
+          </button>
+        </div>
+      )}
+
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel={access ? "Salvar acesso" : "Criar acesso"}
+        steps={[
+          {
+            id: "access-identity",
+            title: "Identidade",
+            description: "Defina quem usará o acesso e em qual portal entrará.",
+            content: (
+              <>
+                <Field label="Nome do acesso">
+                  <input value={form.name} onChange={(event) => updateField("name", event.target.value)} placeholder="Ex.: Técnico COOPAFAMITA" required />
+                </Field>
+                <div className="access-type-options">
+                  {ACCESS_TYPES.map((item) => (
+                    <label className={form.accountType === item.value ? "active" : ""} key={item.value}>
+                      <input type="radio" name="accountType" value={item.value} checked={form.accountType === item.value} onChange={() => changeType(item.value)} />
+                      <span><strong>{item.label}</strong><small>{item.description}</small></span>
+                    </label>
+                  ))}
+                </div>
+                <div className="inline-grid">
+                  <Field label="Login">
+                    <input value={form.login} onChange={(event) => updateField("login", event.target.value.toUpperCase().replace(/\s+/g, "-"))} placeholder="EX.: COOPAFAMITA-01" required />
+                  </Field>
+                  <Field label={access ? "Novo código (opcional)" : "Código (opcional)"}>
+                    <input value={form.accessCode} onChange={(event) => updateField("accessCode", event.target.value.toUpperCase())} placeholder={access ? "Deixe vazio para manter" : "Gerado automaticamente"} />
+                  </Field>
+                </div>
+                {form.accountType === "ORGANIZACAO" && (
+                  <Field label="Nome da organização">
+                    <input value={form.organization} onChange={(event) => updateField("organization", event.target.value)} placeholder="Ex.: COOPAFAMITA" />
+                  </Field>
+                )}
+              </>
+            )
+          },
+          {
+            id: "access-scope",
+            title: "Produtores",
+            description: "Escolha quais produtores este acesso poderá acompanhar.",
+            content: (
+              <>
+                {form.accountType !== "PRODUTOR" && (
+                  <Field label="Técnico vinculado">
+                    <select value={form.technicianId} onChange={(event) => updateField("technicianId", event.target.value)}>
+                      <option value="">Sem técnico específico</option>
+                      {technicians.filter((technician) => technician.active).map((technician) => (
+                        <option key={technician.id} value={technician.id}>{technician.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                <label className="search-field access-producer-search">
+                  <Search size={17} />
+                  <input value={producerSearch} onChange={(event) => setProducerSearch(event.target.value)} placeholder="Buscar produtor, CPF ou agência" />
+                </label>
+                <div className="access-producer-list">
+                  {filteredProducers.map((producer) => (
+                    <label className={form.producerIds.includes(producer.id) ? "selected" : ""} key={producer.id}>
+                      <input
+                        type={form.accountType === "PRODUTOR" ? "radio" : "checkbox"}
+                        name={form.accountType === "PRODUTOR" ? "producerScope" : undefined}
+                        checked={form.producerIds.includes(producer.id)}
+                        onChange={() => toggleProducer(producer.id)}
+                      />
+                      <span><strong>{producer.name}</strong><small>{maskCpf(producer.cpf)} · {producer.agency || "Sem agência"}</small></span>
+                    </label>
+                  ))}
+                </div>
+                <p className="scope-selection-count">{form.producerIds.length} {form.producerIds.length === 1 ? "produtor vinculado" : "produtores vinculados"}</p>
+              </>
+            )
+          },
+          {
+            id: "access-permissions",
+            title: "Permissões",
+            description: "Revise as permissões e o status da conta.",
+            content: (
+              <>
+                <div className="access-permission-list">
+                  <label>
+                    <input type="checkbox" checked={form.canSubmitReports} onChange={(event) => updateField("canSubmitReports", event.target.checked)} />
+                    <span><strong>Enviar relatórios</strong><small>Permite preencher dados de produção.</small></span>
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={form.canManageVisits} onChange={(event) => updateField("canManageVisits", event.target.checked)} />
+                    <span><strong>Cadastrar visitas</strong><small>Permite registrar e atualizar visitas técnicas.</small></span>
+                  </label>
+                  <label>
+                    <input type="checkbox" checked={form.active} onChange={(event) => updateField("active", event.target.checked)} />
+                    <span><strong>Acesso ativo</strong><small>Desmarque para bloquear imediatamente.</small></span>
+                  </label>
+                </div>
+                <Field label="Observações internas">
+                  <textarea rows="4" value={form.notes} onChange={(event) => updateField("notes", event.target.value)} />
+                </Field>
+                {access && (
+                  <div className="access-danger-actions">
+                    <button className="ghost-button" type="button" onClick={onResetCode}><RefreshCcw size={16} /> Redefinir código</button>
+                    <button className="danger-button" type="button" onClick={onDelete}><Trash2 size={16} /> Excluir acesso</button>
+                  </div>
+                )}
+              </>
+            )
+          }
+        ]}
+      />
+    </form>
+  );
+}
+
+function ReportsWorkspace({ createTask, filters, loading, onChange, onReset, onReviewSave, options, reports, summary }) {
   const [selectedReportId, setSelectedReportId] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const pagination = usePagedItems(reports, REPORT_PAGE_SIZE);
@@ -3034,26 +3836,26 @@ function ReportsWorkspace({ createTask, createVisit, filters, loading, onChange,
           <input value={filters.search} onChange={(event) => onChange("search", event.target.value)} placeholder="Buscar produtor, CPF ou observação" />
         </label>
 
-        <SelectFilter value={filters.needsVisit} onChange={(value) => onChange("needsVisit", value)}>
+        <SelectFilter ariaLabel="Filtrar relatórios por necessidade de visita" value={filters.needsVisit} onChange={(value) => onChange("needsVisit", value)}>
           <option value="">Todas as visitas</option>
           <option value="yes">Precisa visita</option>
         </SelectFilter>
 
-        <SelectFilter value={filters.status} onChange={(value) => onChange("status", value)}>
+        <SelectFilter ariaLabel="Filtrar relatórios por status" value={filters.status} onChange={(value) => onChange("status", value)}>
           <option value="">Todos os status</option>
           {options.statuses.map((status) => (
             <option key={status} value={status}>{status}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.agency} onChange={(value) => onChange("agency", value)}>
+        <SelectFilter ariaLabel="Filtrar relatórios por agência" value={filters.agency} onChange={(value) => onChange("agency", value)}>
           <option value="">Todas as agências</option>
           {options.agencies.map((agency) => (
             <option key={agency} value={agency}>{agency}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.reviewStatus} onChange={(value) => onChange("reviewStatus", value)}>
+        <SelectFilter ariaLabel="Filtrar relatórios por situação da análise" value={filters.reviewStatus} onChange={(value) => onChange("reviewStatus", value)}>
           <option value="">Todas as análises</option>
           {REPORT_REVIEW_STATUSES.map((status) => (
             <option key={status} value={status}>{status}</option>
@@ -3099,10 +3901,16 @@ function ReportsWorkspace({ createTask, createVisit, filters, loading, onChange,
                     <tr
                       className={report.id === selectedReport?.id ? "selected-row" : ""}
                       key={report.id}
+                      tabIndex="0"
+                      aria-label={`Abrir relatório de ${report.producerName}`}
                       onClick={() => {
                         setSelectedReportId(report.id);
                         setDetailOpen(true);
                       }}
+                      onKeyDown={(event) => activateRow(event, () => {
+                        setSelectedReportId(report.id);
+                        setDetailOpen(true);
+                      })}
                     >
                       <td>
                         <strong>{report.producerName}</strong>
@@ -3145,32 +3953,23 @@ function ReportsWorkspace({ createTask, createVisit, filters, loading, onChange,
         title={selectedReport?.producerName || "Relatório"}
         size="xl"
       >
-        <ReportDetailPanel createTask={createTask} createVisit={createVisit} onReviewSave={onReviewSave} report={selectedReport} />
+        <ReportDetailPanel createTask={createTask} onReviewSave={onReviewSave} report={selectedReport} />
       </Modal>
     </>
   );
 }
 
-function ReportDetailPanel({ createTask, createVisit, onReviewSave, report }) {
+function ReportDetailPanel({ createTask, onReviewSave, report }) {
   const [copied, setCopied] = useState(false);
   const [savingReview, setSavingReview] = useState(false);
   const [reviewSaved, setReviewSaved] = useState(false);
   const [reviewError, setReviewError] = useState("");
-  const [creatingVisit, setCreatingVisit] = useState(false);
-  const [visitSaved, setVisitSaved] = useState(false);
-  const [visitError, setVisitError] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
   const [taskSaved, setTaskSaved] = useState(false);
   const [taskError, setTaskError] = useState("");
   const [reviewForm, setReviewForm] = useState({
     reviewStatus: "PENDENTE",
     technicalNote: ""
-  });
-  const [visitForm, setVisitForm] = useState({
-    scheduledDate: "",
-    technician: "",
-    priority: "ALTA",
-    objective: ""
   });
   const [taskForm, setTaskForm] = useState({
     title: "",
@@ -3184,19 +3983,11 @@ function ReportDetailPanel({ createTask, createVisit, onReviewSave, report }) {
     setCopied(false);
     setReviewSaved(false);
     setReviewError("");
-    setVisitSaved(false);
-    setVisitError("");
     setTaskSaved(false);
     setTaskError("");
     setReviewForm({
       reviewStatus: report?.reviewStatus || "PENDENTE",
       technicalNote: report?.technicalNote || ""
-    });
-    setVisitForm({
-      scheduledDate: "",
-      technician: "",
-      priority: report?.needsVisit ? "ALTA" : "NORMAL",
-      objective: report ? `Verificar ${report.areaStatus || "situação informada"} - ${report.producerName}` : ""
     });
     setTaskForm({
       title: report ? `Tratar relatório de ${report.producerName}` : "",
@@ -3241,34 +4032,6 @@ function ReportDetailPanel({ createTask, createVisit, onReviewSave, report }) {
       setReviewError(requestError.message || "Não foi possível salvar a análise.");
     } finally {
       setSavingReview(false);
-    }
-  }
-
-  async function submitVisit(event) {
-    event.preventDefault();
-    setCreatingVisit(true);
-    setVisitSaved(false);
-    setVisitError("");
-
-    try {
-      await createVisit({
-        reportId: report.id,
-        producerId: report.producerId,
-        scheduledDate: visitForm.scheduledDate,
-        technician: visitForm.technician,
-        priority: visitForm.priority,
-        objective: visitForm.objective,
-        technicalNote: visitForm.scheduledDate
-          ? `Visita técnica programada para ${formatDate(visitForm.scheduledDate)}. ${visitForm.objective}`
-          : `Visita técnica programada. ${visitForm.objective}`
-      });
-      setVisitSaved(true);
-      setReviewForm((current) => ({ ...current, reviewStatus: "VISITA PROGRAMADA" }));
-      window.setTimeout(() => setVisitSaved(false), 2400);
-    } catch (requestError) {
-      setVisitError(requestError.message || "Não foi possível programar a visita.");
-    } finally {
-      setCreatingVisit(false);
     }
   }
 
@@ -3388,60 +4151,6 @@ function ReportDetailPanel({ createTask, createVisit, onReviewSave, report }) {
         </button>
       </form>
 
-      <form className="detail-section visit-scheduler" onSubmit={submitVisit}>
-        <div className="review-editor-heading">
-          <div>
-            <h3>Programar visita</h3>
-            <p>Gera uma agenda técnica vinculada a este relatório.</p>
-          </div>
-          <VisitPriorityBadge priority={visitForm.priority} />
-        </div>
-
-        <Field label="Data da visita">
-          <input
-            type="date"
-            value={visitForm.scheduledDate}
-            onChange={(event) => setVisitForm((current) => ({ ...current, scheduledDate: event.target.value }))}
-          />
-        </Field>
-
-        <div className="inline-grid">
-          <Field label="Técnico responsável">
-            <input
-              value={visitForm.technician}
-              onChange={(event) => setVisitForm((current) => ({ ...current, technician: event.target.value }))}
-              placeholder="Nome do técnico"
-            />
-          </Field>
-
-          <Field label="Prioridade">
-            <select
-              value={visitForm.priority}
-              onChange={(event) => setVisitForm((current) => ({ ...current, priority: event.target.value }))}
-            >
-              {VISIT_PRIORITIES.map((priority) => (
-                <option key={priority} value={priority}>{priority}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        <Field label="Objetivo da visita">
-          <textarea
-            rows="3"
-            value={visitForm.objective}
-            onChange={(event) => setVisitForm((current) => ({ ...current, objective: event.target.value }))}
-          />
-        </Field>
-
-        {visitError && <p className="form-error">{visitError}</p>}
-
-        <button className="primary-button wide" type="submit" disabled={creatingVisit}>
-          {creatingVisit ? <Loader2 className="spin" size={17} /> : <CalendarDays size={17} />}
-          {visitSaved ? "Visita programada" : "Programar visita"}
-        </button>
-      </form>
-
       <form className="detail-section task-creator" onSubmit={submitTask}>
         <div className="review-editor-heading">
           <div>
@@ -3556,21 +4265,21 @@ function VisitsWorkspace({ createTask, filters, loading, onChange, onReset, onVi
           />
         </label>
 
-        <SelectFilter value={filters.status} onChange={(value) => onChange("status", value)}>
+        <SelectFilter ariaLabel="Filtrar visitas por status" value={filters.status} onChange={(value) => onChange("status", value)}>
           <option value="">Todos os status</option>
           {(options.visitStatuses || VISIT_STATUSES).map((status) => (
             <option key={status} value={status}>{status}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.priority} onChange={(value) => onChange("priority", value)}>
+        <SelectFilter ariaLabel="Filtrar visitas por prioridade" value={filters.priority} onChange={(value) => onChange("priority", value)}>
           <option value="">Todas as prioridades</option>
           {(options.visitPriorities || VISIT_PRIORITIES).map((priority) => (
             <option key={priority} value={priority}>{priority}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.agency} onChange={(value) => onChange("agency", value)}>
+        <SelectFilter ariaLabel="Filtrar visitas por agência" value={filters.agency} onChange={(value) => onChange("agency", value)}>
           <option value="">Todas as agências</option>
           {options.agencies.map((agency) => (
             <option key={agency} value={agency}>{agency}</option>
@@ -3623,10 +4332,16 @@ function VisitsWorkspace({ createTask, filters, loading, onChange, onReset, onVi
                   <tr
                     className={visit.id === selectedVisit?.id ? "selected-row" : ""}
                     key={visit.id}
+                    tabIndex="0"
+                    aria-label={`Abrir visita de ${visit.producerName}`}
                     onClick={() => {
                       setSelectedVisitId(visit.id);
                       setDetailOpen(true);
                     }}
+                    onKeyDown={(event) => activateRow(event, () => {
+                      setSelectedVisitId(visit.id);
+                      setDetailOpen(true);
+                    })}
                   >
                     <td>
                       <strong>{visit.producerName}</strong>
@@ -3719,7 +4434,7 @@ function VisitDetailPanel({ createTask, onVisitSave, visit }) {
         <div className="empty-history">
           <CalendarDays size={22} />
           <strong>Nenhuma visita selecionada</strong>
-          <p>Programe uma visita a partir de um relatório ou selecione um registro da agenda técnica.</p>
+          <p>Nenhum registro disponível para análise técnica.</p>
         </div>
       </aside>
     );
@@ -3929,9 +4644,10 @@ function VisitDetailPanel({ createTask, onVisitSave, visit }) {
   );
 }
 
-function TasksWorkspace({ filters, loading, onChange, onReset, onTaskSave, options, summary, tasks }) {
+function TasksWorkspace({ createTask, filters, loading, onChange, onReset, onTaskSave, options, producers, summary, tasks }) {
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const pagination = usePagedItems(tasks, TASK_PAGE_SIZE);
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) || pagination.items[0] || tasks[0] || null;
 
@@ -3968,28 +4684,28 @@ function TasksWorkspace({ filters, loading, onChange, onReset, onTaskSave, optio
           />
         </label>
 
-        <SelectFilter value={filters.status} onChange={(value) => onChange("status", value)}>
+        <SelectFilter ariaLabel="Filtrar pendências por status" value={filters.status} onChange={(value) => onChange("status", value)}>
           <option value="">Todos os status</option>
           {(options.taskStatuses || TASK_STATUSES).map((status) => (
             <option key={status} value={status}>{status}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.priority} onChange={(value) => onChange("priority", value)}>
+        <SelectFilter ariaLabel="Filtrar pendências por prioridade" value={filters.priority} onChange={(value) => onChange("priority", value)}>
           <option value="">Todas as prioridades</option>
           {(options.visitPriorities || VISIT_PRIORITIES).map((priority) => (
             <option key={priority} value={priority}>{priority}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.type} onChange={(value) => onChange("type", value)}>
+        <SelectFilter ariaLabel="Filtrar pendências por tipo" value={filters.type} onChange={(value) => onChange("type", value)}>
           <option value="">Todos os tipos</option>
           {(options.taskTypes || TASK_TYPES).map((type) => (
             <option key={type} value={type}>{type}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.agency} onChange={(value) => onChange("agency", value)}>
+        <SelectFilter ariaLabel="Filtrar pendências por agência" value={filters.agency} onChange={(value) => onChange("agency", value)}>
           <option value="">Todas as agências</option>
           {options.agencies.map((agency) => (
             <option key={agency} value={agency}>{agency}</option>
@@ -4019,6 +4735,10 @@ function TasksWorkspace({ filters, loading, onChange, onReset, onTaskSave, optio
             </div>
             <div className="table-heading-actions">
               {loading && <Loader2 className="spin" size={20} />}
+              <button className="primary-button" type="button" onClick={() => setCreateOpen(true)}>
+                <Plus size={17} />
+                Cadastrar pendência
+              </button>
               <button className="icon-text-button" type="button" disabled={!selectedTask} onClick={() => setDetailOpen(true)}>
                 <Pencil size={17} />
                 Abrir pendência
@@ -4042,10 +4762,16 @@ function TasksWorkspace({ filters, loading, onChange, onReset, onTaskSave, optio
                   <tr
                     className={task.id === selectedTask?.id ? "selected-row" : ""}
                     key={task.id}
+                    tabIndex="0"
+                    aria-label={`Abrir pendência ${task.title}`}
                     onClick={() => {
                       setSelectedTaskId(task.id);
                       setDetailOpen(true);
                     }}
+                    onKeyDown={(event) => activateRow(event, () => {
+                      setSelectedTaskId(task.id);
+                      setDetailOpen(true);
+                    })}
                   >
                     <td>
                       <strong>{task.title}</strong>
@@ -4075,6 +4801,23 @@ function TasksWorkspace({ filters, loading, onChange, onReset, onTaskSave, optio
       </div>
 
       <Modal
+        eyebrow="Nova atividade"
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Cadastrar pendência"
+        size="large"
+      >
+        <TaskCreateForm
+          onCancel={() => setCreateOpen(false)}
+          onSubmit={async (payload) => {
+            await createTask(payload);
+            setCreateOpen(false);
+          }}
+          producers={producers}
+        />
+      </Modal>
+
+      <Modal
         eyebrow="Pendência interna"
         open={detailOpen && !!selectedTask}
         onClose={() => setDetailOpen(false)}
@@ -4084,6 +4827,117 @@ function TasksWorkspace({ filters, loading, onChange, onReset, onTaskSave, optio
         <TaskDetailPanel onTaskSave={onTaskSave} task={selectedTask} />
       </Modal>
     </>
+  );
+}
+
+function TaskCreateForm({ onCancel, onSubmit, producers }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [producerSearch, setProducerSearch] = useState("");
+  const [form, setForm] = useState({
+    producerId: "",
+    title: "",
+    type: "OUTRO",
+    priority: "NORMAL",
+    assignee: "",
+    dueDate: "",
+    notes: ""
+  });
+  const filteredProducers = producers
+    .filter((producer) => [producer.name, producer.cpf, producer.agency].some((value) => normalizeForSearch(value).includes(normalizeForSearch(producerSearch))))
+    .slice(0, 60);
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      await onSubmit(form);
+    } catch (requestError) {
+      setError(requestError.message || "Não foi possível criar a pendência.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="detail-panel task-create-form" onSubmit={submit}>
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel="Criar pendência"
+        steps={[
+          {
+            id: "task-identification",
+            title: "Pendência",
+            description: "Defina a atividade, tipo e prioridade.",
+            content: (
+              <>
+                <Field label="Título">
+                  <input value={form.title} onChange={(event) => updateField("title", event.target.value)} required />
+                </Field>
+                <div className="inline-grid">
+                  <Field label="Tipo">
+                    <select value={form.type} onChange={(event) => updateField("type", event.target.value)}>
+                      {TASK_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Prioridade">
+                    <select value={form.priority} onChange={(event) => updateField("priority", event.target.value)}>
+                      {VISIT_PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                    </select>
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "task-context",
+            title: "Responsável",
+            description: "Vincule um produtor, responsável e prazo.",
+            content: (
+              <>
+                <label className="search-field">
+                  <Search size={17} />
+                  <input value={producerSearch} onChange={(event) => setProducerSearch(event.target.value)} placeholder="Buscar produtor" />
+                </label>
+                <Field label="Produtor vinculado">
+                  <select value={form.producerId} onChange={(event) => updateField("producerId", event.target.value)}>
+                    <option value="">Sem produtor específico</option>
+                    {filteredProducers.map((producer) => <option key={producer.id} value={producer.id}>{producer.name} · {producer.agency || "Sem agência"}</option>)}
+                  </select>
+                </Field>
+                <div className="inline-grid">
+                  <Field label="Responsável">
+                    <input value={form.assignee} onChange={(event) => updateField("assignee", event.target.value)} />
+                  </Field>
+                  <Field label="Prazo">
+                    <input type="date" value={form.dueDate} onChange={(event) => updateField("dueDate", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "task-notes",
+            title: "Detalhes",
+            description: "Registre as orientações para execução.",
+            content: (
+              <Field label="Observações">
+                <textarea rows="6" value={form.notes} onChange={(event) => updateField("notes", event.target.value)} />
+              </Field>
+            )
+          }
+        ]}
+      />
+    </form>
   );
 }
 
@@ -4296,21 +5150,21 @@ function DocumentsWorkspace({ createDocument, documents, filters, loading, onCha
           />
         </label>
 
-        <SelectFilter value={filters.status} onChange={(value) => onChange("status", value)}>
+        <SelectFilter ariaLabel="Filtrar documentos por status" value={filters.status} onChange={(value) => onChange("status", value)}>
           <option value="">Todos os status</option>
           {(options.documentStatuses || DOCUMENT_STATUSES).map((status) => (
             <option key={status} value={status}>{status}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.category} onChange={(value) => onChange("category", value)}>
+        <SelectFilter ariaLabel="Filtrar documentos por categoria" value={filters.category} onChange={(value) => onChange("category", value)}>
           <option value="">Todas as categorias</option>
           {(options.documentCategories || DOCUMENT_CATEGORIES).map((category) => (
             <option key={category} value={category}>{category}</option>
           ))}
         </SelectFilter>
 
-        <SelectFilter value={filters.agency} onChange={(value) => onChange("agency", value)}>
+        <SelectFilter ariaLabel="Filtrar documentos por agência" value={filters.agency} onChange={(value) => onChange("agency", value)}>
           <option value="">Todas as agências</option>
           {options.agencies.map((agency) => (
             <option key={agency} value={agency}>{agency}</option>
@@ -4358,10 +5212,16 @@ function DocumentsWorkspace({ createDocument, documents, filters, loading, onCha
                   <tr
                     className={document.id === selectedDocument?.id ? "selected-row" : ""}
                     key={document.id}
+                    tabIndex="0"
+                    aria-label={`Abrir documento ${document.title}`}
                     onClick={() => {
                       setSelectedDocumentId(document.id);
                       setDetailOpen(true);
                     }}
+                    onKeyDown={(event) => activateRow(event, () => {
+                      setSelectedDocumentId(document.id);
+                      setDetailOpen(true);
+                    })}
                   >
                     <td>
                       <strong>{document.title}</strong>
@@ -4452,7 +5312,6 @@ function DocumentDetailPanel({ createDocument, document, mode = "combined", onAf
         normalizeForSearch([
           producer.name,
           producer.cpf,
-          producer.accessLogin,
           producer.agency,
           producer.address,
           producer.city
@@ -4564,7 +5423,7 @@ function DocumentDetailPanel({ createDocument, document, mode = "combined", onAf
             <input
               value={producerSearch}
               onChange={(event) => setProducerSearch(event.target.value)}
-              placeholder="Nome, CPF, login, agência ou cidade"
+              placeholder="Nome, CPF, agência ou cidade"
             />
           </Field>
 
@@ -4576,7 +5435,7 @@ function DocumentDetailPanel({ createDocument, document, mode = "combined", onAf
               <option value="">Sem vínculo</option>
               {visibleUploadProducers.map((producer) => (
                 <option key={producer.id} value={producer.id}>
-                  {producer.name} {producer.accessLogin ? `· ${producer.accessLogin}` : ""}
+                  {producer.name} · {producer.agency || "Sem agência"}
                 </option>
               ))}
             </select>
@@ -4610,6 +5469,7 @@ function DocumentDetailPanel({ createDocument, document, mode = "combined", onAf
           <Field label="Arquivo">
             <input
               type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls"
               onChange={(event) => setUploadForm((current) => ({ ...current, file: event.target.files?.[0] || null }))}
             />
           </Field>
@@ -4622,7 +5482,7 @@ function DocumentDetailPanel({ createDocument, document, mode = "combined", onAf
             />
           </Field>
 
-          <p className="upload-hint">Limite atual: 6 MB por arquivo no ambiente de teste local.</p>
+          <p className="upload-hint">Limite de 6 MB por arquivo, armazenado em área privada.</p>
           {uploadError && <p className="form-error">{uploadError}</p>}
 
           <button className="primary-button wide" type="submit" disabled={uploading}>
@@ -4727,6 +5587,1423 @@ function DocumentDetailPanel({ createDocument, document, mode = "combined", onAf
   );
 }
 
+function FuelWorkspace({
+  createFuelEntry,
+  createFuelDriver,
+  createFuelVehicle,
+  deleteFuelDriver,
+  deleteFuelVehicle,
+  drivers,
+  filters,
+  importFuelFile,
+  loading,
+  onChange,
+  onReset,
+  options,
+  records,
+  saveFuelDriver,
+  saveFuelVehicle,
+  summary,
+  vehicles
+}) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [vehicleOpen, setVehicleOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState(null);
+  const [driverOpen, setDriverOpen] = useState(false);
+  const [editingDriver, setEditingDriver] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [file, setFile] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
+  const [importError, setImportError] = useState("");
+  const pagination = usePagedItems(records, FUEL_PAGE_SIZE);
+  const monthly = summary?.byMonth || [];
+  const monthlyRows = monthly.slice(-10);
+  const driverRows = summary?.byDriver || [];
+  const plateRows = summary?.byPlate || [];
+  const efficiencyRows = summary?.efficiencyByPlate || [];
+  const quotaRows = summary?.quotaRisks || [];
+  const futureRows = summary?.futureRecords || [];
+  const alertRows = summary?.efficiencyAlerts || [];
+  const maxMonthLiters = Math.max(...monthlyRows.map((item) => item.suppliedLiters || 0), 1);
+  const maxDriverLiters = Math.max(...driverRows.map((item) => item.suppliedLiters || 0), 1);
+  const maxEfficiency = Math.max(...efficiencyRows.map((item) => item.averageKmPerLiter || 0), 1);
+  const maxQuotaUsage = Math.max(...quotaRows.map((item) => item.quotaLiters ? (item.suppliedLiters / item.quotaLiters) * 100 : 0), 100);
+
+  async function submitImport(event) {
+    event.preventDefault();
+    setImportError("");
+    setImportMessage("");
+
+    if (!file) {
+      setImportError("Selecione a planilha de abastecimento.");
+      return;
+    }
+
+    setImporting(true);
+
+    try {
+      const result = await importFuelFile(file);
+      setImportMessage(`${result.importedRecords || 0} abastecimentos e ${result.importedVehicles || 0} veículos importados.`);
+      setFile(null);
+      event.currentTarget.reset();
+    } catch (requestError) {
+      setImportError(requestError.message || "Não foi possível importar a planilha.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <>
+      <section className="fuel-cockpit">
+        <div className="fuel-cockpit-copy">
+          <p className="eyebrow">Gestão de abastecimento</p>
+          <h2>Consumo, frota e eficiência em uma visão de controle.</h2>
+          <div className="fuel-cockpit-strip">
+            <span><strong>{formatDecimal(summary?.totalSuppliedLiters)} L</strong> atendidos</span>
+            <span><strong>{summary?.drivers ?? 0}</strong> condutores</span>
+            <span><strong>{(futureRows.length || 0) + (alertRows.length || 0)}</strong> alertas</span>
+          </div>
+        </div>
+
+        <div className="fuel-cockpit-actions">
+          <button className="icon-text-button" type="button" onClick={() => { setEditingVehicle(null); setVehicleOpen(true); }}>
+            <Truck size={17} />
+            Cadastrar veículo
+          </button>
+          <button className="icon-text-button" type="button" onClick={() => { setEditingDriver(null); setDriverOpen(true); }}>
+            <UserRound size={17} />
+            Cadastrar motorista
+          </button>
+          <button className="primary-button" type="button" onClick={() => setCreateOpen(true)}>
+            <Plus size={17} />
+            Novo abastecimento
+          </button>
+          <button className="icon-button" type="button" title="Importar planilha" onClick={() => setImportOpen(true)}>
+            <Download size={17} />
+          </button>
+        </div>
+      </section>
+
+      <section className="overview-band fuel-summary-band">
+        <Metric label="Registros" value={summary?.total ?? 0} icon={<ClipboardList size={21} />} />
+        <Metric label="Litros atendidos" value={`${formatDecimal(summary?.totalSuppliedLiters)} L`} icon={<Droplets size={21} />} />
+        <Metric label="KM rodado" value={formatDecimal(summary?.totalKmDriven)} icon={<Truck size={21} />} />
+        <Metric label="Média KM/L" value={formatDecimal(summary?.averageKmPerLiter)} icon={<Activity size={21} />} />
+        <Metric label="Veículos" value={summary?.activeVehicles ?? vehicles.length} icon={<Factory size={21} />} />
+      </section>
+
+      <section className="filters report-filters fuel-filters" aria-label="Filtros de abastecimento">
+        <label className="search-field">
+          <Search size={18} />
+          <input
+            value={filters.search}
+            onChange={(event) => onChange("search", event.target.value)}
+            placeholder="Buscar condutor, placa, requisição, local ou observação"
+          />
+        </label>
+
+        <SelectFilter ariaLabel="Filtrar abastecimentos por ano" value={filters.year} onChange={(value) => onChange("year", value)}>
+          <option value="">Todos os anos</option>
+          {(options.years || []).map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </SelectFilter>
+
+        <SelectFilter ariaLabel="Filtrar abastecimentos por mês" value={filters.month} onChange={(value) => onChange("month", value)}>
+          <option value="">Todos os meses</option>
+          {(options.months || []).map((month) => (
+            <option key={month} value={month}>{month}</option>
+          ))}
+        </SelectFilter>
+
+        <SelectFilter ariaLabel="Filtrar abastecimentos por motorista" value={filters.driver} onChange={(value) => onChange("driver", value)}>
+          <option value="">Todos os condutores</option>
+          {(options.drivers || []).map((driver) => (
+            <option key={driver} value={driver}>{driver}</option>
+          ))}
+        </SelectFilter>
+
+        <SelectFilter ariaLabel="Filtrar abastecimentos por placa" value={filters.plate} onChange={(value) => onChange("plate", value)}>
+          <option value="">Todas as placas</option>
+          {(options.plates || []).map((plate) => (
+            <option key={plate} value={plate}>{plate}</option>
+          ))}
+        </SelectFilter>
+
+        <SelectFilter ariaLabel="Filtrar abastecimentos por local" value={filters.location} onChange={(value) => onChange("location", value)}>
+          <option value="">Todos os locais</option>
+          {(options.locations || []).map((location) => (
+            <option key={location} value={location}>{location}</option>
+          ))}
+        </SelectFilter>
+
+        <button className="ghost-button" type="button" onClick={onReset}>
+          Limpar
+        </button>
+      </section>
+
+      <section className="fuel-command-grid">
+        <article className="fuel-card fuel-chart-card">
+          <div className="fuel-card-heading">
+            <div>
+              <p className="eyebrow">Consumo mensal</p>
+              <h2>Litros e KM por período</h2>
+            </div>
+            <CalendarDays size={22} />
+          </div>
+
+          <div className="fuel-bars" aria-label="Gráfico mensal de abastecimento">
+            {monthlyRows.length ? monthlyRows.map((item) => (
+              <div className="fuel-bar-row" key={item.key}>
+                <span>{formatFuelMonthLabel(item)}</span>
+                <div>
+                  <i style={{ width: `${clampPercent(item.suppliedLiters, maxMonthLiters)}%` }} />
+                </div>
+                <strong>{formatDecimal(item.suppliedLiters)} L</strong>
+              </div>
+            )) : (
+              <p className="empty-row">Os gráficos aparecerão depois dos primeiros abastecimentos.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="fuel-card fuel-ranking-card">
+          <div className="fuel-card-heading">
+            <div>
+              <p className="eyebrow">Condutores</p>
+              <h2>Maior volume abastecido</h2>
+            </div>
+            <UserCheck size={22} />
+          </div>
+
+          <div className="fuel-ranking-list">
+            {driverRows.length ? driverRows.slice(0, 6).map((item) => (
+              <div className="fuel-ranking-item" key={item.label}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>{item.records} lançamentos · {formatDecimal(item.averageKmPerLiter)} KM/L</span>
+                </div>
+                <div className="fuel-ranking-bar">
+                  <i style={{ width: `${clampPercent(item.suppliedLiters, maxDriverLiters)}%` }} />
+                </div>
+                <b>{formatDecimal(item.suppliedLiters)} L</b>
+              </div>
+            )) : (
+              <p className="empty-row">Cadastre motoristas e registre abastecimentos para iniciar a análise.</p>
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="fuel-decision-grid" aria-label="Análises para decisão">
+        <article className="fuel-card fuel-alert-card">
+          <div className="fuel-card-heading">
+            <div>
+              <p className="eyebrow">Atenção gerencial</p>
+              <h2>Pontos para validar</h2>
+            </div>
+            <Activity size={22} />
+          </div>
+
+          <div className="fuel-alert-list">
+            {futureRows.map((item) => (
+              <div className="fuel-alert-item" key={`future-${item.id}`}>
+                <strong>Data futura</strong>
+                <span>{formatDate(item.servedDate)} · {item.driver || "-"} · {item.plate || "-"}</span>
+                <b>{formatDecimal(item.suppliedLiters)} L</b>
+              </div>
+            ))}
+            {alertRows.map((item) => (
+              <div className="fuel-alert-item" key={`eff-${item.id}`}>
+                <strong>Média fora do padrão</strong>
+                <span>{formatDate(item.servedDate)} · {item.driver || "-"} · {item.plate || "-"}</span>
+                <b>{formatDecimal(item.kmPerLiter)} KM/L</b>
+              </div>
+            ))}
+            {!futureRows.length && !alertRows.length && (
+              <p className="empty-row">Sem alertas no filtro atual.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="fuel-card">
+          <div className="fuel-card-heading">
+            <div>
+              <p className="eyebrow">Cotas</p>
+              <h2>Uso por condutor</h2>
+            </div>
+            <ScanLine size={22} />
+          </div>
+
+          <div className="fuel-ranking-list">
+            {quotaRows.length ? quotaRows.map((item) => {
+              const usage = item.quotaLiters ? (item.suppliedLiters / item.quotaLiters) * 100 : 0;
+              return (
+                <div className="fuel-ranking-item quota" key={item.label}>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <span>{formatDecimal(item.suppliedLiters)} L de {formatDecimal(item.quotaLiters)} L</span>
+                  </div>
+                  <div className="fuel-ranking-bar">
+                    <i style={{ width: `${clampPercent(usage, maxQuotaUsage)}%` }} />
+                  </div>
+                  <b className={item.quotaBalance < 0 ? "danger-text" : ""}>
+                    {item.quotaBalance < 0 ? "+" : ""}{formatDecimal(Math.abs(item.quotaBalance || 0))} L
+                  </b>
+                </div>
+              );
+            }) : (
+              <p className="empty-row">Sem cotas para analisar neste filtro.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="fuel-card">
+          <div className="fuel-card-heading">
+            <div>
+              <p className="eyebrow">Eficiência</p>
+              <h2>KM/L por placa</h2>
+            </div>
+            <Truck size={22} />
+          </div>
+
+          <div className="fuel-ranking-list">
+            {efficiencyRows.length ? efficiencyRows.map((item) => (
+              <div className="fuel-ranking-item efficiency" key={item.label}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>{item.vehicle || item.fleetType || `${item.records} lançamentos`}</span>
+                </div>
+                <div className="fuel-ranking-bar">
+                  <i style={{ width: `${clampPercent(item.averageKmPerLiter, maxEfficiency)}%` }} />
+                </div>
+                <b>{formatDecimal(item.averageKmPerLiter)} KM/L</b>
+              </div>
+            )) : (
+              <p className="empty-row">Sem KM suficiente para calcular eficiência.</p>
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="table-shell fuel-table-shell" aria-label="Controle de abastecimento">
+        <div className="table-heading">
+          <div>
+            <h2>Abastecimentos</h2>
+            <p>{loading ? "Carregando..." : `${records.length} registros encontrados`}</p>
+          </div>
+          <div className="table-heading-actions">
+            {loading && <Loader2 className="spin" size={20} />}
+            <button className="icon-text-button" type="button" onClick={() => { setEditingVehicle(null); setVehicleOpen(true); }}>
+              <Truck size={17} />
+              Veículo
+            </button>
+            <button className="icon-text-button" type="button" onClick={() => setCreateOpen(true)}>
+              <Plus size={17} />
+              Novo abastecimento
+            </button>
+          </div>
+        </div>
+
+        <div className="fuel-insight-strip">
+          {plateRows.slice(0, 4).map((item) => (
+            <div key={item.label}>
+              <span>{item.label}</span>
+              <strong>{formatDecimal(item.suppliedLiters)} L</strong>
+              <small>{item.vehicle || `${formatDecimal(item.averageKmPerLiter)} KM/L`}</small>
+            </div>
+          ))}
+          {!plateRows.length && (
+            <div>
+              <span>Frota</span>
+              <strong>{vehicles.length}</strong>
+              <small>veículos cadastrados</small>
+            </div>
+          )}
+        </div>
+
+        <div className="table-wrap fuel-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Condutor</th>
+                <th>Placa</th>
+                <th>Litros</th>
+                <th>KM</th>
+                <th>Média</th>
+                <th>Local</th>
+                <th>Cota</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pagination.items.map((record) => (
+                <tr key={record.id}>
+                  <td>
+                    <strong>{record.servedDate ? formatDate(record.servedDate) : "-"}</strong>
+                    <span>{record.month || ""} {record.year || ""}</span>
+                  </td>
+                  <td>
+                    <strong>{record.driver || "-"}</strong>
+                    <span>{record.vehicleResponsible || record.assignedTo || "Sem responsável"}</span>
+                  </td>
+                  <td>
+                    <code>{record.plate || "-"}</code>
+                    <span>{record.vehicleName || record.fleetType || ""}</span>
+                  </td>
+                  <td>
+                    <strong>{formatDecimal(record.suppliedLiters)} L</strong>
+                    <span>Solicitado: {formatDecimal(record.requestedLiters)} L</span>
+                  </td>
+                  <td>
+                    <strong>{formatDecimal(record.kmDriven)}</strong>
+                    <span>{formatDecimal(record.kmStart)} → {formatDecimal(record.kmEnd)}</span>
+                  </td>
+                  <td>{formatDecimal(record.kmPerLiter)} KM/L</td>
+                  <td>{record.location || "-"}</td>
+                  <td>{record.quotaLiters ? `${formatDecimal(record.quotaLiters)} L` : "-"}</td>
+                </tr>
+              ))}
+              {!loading && pagination.items.length === 0 && (
+                <tr>
+                  <td colSpan="8">
+                    <span className="empty-row">Nenhum abastecimento encontrado.</span>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <PaginationControls pagination={pagination} label="abastecimentos" />
+      </section>
+
+      <section className="table-shell fuel-vehicle-shell" aria-label="Cadastro de frota">
+        <div className="table-heading">
+          <div>
+            <h2>Frota e placas</h2>
+            <p>{vehicles.length} veículos cadastrados</p>
+          </div>
+          <div className="table-heading-actions">
+            <button className="icon-text-button" type="button" onClick={() => { setEditingVehicle(null); setVehicleOpen(true); }}>
+              <Plus size={17} />
+              Cadastrar veículo
+            </button>
+          </div>
+        </div>
+
+        <div className="fuel-vehicle-grid">
+          {vehicles.slice(0, 8).map((vehicle) => (
+            <article className="fuel-vehicle-card" key={vehicle.id}>
+              <div className="fuel-vehicle-copy">
+                <code>{vehicle.plate}</code>
+                <strong>{vehicle.vehicle || "Veículo sem descrição"}</strong>
+                <span>{vehicle.driverName || vehicle.assignedTo || "Responsável não informado"}</span>
+              </div>
+              <div className="fuel-vehicle-meta">
+                <b>{vehicle.quotaLiters ? `${formatDecimal(vehicle.quotaLiters)} L` : "Sem cota"}</b>
+                <small>{vehicle.fleetType || vehicle.area || "Tipo não informado"}</small>
+              </div>
+              <div className="row-actions fuel-vehicle-actions">
+                <button
+                  className="icon-button"
+                  type="button"
+                  title="Editar veículo"
+                  onClick={() => { setEditingVehicle(vehicle); setVehicleOpen(true); }}
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  className="icon-button danger-icon-button"
+                  type="button"
+                  title="Excluir veículo"
+                  onClick={async () => {
+                    if (!window.confirm(`Excluir o veículo ${vehicle.plate}? Os abastecimentos já registrados serão preservados.`)) return;
+                    await deleteFuelVehicle(vehicle.id);
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </article>
+          ))}
+          {!vehicles.length && (
+            <div className="fuel-empty-card">
+              <Truck size={22} />
+              <strong>Nenhum veículo cadastrado</strong>
+              <span>Cadastre placas, responsáveis e cotas para qualificar a análise.</span>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="table-shell fuel-driver-shell" aria-label="Cadastro de motoristas">
+        <div className="table-heading">
+          <div>
+            <h2>Motoristas</h2>
+            <p>{drivers.length} motoristas cadastrados</p>
+          </div>
+          <div className="table-heading-actions">
+            <button className="icon-text-button" type="button" onClick={() => { setEditingDriver(null); setDriverOpen(true); }}>
+              <Plus size={17} />
+              Cadastrar motorista
+            </button>
+          </div>
+        </div>
+
+        <div className="fuel-driver-grid">
+          {drivers.map((driver) => (
+            <article className={`fuel-driver-card ${driver.active ? "" : "inactive"}`} key={driver.id}>
+              <span className="registration-avatar"><UserRound size={18} /></span>
+              <div>
+                <strong>{driver.name}</strong>
+                <small>{driver.licenseNumber ? `CNH ${driver.licenseNumber}` : "CNH não informada"} · {driver.phone || "Sem telefone"}</small>
+              </div>
+              <span className={`review-badge ${driver.active ? "done" : "returned"}`}>{driver.active ? "ATIVO" : "INATIVO"}</span>
+              <div className="row-actions">
+                <button className="icon-button" type="button" title="Editar motorista" onClick={() => { setEditingDriver(driver); setDriverOpen(true); }}>
+                  <Pencil size={16} />
+                </button>
+                <button
+                  className="icon-button danger-icon-button"
+                  type="button"
+                  title="Excluir motorista"
+                  onClick={async () => {
+                    if (!window.confirm(`Excluir o motorista ${driver.name}?`)) return;
+                    await deleteFuelDriver(driver.id);
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </article>
+          ))}
+          {!drivers.length && (
+            <div className="fuel-empty-card">
+              <UserRound size={22} />
+              <strong>Nenhum motorista cadastrado</strong>
+              <span>Cadastre os condutores antes de registrar os abastecimentos.</span>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <Modal
+        eyebrow="Lançamento manual"
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Novo abastecimento"
+        size="large"
+      >
+        <FuelEntryForm
+          onCancel={() => setCreateOpen(false)}
+          onSubmit={async (payload) => {
+            await createFuelEntry(payload);
+            setCreateOpen(false);
+          }}
+          options={options}
+        />
+      </Modal>
+
+      <Modal
+        eyebrow="Planilha de abastecimento"
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Importar Excel"
+        size="large"
+      >
+        <form className="detail-panel fuel-entry-form" onSubmit={submitImport}>
+          <div className="detail-header">
+            <div>
+              <p className="eyebrow">Atualização de dados</p>
+              <h2>Controle de abastecimento</h2>
+            </div>
+            <Download size={24} />
+          </div>
+
+          <Field label="Arquivo Excel">
+            <input
+              accept=".xlsx,.xlsm"
+              type="file"
+              onChange={(event) => setFile(event.target.files?.[0] || null)}
+            />
+          </Field>
+
+          {importError && <p className="form-error">{importError}</p>}
+          {importMessage && <p className="form-success">{importMessage}</p>}
+
+          <div className="modal-actions">
+            <button className="ghost-button" type="button" onClick={() => setImportOpen(false)}>Cancelar</button>
+            <button className="primary-button" type="submit" disabled={importing}>
+              {importing ? <Loader2 className="spin" size={17} /> : <Download size={17} />}
+              Importar
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        eyebrow="Cadastro de frota"
+        open={vehicleOpen}
+        onClose={() => { setVehicleOpen(false); setEditingVehicle(null); }}
+        title={editingVehicle?.plate || "Cadastrar veículo"}
+        size="large"
+      >
+        <FuelVehicleForm
+          initial={editingVehicle}
+          onCancel={() => { setVehicleOpen(false); setEditingVehicle(null); }}
+          onSubmit={async (payload) => {
+            if (editingVehicle) {
+              await saveFuelVehicle(editingVehicle.id, payload);
+            } else {
+              await createFuelVehicle(payload);
+            }
+            setVehicleOpen(false);
+            setEditingVehicle(null);
+          }}
+          options={options}
+        />
+      </Modal>
+
+      <Modal
+        eyebrow="Cadastro de motoristas"
+        open={driverOpen}
+        onClose={() => setDriverOpen(false)}
+        title={editingDriver?.name || "Cadastrar motorista"}
+        size="large"
+      >
+        <FuelDriverForm
+          initial={editingDriver}
+          onCancel={() => setDriverOpen(false)}
+          onSubmit={async (payload) => {
+            if (editingDriver) {
+              await saveFuelDriver(editingDriver.id, payload);
+            } else {
+              await createFuelDriver(payload);
+            }
+            setDriverOpen(false);
+          }}
+        />
+      </Modal>
+    </>
+  );
+}
+
+function FuelEntryForm({ onCancel, onSubmit, options }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    servedDate: new Date().toISOString().slice(0, 10),
+    driver: "",
+    plate: "",
+    vehicleResponsible: "",
+    requestedLiters: "",
+    suppliedLiters: "",
+    kmStart: "",
+    kmEnd: "",
+    location: "",
+    requisition: "",
+    quotaLiters: "",
+    notes: ""
+  });
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      await onSubmit(form);
+    } catch (requestError) {
+      setError(requestError.message || "Não foi possível salvar o abastecimento.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="detail-panel fuel-entry-form" onSubmit={submit}>
+      <div className="detail-header">
+        <div>
+          <p className="eyebrow">Controle de campo</p>
+          <h2>Registrar abastecimento</h2>
+        </div>
+        <Droplets size={24} />
+      </div>
+
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel="Salvar abastecimento"
+        steps={[
+          {
+            id: "fuel-basic",
+            title: "Identificação",
+            description: "Data, local, condutor e placa.",
+            content: (
+              <>
+                <div className="inline-grid">
+                  <Field label="Data">
+                    <input type="date" value={form.servedDate} onChange={(event) => updateField("servedDate", event.target.value)} />
+                  </Field>
+
+                  <Field label="Local">
+                    <input
+                      list="fuel-locations"
+                      value={form.location}
+                      onChange={(event) => updateField("location", event.target.value)}
+                      placeholder="Indústria, posto, fazenda..."
+                    />
+                    <datalist id="fuel-locations">
+                      {(options.locations || []).map((location) => <option key={location} value={location} />)}
+                    </datalist>
+                  </Field>
+                </div>
+
+                <div className="inline-grid">
+                  <Field label="Condutor">
+                    <input
+                      list="fuel-drivers"
+                      value={form.driver}
+                      onChange={(event) => updateField("driver", event.target.value)}
+                      required
+                    />
+                    <datalist id="fuel-drivers">
+                      {(options.drivers || []).map((driver) => <option key={driver} value={driver} />)}
+                    </datalist>
+                  </Field>
+
+                  <Field label="Placa">
+                    <input
+                      list="fuel-plates"
+                      value={form.plate}
+                      onChange={(event) => updateField("plate", event.target.value)}
+                    />
+                    <datalist id="fuel-plates">
+                      {(options.plates || []).map((plate) => <option key={plate} value={plate} />)}
+                    </datalist>
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "fuel-volume",
+            title: "Volume e KM",
+            description: "Litros abastecidos e leitura de odômetro.",
+            content: (
+              <>
+                <div className="inline-grid">
+                  <Field label="Litros solicitados">
+                    <input type="number" step="0.001" value={form.requestedLiters} onChange={(event) => updateField("requestedLiters", event.target.value)} />
+                  </Field>
+
+                  <Field label="Litros atendidos">
+                    <input type="number" step="0.001" value={form.suppliedLiters} onChange={(event) => updateField("suppliedLiters", event.target.value)} required />
+                  </Field>
+                </div>
+
+                <div className="inline-grid">
+                  <Field label="KM inicial">
+                    <input type="number" step="0.1" value={form.kmStart} onChange={(event) => updateField("kmStart", event.target.value)} />
+                  </Field>
+
+                  <Field label="KM final">
+                    <input type="number" step="0.1" value={form.kmEnd} onChange={(event) => updateField("kmEnd", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "fuel-control",
+            title: "Controle",
+            description: "Responsável, requisição, cota e observações.",
+            content: (
+              <>
+                <Field label="Responsável pelo veículo">
+                  <input
+                    value={form.vehicleResponsible}
+                    onChange={(event) => updateField("vehicleResponsible", event.target.value)}
+                  />
+                </Field>
+
+                <div className="inline-grid">
+                  <Field label="Requisição">
+                    <input value={form.requisition} onChange={(event) => updateField("requisition", event.target.value)} />
+                  </Field>
+
+                  <Field label="Cota">
+                    <input type="number" step="0.001" value={form.quotaLiters} onChange={(event) => updateField("quotaLiters", event.target.value)} />
+                  </Field>
+                </div>
+
+                <Field label="Observações">
+                  <textarea rows="4" value={form.notes} onChange={(event) => updateField("notes", event.target.value)} />
+                </Field>
+              </>
+            )
+          }
+        ]}
+      />
+    </form>
+  );
+}
+
+function FuelVehicleForm({ initial, onCancel, onSubmit, options }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    plate: initial?.plate || "",
+    vehicle: initial?.vehicle || "",
+    driverId: initial?.driverId ? String(initial.driverId) : "",
+    assignedTo: initial?.assignedTo || "",
+    quotaLiters: initial?.quotaLiters ?? "",
+    fleetType: initial?.fleetType || "",
+    costCenter: initial?.costCenter || "",
+    department: initial?.department || "",
+    area: initial?.area || "PAF",
+    category: initial?.category || ""
+  });
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      await onSubmit(form);
+    } catch (requestError) {
+      setError(requestError.message || "Não foi possível salvar o veículo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="detail-panel fuel-entry-form" onSubmit={submit}>
+      <div className="detail-header">
+        <div>
+          <p className="eyebrow">Frota PAF</p>
+          <h2>{initial ? "Editar veículo e vínculo" : "Placa, veículo e cota"}</h2>
+        </div>
+        <Truck size={24} />
+      </div>
+
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel="Salvar veículo"
+        steps={[
+          {
+            id: "vehicle-identification",
+            title: "Veículo",
+            description: "Placa, tipo e descrição da frota.",
+            content: (
+              <>
+                <div className="inline-grid">
+                  <Field label="Placa">
+                    <input
+                      value={form.plate}
+                      onChange={(event) => updateField("plate", event.target.value.toUpperCase())}
+                      placeholder="Ex.: SZA5J37"
+                      required
+                    />
+                  </Field>
+
+                  <Field label="Tipo">
+                    <input
+                      list="fuel-fleet-types"
+                      value={form.fleetType}
+                      onChange={(event) => updateField("fleetType", event.target.value)}
+                      placeholder="Moto, carro, caminhonete..."
+                    />
+                    <datalist id="fuel-fleet-types">
+                      {(options.fleetTypes || []).map((type) => <option key={type} value={type} />)}
+                    </datalist>
+                  </Field>
+                </div>
+
+                <Field label="Veículo">
+                  <input
+                    value={form.vehicle}
+                    onChange={(event) => updateField("vehicle", event.target.value)}
+                    placeholder="Modelo ou descrição do veículo"
+                    required
+                  />
+                </Field>
+              </>
+            )
+          },
+          {
+            id: "vehicle-responsibility",
+            title: "Responsável",
+            description: "Vincule o motorista principal e o responsável pelo veículo.",
+            content: (
+              <>
+                <Field label="Motorista principal">
+                  <select value={form.driverId} onChange={(event) => updateField("driverId", event.target.value)}>
+                    <option value="">Sem motorista vinculado</option>
+                    {(options.driverItems || []).filter((driver) => driver.active).map((driver) => (
+                      <option key={driver.id} value={driver.id}>{driver.name}</option>
+                    ))}
+                  </select>
+                </Field>
+                <div className="inline-grid">
+                  <Field label="Responsável interno">
+                    <input
+                      value={form.assignedTo}
+                      onChange={(event) => updateField("assignedTo", event.target.value)}
+                      placeholder="Nome do responsável"
+                    />
+                  </Field>
+                  <Field label="Cota mensal em litros">
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={form.quotaLiters}
+                      onChange={(event) => updateField("quotaLiters", event.target.value)}
+                    />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "vehicle-internal",
+            title: "Interno",
+            description: "Dados administrativos para filtros e relatórios.",
+            content: (
+              <>
+                <div className="inline-grid">
+                  <Field label="Centro de custo">
+                    <input value={form.costCenter} onChange={(event) => updateField("costCenter", event.target.value)} />
+                  </Field>
+
+                  <Field label="Departamento">
+                    <input value={form.department} onChange={(event) => updateField("department", event.target.value)} />
+                  </Field>
+                </div>
+
+                <div className="inline-grid">
+                  <Field label="Área">
+                    <input value={form.area} onChange={(event) => updateField("area", event.target.value)} />
+                  </Field>
+
+                  <Field label="Categoria">
+                    <input value={form.category} onChange={(event) => updateField("category", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          }
+        ]}
+      />
+    </form>
+  );
+}
+
+function FuelDriverForm({ initial, onCancel, onSubmit }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    name: initial?.name || "",
+    cpf: initial?.cpf || "",
+    phone: initial?.phone || "",
+    licenseNumber: initial?.licenseNumber || "",
+    licenseCategory: initial?.licenseCategory || "",
+    licenseExpiresAt: initial?.licenseExpiresAt || "",
+    active: initial?.active ?? true,
+    notes: initial?.notes || ""
+  });
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      await onSubmit(form);
+    } catch (requestError) {
+      setError(requestError.message || "Não foi possível salvar o motorista.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="detail-panel fuel-entry-form" onSubmit={submit}>
+      <div className="detail-header">
+        <div>
+          <p className="eyebrow">Condutor da frota</p>
+          <h2>{initial ? "Editar motorista" : "Novo motorista"}</h2>
+        </div>
+        <UserRound size={24} />
+      </div>
+
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel="Salvar motorista"
+        steps={[
+          {
+            id: "driver-personal",
+            title: "Motorista",
+            description: "Identificação e contato do condutor.",
+            content: (
+              <>
+                <Field label="Nome completo">
+                  <input value={form.name} onChange={(event) => updateField("name", event.target.value)} required />
+                </Field>
+                <div className="inline-grid">
+                  <Field label="CPF">
+                    <input value={form.cpf} onChange={(event) => updateField("cpf", event.target.value)} />
+                  </Field>
+                  <Field label="Telefone">
+                    <input value={form.phone} onChange={(event) => updateField("phone", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "driver-license",
+            title: "Habilitação",
+            description: "Dados da CNH para controle e vencimento.",
+            content: (
+              <>
+                <Field label="Número da CNH">
+                  <input value={form.licenseNumber} onChange={(event) => updateField("licenseNumber", event.target.value)} />
+                </Field>
+                <div className="inline-grid">
+                  <Field label="Categoria">
+                    <input value={form.licenseCategory} onChange={(event) => updateField("licenseCategory", event.target.value.toUpperCase())} placeholder="Ex.: AB" />
+                  </Field>
+                  <Field label="Validade da CNH">
+                    <input type="date" value={form.licenseExpiresAt} onChange={(event) => updateField("licenseExpiresAt", event.target.value)} />
+                  </Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "driver-status",
+            title: "Status",
+            description: "Defina a disponibilidade do motorista no sistema.",
+            content: (
+              <>
+                <label className="checkbox-line registration-checkbox">
+                  <input type="checkbox" checked={form.active} onChange={(event) => updateField("active", event.target.checked)} />
+                  Motorista ativo para novos abastecimentos
+                </label>
+                <Field label="Observações">
+                  <textarea rows="4" value={form.notes} onChange={(event) => updateField("notes", event.target.value)} />
+                </Field>
+              </>
+            )
+          }
+        ]}
+      />
+    </form>
+  );
+}
+
+function TechnicalPortal() {
+  const [checking, setChecking] = useState(true);
+  const [account, setAccount] = useState(null);
+  const [producers, setProducers] = useState([]);
+  const [visits, setVisits] = useState([]);
+  const [summary, setSummary] = useState(null);
+
+  function applyTechnicalData(data) {
+    setAccount(data.account || null);
+    setProducers(data.producers || []);
+    setVisits(data.visits || []);
+    setSummary(data.summary || null);
+  }
+
+  function refreshTechnicalData() {
+    return fetchJson("/api/technical/me").then(applyTechnicalData);
+  }
+
+  useEffect(() => {
+    fetchJson("/api/auth/me")
+      .then((data) => {
+        if (data.user?.role === "technical") {
+          return refreshTechnicalData();
+        }
+        return null;
+      })
+      .catch(() => null)
+      .finally(() => setChecking(false));
+  }, []);
+
+  useEffect(() => {
+    if (!account?.id) return undefined;
+    const refresh = () => {
+      if (document.visibilityState === "visible") refreshTechnicalData().catch(() => null);
+    };
+    const timer = window.setInterval(refresh, 30000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [account?.id]);
+
+  if (checking) {
+    return <LoadingScreen label="Carregando portal técnico" />;
+  }
+
+  if (!account) {
+    return <TechnicalLogin onLogin={() => refreshTechnicalData()} />;
+  }
+
+  async function logout() {
+    await fetchJson("/api/auth/logout", { method: "POST" }).catch(() => null);
+    setAccount(null);
+    setProducers([]);
+    setVisits([]);
+  }
+
+  async function createTechnicalVisit(payload) {
+    const data = await fetchJson("/api/technical/visits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    setVisits((current) => [data.visit, ...current.filter((visit) => visit.id !== data.visit.id)]);
+    refreshTechnicalData().catch(() => null);
+    return data.visit;
+  }
+
+  async function saveTechnicalVisit(visitId, payload) {
+    const data = await fetchJson(`/api/technical/visits/${visitId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    setVisits((current) => current.map((visit) => (visit.id === data.visit.id ? data.visit : visit)));
+    return data.visit;
+  }
+
+  return (
+    <TechnicalWorkspace
+      account={account}
+      createVisit={createTechnicalVisit}
+      onLogout={logout}
+      producers={producers}
+      saveVisit={saveTechnicalVisit}
+      summary={summary}
+      visits={visits}
+    />
+  );
+}
+
+function TechnicalLogin({ onLogin }) {
+  const [login, setLogin] = useState("");
+  const [accessCode, setAccessCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      await fetchJson("/api/auth/access-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ login, accessCode })
+      });
+      await onLogin();
+    } catch (requestError) {
+      setError(requestError.message || "Não foi possível entrar.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="premium-login-screen technical-login-screen">
+      <section className="login-shell" aria-label="Acesso da equipe técnica PAF">
+        <aside className="login-story technical-login-story">
+          <div className="login-story-topline">
+            <img className="login-company-logo" src={BRAND_ASSETS.vilaLogoOnDark} alt="Vila Nova Agroindustrial" />
+            <span>Portal técnico</span>
+          </div>
+          <div className="login-story-copy">
+            <p className="eyebrow">Acompanhamento de campo</p>
+            <h1>Visitas registradas por quem está próximo do produtor.</h1>
+            <p>Consulte os produtores vinculados, registre visitas e mantenha o histórico técnico atualizado.</p>
+          </div>
+          <div className="login-benefit-grid">
+            <span><Users size={16} /> Produtores vinculados</span>
+            <span><MapPin size={16} /> Visitas de campo</span>
+            <span><ShieldCheck size={16} /> Escopo controlado</span>
+          </div>
+        </aside>
+
+        <section className="premium-login-panel">
+          <div className="login-brand">
+            <div className="brand-mark login-brand-mark"><img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" /></div>
+            <div>
+              <p className="eyebrow">Equipe de campo</p>
+              <h1>Acesso técnico</h1>
+              <p className="login-panel-text">Use o login criado pela gestão do PAF.</p>
+            </div>
+          </div>
+          <form className="login-form" onSubmit={submit}>
+            <Field label="Login">
+              <input value={login} onChange={(event) => setLogin(event.target.value)} autoComplete="username" required />
+            </Field>
+            <Field label="Código de acesso">
+              <input type="password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} autoComplete="current-password" required />
+            </Field>
+            {error && <p className="form-error">{error}</p>}
+            <button className="primary-button wide" type="submit" disabled={loading}>
+              {loading ? <Loader2 className="spin" size={18} /> : <LogIn size={18} />}
+              Entrar
+            </button>
+            <a className="login-switch" href="/produtor">Acesso do produtor</a>
+            <a className="login-switch" href="/admin">Acesso administrativo</a>
+          </form>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function TechnicalWorkspace({ account, createVisit, onLogout, producers, saveVisit, summary, visits }) {
+  const [search, setSearch] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingVisit, setEditingVisit] = useState(null);
+  const normalizedSearch = normalizeForSearch(search);
+  const filteredVisits = visits.filter((visit) => [
+    visit.producerName,
+    visit.producerCpf,
+    visit.producerAgency,
+    visit.technician,
+    visit.objective,
+    visit.status
+  ].some((value) => normalizeForSearch(value).includes(normalizedSearch)));
+  const pagination = usePagedItems(filteredVisits, VISIT_PAGE_SIZE);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
+
+  function openCreate() {
+    if (!producers.length) return;
+    setEditingVisit(null);
+    setModalOpen(true);
+  }
+
+  function openEdit(visit) {
+    setEditingVisit(visit);
+    setModalOpen(true);
+  }
+
+  return (
+    <div className="technical-app">
+      <header className="technical-topbar">
+        <div className="technical-brand">
+          <div className="brand-mark"><img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" /></div>
+          <div>
+            <p className="eyebrow">Portal técnico PAF</p>
+            <h1>{account.name}</h1>
+            <span>{account.organization || account.technicianName || "Equipe técnica Vila Nova"}</span>
+          </div>
+        </div>
+        <button className="icon-text-button" type="button" onClick={onLogout}><LogOut size={17} /> Sair</button>
+      </header>
+
+      <main className="technical-main">
+        <section className="technical-hero">
+          <div>
+            <p className="eyebrow">Operação de campo</p>
+            <h2>Produtores vinculados e visitas técnicas.</h2>
+            <p>Registre o atendimento em campo e mantenha a gestão informada em tempo real.</p>
+          </div>
+          <button className="primary-button" type="button" disabled={!producers.length} title={!producers.length ? "Nenhum produtor vinculado" : undefined} onClick={openCreate}><Plus size={18} /> Cadastrar visita</button>
+        </section>
+
+        <section className="overview-band technical-summary">
+          <Metric label="Produtores" value={producers.length} icon={<Users size={20} />} />
+          <Metric label="Visitas" value={summary?.total ?? visits.length} icon={<MapPin size={20} />} />
+          <Metric label="Programadas" value={summary?.scheduled ?? 0} icon={<CalendarDays size={20} />} />
+          <Metric label="Concluídas" value={summary?.completed ?? 0} icon={<Check size={20} />} />
+        </section>
+
+        <section className="filters technical-filters">
+          <label className="search-field">
+            <Search size={18} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar produtor, agência, técnico ou objetivo" />
+          </label>
+          <button className="ghost-button" type="button" onClick={() => setSearch("")}>Limpar</button>
+          <button className="primary-button" type="button" disabled={!producers.length} title={!producers.length ? "Nenhum produtor vinculado" : undefined} onClick={openCreate}><Plus size={17} /> Nova visita</button>
+        </section>
+
+        <section className="table-shell">
+          <div className="table-heading">
+            <div><h2>Histórico de visitas</h2><p>{filteredVisits.length} registros no seu escopo</p></div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Produtor</th><th>Data</th><th>Status</th><th>Prioridade</th><th>Objetivo</th><th aria-label="Ações" /></tr></thead>
+              <tbody>
+                {pagination.items.map((visit) => (
+                  <tr
+                    key={visit.id}
+                    tabIndex="0"
+                    aria-label={`Editar visita de ${visit.producerName}`}
+                    onClick={() => openEdit(visit)}
+                    onKeyDown={(event) => activateRow(event, () => openEdit(visit))}
+                  >
+                    <td><strong>{visit.producerName}</strong><span>{visit.producerAgency || "Sem agência"}</span></td>
+                    <td>{visit.scheduledDate ? formatDate(visit.scheduledDate) : "A definir"}</td>
+                    <td><VisitStatusBadge status={visit.status} /></td>
+                    <td><VisitPriorityBadge priority={visit.priority} /></td>
+                    <td>{visit.objective || "Sem objetivo registrado"}</td>
+                    <td><button className="icon-button" type="button" title="Editar visita" onClick={(event) => { event.stopPropagation(); openEdit(visit); }}><Pencil size={16} /></button></td>
+                  </tr>
+                ))}
+                {!pagination.items.length && <tr><td colSpan="6"><span className="empty-row">{producers.length ? "Nenhuma visita cadastrada. Use “Cadastrar visita” para começar." : "Nenhum produtor está vinculado a este acesso. Solicite o vínculo à gestão PAF."}</span></td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <PaginationControls pagination={pagination} label="visitas" />
+        </section>
+      </main>
+
+      <Modal
+        eyebrow="Acompanhamento de campo"
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editingVisit ? `Visita · ${editingVisit.producerName}` : "Cadastrar visita"}
+        size="large"
+      >
+        <TechnicalVisitForm
+          account={account}
+          initial={editingVisit}
+          onCancel={() => setModalOpen(false)}
+          onSubmit={async (payload) => {
+            if (editingVisit) await saveVisit(editingVisit.id, payload);
+            else await createVisit(payload);
+            setModalOpen(false);
+          }}
+          producers={producers}
+        />
+      </Modal>
+    </div>
+  );
+}
+
+function TechnicalVisitForm({ account, initial, onCancel, onSubmit, producers }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState({
+    producerId: initial?.producerId || producers[0]?.id || "",
+    scheduledDate: initial?.scheduledDate || new Date().toISOString().slice(0, 10),
+    status: initial?.status || "PROGRAMADA",
+    priority: initial?.priority || "NORMAL",
+    technician: initial?.technician || account.technicianName || account.name,
+    objective: initial?.objective || "",
+    resultNote: initial?.resultNote || ""
+  });
+
+  function updateField(key, value) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      await onSubmit(form);
+    } catch (requestError) {
+      setError(requestError.message || "Não foi possível salvar a visita.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="detail-panel technical-visit-form" onSubmit={submit}>
+      <StepWizard
+        cancelLabel="Cancelar"
+        error={error}
+        onCancel={onCancel}
+        saving={saving}
+        submitLabel="Salvar visita"
+        steps={[
+          {
+            id: "technical-visit-producer",
+            title: "Produtor",
+            description: "Selecione o produtor atendido e a data da visita.",
+            content: (
+              <>
+                <Field label="Produtor">
+                  <select value={form.producerId} onChange={(event) => updateField("producerId", event.target.value)} disabled={Boolean(initial)} required>
+                    {producers.map((producer) => <option key={producer.id} value={producer.id}>{producer.name} · {producer.agency || "Sem agência"}</option>)}
+                  </select>
+                </Field>
+                <div className="inline-grid">
+                  <Field label="Data da visita"><input type="date" value={form.scheduledDate} onChange={(event) => updateField("scheduledDate", event.target.value)} /></Field>
+                  <Field label="Prioridade"><select value={form.priority} onChange={(event) => updateField("priority", event.target.value)}>{VISIT_PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></Field>
+                </div>
+              </>
+            )
+          },
+          {
+            id: "technical-visit-service",
+            title: "Atendimento",
+            description: "Registre o técnico, o status e o objetivo do atendimento.",
+            content: (
+              <>
+                <div className="inline-grid">
+                  <Field label="Técnico"><input value={form.technician} onChange={(event) => updateField("technician", event.target.value)} required /></Field>
+                  <Field label="Status"><select value={form.status} onChange={(event) => updateField("status", event.target.value)}>{VISIT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}</select></Field>
+                </div>
+                <Field label="Objetivo da visita"><textarea rows="5" value={form.objective} onChange={(event) => updateField("objective", event.target.value)} required /></Field>
+              </>
+            )
+          },
+          {
+            id: "technical-visit-result",
+            title: "Resultado",
+            description: "Descreva o que foi encontrado e os próximos encaminhamentos.",
+            content: (
+              <Field label="Resultado e orientação técnica"><textarea rows="7" value={form.resultNote} onChange={(event) => updateField("resultNote", event.target.value)} /></Field>
+            )
+          }
+        ]}
+      />
+    </form>
+  );
+}
+
 function ProducerPortal() {
   const [checking, setChecking] = useState(true);
   const [producer, setProducer] = useState(null);
@@ -4748,11 +7025,8 @@ function ProducerPortal() {
 
   useEffect(() => {
     if (!producer?.id) return undefined;
-
-    const socket = io();
-    const refreshProducerData = (event) => {
-      if (event.producerId !== producer.id) return;
-
+    const refreshProducerData = () => {
+      if (document.visibilityState !== "visible") return;
       fetchJson("/api/producer/me")
         .then((data) => {
           setProducer(data.producer);
@@ -4761,11 +7035,12 @@ function ProducerPortal() {
         })
         .catch(() => null);
     };
-
-    socket.on("report:reviewed", refreshProducerData);
-    socket.on("visit:updated", refreshProducerData);
-
-    return () => socket.close();
+    const timer = window.setInterval(refreshProducerData, 30000);
+    document.addEventListener("visibilitychange", refreshProducerData);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshProducerData);
+    };
   }, [producer?.id]);
 
   if (checking) {
@@ -4886,6 +7161,9 @@ function ProducerLogin({ onLogin }) {
             <a className="login-switch" href="/admin">
               Acesso administrativo da equipe técnica
             </a>
+            <a className="login-switch" href="/tecnico">
+              Portal de visitas dos técnicos
+            </a>
           </form>
         </section>
       </section>
@@ -4912,6 +7190,10 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
     needsVisit: false,
     notes: ""
   });
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, []);
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -5002,95 +7284,126 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
 
         <section className="producer-content">
           <form className="report-form" onSubmit={submitReport}>
-            <div className="form-grid">
-              <Field label="Data do relatório">
-                <input
-                  type="date"
-                  value={form.reportDate}
-                  onChange={(event) => updateField("reportDate", event.target.value)}
-                  required
-                />
-              </Field>
-
-              <Field label="Telefone">
-                <input
-                  value={form.contactPhone}
-                  onChange={(event) => updateField("contactPhone", event.target.value)}
-                  placeholder="(00) 00000-0000"
-                  inputMode="tel"
-                  required
-                />
-              </Field>
-
-              <Field label="Situação da área">
-                <select value={form.areaStatus} onChange={(event) => updateField("areaStatus", event.target.value)}>
-                  {AREA_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Área em hectares">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.areaHa}
-                  onChange={(event) => updateField("areaHa", event.target.value)}
-                  required
-                />
-              </Field>
-
-              <Field label="Ano de plantio">
-                <input
-                  type="number"
-                  min="2000"
-                  max="2100"
-                  value={form.plantingYear}
-                  onChange={(event) => updateField("plantingYear", event.target.value)}
-                />
-              </Field>
-
-              <Field label="Cultura principal">
-                <input value={form.crop} onChange={(event) => updateField("crop", event.target.value)} />
-              </Field>
+            <div className="report-form-heading">
+              <div>
+                <p className="eyebrow">Novo acompanhamento</p>
+                <h2>Atualize os dados da sua produção</h2>
+              </div>
+              <span>Leva poucos minutos</span>
             </div>
 
-            <Field label="Data do plantio">
-              <input type="date" value={form.plantingDate} onChange={(event) => updateField("plantingDate", event.target.value)} />
-            </Field>
-
-            <Field label="Endereço">
-              <input value={form.address} onChange={(event) => updateField("address", event.target.value)} />
-            </Field>
-
-            <Field label="Produção ou andamento">
-              <input value={form.productionNote} onChange={(event) => updateField("productionNote", event.target.value)} />
-            </Field>
-
-            <Field label="Observações">
-              <textarea rows="5" value={form.notes} onChange={(event) => updateField("notes", event.target.value)} />
-            </Field>
-
-            <label className="checkbox-line">
-              <input
-                type="checkbox"
-                checked={form.needsVisit}
-                onChange={(event) => updateField("needsVisit", event.target.checked)}
-              />
-              Solicitar visita técnica
-            </label>
-
-            {error && <p className="form-error">{error}</p>}
-
-            <div className="form-actions">
-              <button className="primary-button" type="submit" disabled={submitting}>
-                {submitting ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-                Enviar relatório
-              </button>
-            </div>
+            <StepWizard
+              cancelLabel="Limpar"
+              className="producer-report-wizard"
+              error={error}
+              onCancel={() => setForm((current) => ({ ...current, notes: "", productionNote: "", needsVisit: false }))}
+              resetKey={reports.length}
+              saving={submitting}
+              submitLabel="Enviar relatório"
+              steps={[
+                {
+                  id: "producer-report-contact",
+                  title: "Identificação",
+                  description: "Confirme a data, seu contato e a situação atual da área.",
+                  content: (
+                    <div className="form-grid">
+                      <Field label="Data do relatório">
+                        <input
+                          type="date"
+                          value={form.reportDate}
+                          onChange={(event) => updateField("reportDate", event.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field label="Telefone para contato">
+                        <input
+                          value={form.contactPhone}
+                          onChange={(event) => updateField("contactPhone", event.target.value)}
+                          placeholder="(00) 00000-0000"
+                          inputMode="tel"
+                          required
+                        />
+                      </Field>
+                      <Field label="Situação da área">
+                        <select value={form.areaStatus} onChange={(event) => updateField("areaStatus", event.target.value)}>
+                          {AREA_STATUSES.map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                  )
+                },
+                {
+                  id: "producer-report-production",
+                  title: "Produção",
+                  description: "Informe os dados atuais do plantio e confirme o local da produção.",
+                  content: (
+                    <div className="form-grid">
+                      <Field label="Área em hectares">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={form.areaHa}
+                          onChange={(event) => updateField("areaHa", event.target.value)}
+                          required
+                        />
+                      </Field>
+                      <Field label="Ano de plantio">
+                        <input
+                          type="number"
+                          min="2000"
+                          max="2100"
+                          value={form.plantingYear}
+                          onChange={(event) => updateField("plantingYear", event.target.value)}
+                        />
+                      </Field>
+                      <Field label="Cultura principal">
+                        <input value={form.crop} onChange={(event) => updateField("crop", event.target.value)} />
+                      </Field>
+                      <Field label="Data do plantio">
+                        <input type="date" value={form.plantingDate} onChange={(event) => updateField("plantingDate", event.target.value)} />
+                      </Field>
+                      <Field label="Endereço da área">
+                        <input value={form.address} onChange={(event) => updateField("address", event.target.value)} />
+                      </Field>
+                    </div>
+                  )
+                },
+                {
+                  id: "producer-report-final",
+                  title: "Finalização",
+                  description: "Conte o que mudou e sinalize se precisa do apoio da equipe técnica.",
+                  content: (
+                    <div className="report-final-fields">
+                      <Field label="Produção ou andamento">
+                        <input value={form.productionNote} onChange={(event) => updateField("productionNote", event.target.value)} placeholder="Ex.: plantio concluído, manutenção ou colheita" />
+                      </Field>
+                      <Field label="Observações para a equipe técnica">
+                        <textarea rows="5" value={form.notes} onChange={(event) => updateField("notes", event.target.value)} placeholder="Descreva ocorrências, dúvidas ou necessidades da área" />
+                      </Field>
+                      <label className="checkbox-line visit-request-control">
+                        <input
+                          type="checkbox"
+                          checked={form.needsVisit}
+                          onChange={(event) => updateField("needsVisit", event.target.checked)}
+                        />
+                        <span>
+                          <strong>Solicitar visita técnica</strong>
+                          <small>Marque quando precisar de acompanhamento presencial da equipe PAF.</small>
+                        </span>
+                      </label>
+                      <div className="report-review-strip" aria-label="Resumo do relatório">
+                        <span><small>Situação</small><strong>{form.areaStatus}</strong></span>
+                        <span><small>Área</small><strong>{formatArea(form.areaHa)} ha</strong></span>
+                        <span><small>Visita</small><strong>{form.needsVisit ? "Solicitada" : "Não solicitada"}</strong></span>
+                      </div>
+                    </div>
+                  )
+                }
+              ]}
+            />
           </form>
 
           <ProducerReportHistory reports={reports} />
@@ -5284,7 +7597,7 @@ function PaginationControls({ label, pagination }) {
   return (
     <div className="table-pager">
       <span>
-        {total ? `Mostrando ${start + 1}-${end} de ${total} ${label}` : `Nenhum ${label}`}
+        {total ? `Mostrando ${start + 1}-${end} de ${total} ${label}` : "Nenhum registro"}
       </span>
       {totalPages > 1 && (
         <div className="pager-actions">
@@ -5337,26 +7650,64 @@ function PriorityBadge({ priority }) {
 }
 
 function Modal({ children, eyebrow, open, onClose, size = "large", title }) {
+  const panelRef = useRef(null);
+  const openerRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useEffect(() => {
     if (!open) return undefined;
 
     const previousOverflow = document.body.style.overflow;
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.style.overflow = "hidden";
 
+    const focusFrame = window.requestAnimationFrame(() => {
+      const focusTarget = panelRef.current?.querySelector("[data-modal-autofocus]")
+        || panelRef.current?.querySelector("input:not([disabled]), select:not([disabled]), textarea:not([disabled])")
+        || panelRef.current?.querySelector("button:not([disabled]), a[href]");
+      (focusTarget || panelRef.current)?.focus();
+    });
+
     function handleKeyDown(event) {
-      if (event.key === "Escape") onClose?.();
+      if (event.key === "Escape") {
+        closeRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+
+      const focusable = [...panelRef.current.querySelectorAll(
+        "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href]"
+      )].filter((element) => element instanceof HTMLElement && element.offsetParent !== null && !element.closest("[inert]"));
+      if (!focusable.length) {
+        event.preventDefault();
+        panelRef.current.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      openerRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
       className="modal-backdrop"
       role="presentation"
@@ -5364,7 +7715,7 @@ function Modal({ children, eyebrow, open, onClose, size = "large", title }) {
         if (event.target === event.currentTarget) onClose?.();
       }}
     >
-      <section className={`modal-panel modal-panel-${size}`} role="dialog" aria-modal="true" aria-label={title}>
+      <section ref={panelRef} tabIndex="-1" className={`modal-panel modal-panel-${size}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="modal-header">
           <div>
             {eyebrow && <p className="eyebrow">{eyebrow}</p>}
@@ -5376,15 +7727,22 @@ function Modal({ children, eyebrow, open, onClose, size = "large", title }) {
         </header>
         <div className="modal-body">{children}</div>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
 
-function SelectFilter({ children, icon, value, onChange }) {
+function activateRow(event, action) {
+  if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return;
+  event.preventDefault();
+  action();
+}
+
+function SelectFilter({ ariaLabel = "Filtrar resultados", children, icon, value, onChange }) {
   return (
     <label className="select-field">
       {icon}
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select aria-label={ariaLabel} value={value} onChange={(event) => onChange(event.target.value)}>
         {children}
       </select>
     </label>
@@ -5432,16 +7790,6 @@ function fileToBase64(file) {
     reader.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
     reader.readAsDataURL(file);
   });
-}
-
-function buildCredentialMessage(producer) {
-  return [
-    `Olá, ${producer.name}.`,
-    "Segue seu acesso para preencher o relatório PAF:",
-    `Link: ${window.location.origin}/produtor`,
-    `Login: ${producer.accessLogin}`,
-    `Código: ${producer.accessCode}`
-  ].join("\n");
 }
 
 function buildQuery(filters) {
@@ -5515,6 +7863,24 @@ function formatArea(value) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   });
+}
+
+function formatDecimal(value, digits = 2) {
+  const numeric = Number(value || 0);
+  return numeric.toLocaleString("pt-BR", {
+    minimumFractionDigits: numeric % 1 === 0 ? 0 : Math.min(digits, 2),
+    maximumFractionDigits: digits
+  });
+}
+
+function formatFuelMonthLabel(item = {}) {
+  if (item.key && /^\d{4}-\d{2}$/.test(item.key)) {
+    const [year, month] = item.key.split("-");
+    const date = new Date(Number(year), Number(month) - 1, 1);
+    return new Intl.DateTimeFormat("pt-BR", { month: "short", year: "2-digit" }).format(date);
+  }
+
+  return [item.month || item.label, item.year].filter(Boolean).join(" ") || "-";
 }
 
 function formatDateTime(value) {
