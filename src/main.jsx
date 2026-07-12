@@ -1802,7 +1802,7 @@ function AdminDashboard({ user, onLogout }) {
               <Menu size={21} />
             </button>
             <div>
-              <p className="eyebrow">PAF / Gestão da agricultura familiar</p>
+              <p className="eyebrow">PAF / Gestão rural</p>
               <h1>{viewTitle}</h1>
             </div>
           </div>
