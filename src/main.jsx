@@ -214,7 +214,7 @@ const PILOT_READINESS = [
   { label: "Núcleo e cadastros", value: 98, status: "Pronto", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
   { label: "Dashboard e gestão", value: 95, status: "Pronto", detail: "Indicadores, filtros e acompanhamento" },
   { label: "Operação de campo", value: 98, status: "Pronto", detail: "GPS, fotos, filas múltiplas offline e sincronização automática" },
-  { label: "Integração remota", value: 45, status: "Pendente", detail: "Criar Supabase PAF e corrigir o endpoint publicado" },
+  { label: "Integração remota", value: 45, status: "Pendente", detail: "Recuperar a gestão do Supabase PAF e publicar o backend atual" },
   { label: "Qualidade do piloto", value: 97, status: "Em validação", detail: "Perfis, sessões e jornadas offline aprovados; falta aparelho real" }
 ];
 const PILOT_READINESS_PERCENT = Math.round(PILOT_READINESS.reduce((sum, stage) => sum + stage.value, 0) / PILOT_READINESS.length);

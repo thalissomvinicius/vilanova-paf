@@ -6,7 +6,7 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 
 - Prontidão geral calculada no produto: **87%**.
 - Aplicação e operação local: prontas para homologação controlada.
-- Produção: bloqueada até existir um projeto Supabase exclusivo do PAF.
+- Produção: o endpoint do Supabase PAF foi restaurado, mas o projeto precisa ser conectado para receber as migrations e a Edge Function atuais.
 - Android: APK de piloto gerado; instalação e uso em aparelho físico ainda precisam de aceite.
 
 ## Requisitos e evidências
@@ -37,13 +37,14 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 | RLS, escopo e migrations Supabase | Validado em CI | `.github/workflows/ci.yml` e `supabase/tests/paf_access_scope_test.sql` |
 | Atividade preventiva do Supabase Free | Implementada | Cron diário da Vercel em `/api/health` e `tests/deployment-config.test.mjs` |
 | APK Android | Gerado e assinado para depuração | `releases/VilaNova-PAF-piloto-debug.apk` |
-| Supabase de produção | Bloqueado | Projeto exclusivo ainda não criado/vinculado |
+| Rotas públicas em produção | Validadas em desktop e celular | `/admin`, `/tecnico` e `/produtor`, sem overflow, erro de console ou API `5xx` |
+| Supabase de produção | Parcialmente restaurado | `/api/health` responde e consulta o banco; o projeto ainda não aparece no conector para aplicar a versão atual |
 | Teste em Android físico | Pendente | Requer aparelho conectado e roteiro de aceite |
 
 ## Critérios para liberar o primeiro piloto
 
-1. Criar e vincular o projeto Supabase exclusivo do PAF.
-2. Aplicar migrations, publicar a Edge Function e criar o administrador definitivo.
+1. Conectar o projeto Supabase PAF existente (`auisvfbloziehspzpnvg`) ou autorizar a criação de um substituto exclusivo.
+2. Aplicar migrations, publicar a Edge Function atual e confirmar o administrador definitivo.
 3. Configurar Vercel e APK para o novo backend e validar `/api/health`.
 4. Cadastrar um técnico e de três a cinco produtores reais de teste.
 5. Executar o roteiro de aceite em um Android físico com 4G e modo avião.
