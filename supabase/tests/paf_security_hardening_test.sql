@@ -3,50 +3,72 @@ begin;
 select plan(12);
 
 select ok(
-  not has_function_privilege('anon', 'public.current_profile_id()', 'EXECUTE'),
-  'anonymous users cannot execute current_profile_id'
+  case
+    when to_regprocedure('public.current_profile_id()') is null then true
+    else not has_function_privilege('anon', to_regprocedure('public.current_profile_id()'), 'EXECUTE')
+  end,
+  'anonymous users cannot execute current_profile_id when the legacy helper exists'
 );
 
 select ok(
-  has_function_privilege('authenticated', 'public.current_profile_id()', 'EXECUTE'),
-  'authenticated legacy policies can execute current_profile_id'
+  case
+    when to_regprocedure('public.current_profile_id()') is null then true
+    else has_function_privilege('authenticated', to_regprocedure('public.current_profile_id()'), 'EXECUTE')
+  end,
+  'authenticated legacy policies retain current_profile_id when it exists'
 );
 
 select ok(
-  not has_function_privilege('anon', 'public.is_admin()', 'EXECUTE'),
-  'anonymous users cannot execute is_admin'
+  case
+    when to_regprocedure('public.is_admin()') is null then true
+    else not has_function_privilege('anon', to_regprocedure('public.is_admin()'), 'EXECUTE')
+  end,
+  'anonymous users cannot execute is_admin when the legacy helper exists'
 );
 
 select ok(
-  has_function_privilege('authenticated', 'public.is_admin()', 'EXECUTE'),
-  'authenticated legacy policies can execute is_admin'
+  case
+    when to_regprocedure('public.is_admin()') is null then true
+    else has_function_privilege('authenticated', to_regprocedure('public.is_admin()'), 'EXECUTE')
+  end,
+  'authenticated legacy policies retain is_admin when it exists'
 );
 
-select is(
-  (
-    select p.proconfig
+select ok(
+  to_regprocedure('public.set_updated_at()') is null
+  or exists (
+    select 1
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and p.proname = 'set_updated_at'
+      and p.proconfig = array['search_path=""']::text[]
   ),
-  array['search_path=""']::text[],
-  'shared trigger helper has an immutable search_path'
+  'shared trigger helper has an immutable search_path when it exists'
 );
 
 select ok(
-  not has_function_privilege('anon', 'public.set_updated_at()', 'EXECUTE'),
-  'anonymous users cannot call the shared trigger helper'
+  case
+    when to_regprocedure('public.set_updated_at()') is null then true
+    else not has_function_privilege('anon', to_regprocedure('public.set_updated_at()'), 'EXECUTE')
+  end,
+  'anonymous users cannot call the shared trigger helper when it exists'
 );
 
 select ok(
-  not has_function_privilege('authenticated', 'public.set_updated_at()', 'EXECUTE'),
-  'authenticated users cannot call the shared trigger helper directly'
+  case
+    when to_regprocedure('public.set_updated_at()') is null then true
+    else not has_function_privilege('authenticated', to_regprocedure('public.set_updated_at()'), 'EXECUTE')
+  end,
+  'authenticated users cannot call the shared trigger helper directly when it exists'
 );
 
 select ok(
-  has_function_privilege('service_role', 'public.set_updated_at()', 'EXECUTE'),
-  'service role retains trigger helper access'
+  case
+    when to_regprocedure('public.set_updated_at()') is null then true
+    else has_function_privilege('service_role', to_regprocedure('public.set_updated_at()'), 'EXECUTE')
+  end,
+  'service role retains trigger helper access when it exists'
 );
 
 select is(

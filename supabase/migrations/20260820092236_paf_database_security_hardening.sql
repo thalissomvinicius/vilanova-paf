@@ -47,15 +47,24 @@ begin
 end;
 $$;
 
--- Cover the two foreign keys reported by the database advisor. Both tables
--- are part of the legacy schema and contain production records.
-create index if not exists forms_device_id_idx
-  on public.forms (device_id);
+-- The legacy schema exists in production but is intentionally absent from a
+-- clean PAF installation. Apply its advisor fixes only when those tables exist.
+do $$
+begin
+  if to_regclass('public.forms') is not null then
+    execute 'create index if not exists forms_device_id_idx on public.forms (device_id)';
+  end if;
 
-create index if not exists sync_logs_device_id_idx
-  on public.sync_logs (device_id);
+  if to_regclass('public.sync_logs') is not null then
+    execute 'create index if not exists sync_logs_device_id_idx on public.sync_logs (device_id)';
+  end if;
 
--- These SELECT policies duplicate their corresponding ALL policies exactly.
--- Removing them preserves authorization while avoiding duplicate evaluation.
-drop policy if exists photos_select_own_or_admin on public.photos;
-drop policy if exists stakeholders_select_own_or_admin on public.stakeholders;
+  if to_regclass('public.photos') is not null then
+    execute 'drop policy if exists photos_select_own_or_admin on public.photos';
+  end if;
+
+  if to_regclass('public.stakeholders') is not null then
+    execute 'drop policy if exists stakeholders_select_own_or_admin on public.stakeholders';
+  end if;
+end;
+$$;
