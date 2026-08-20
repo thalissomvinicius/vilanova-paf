@@ -210,11 +210,12 @@ const FUEL_PAGE_SIZE = 22;
 const MAX_DOCUMENT_UPLOAD_BYTES = 6 * 1024 * 1024;
 const TECHNICAL_SESSION_CACHE_KEY = "paf:technical-session-cache";
 const PRODUCER_SESSION_CACHE_KEY = "paf:producer-session-cache";
+const SYNC_RETRY_INTERVAL_MS = 15000;
 const PILOT_READINESS = [
   { label: "Núcleo e cadastros", value: 98, status: "Pronto", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
   { label: "Dashboard e gestão", value: 95, status: "Pronto", detail: "Indicadores, filtros e acompanhamento" },
   { label: "Operação de campo", value: 98, status: "Pronto", detail: "GPS, fotos, filas múltiplas offline e sincronização automática" },
-  { label: "Integração remota", value: 45, status: "Pendente", detail: "Recuperar a gestão do Supabase PAF e publicar o backend atual" },
+  { label: "Integração remota", value: 95, status: "Pronto", detail: "Supabase PAF migrado, Edge Function publicada e produção homologada" },
   { label: "Qualidade do piloto", value: 97, status: "Em validação", detail: "Perfis, sessões e jornadas offline aprovados; falta aparelho real" }
 ];
 const PILOT_READINESS_PERCENT = Math.round(PILOT_READINESS.reduce((sum, stage) => sum + stage.value, 0) / PILOT_READINESS.length);
@@ -7090,9 +7091,11 @@ function TechnicalPortal() {
     };
     window.addEventListener("online", synchronize);
     const timer = window.setTimeout(synchronize, 700);
+    const retryTimer = window.setInterval(synchronize, SYNC_RETRY_INTERVAL_MS);
     return () => {
       window.removeEventListener("online", synchronize);
       window.clearTimeout(timer);
+      window.clearInterval(retryTimer);
     };
   }, [account?.id]);
 
@@ -7933,9 +7936,11 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
     };
     window.addEventListener("online", synchronize);
     const timer = window.setTimeout(synchronize, 600);
+    const retryTimer = window.setInterval(synchronize, SYNC_RETRY_INTERVAL_MS);
     return () => {
       window.removeEventListener("online", synchronize);
       window.clearTimeout(timer);
+      window.clearInterval(retryTimer);
     };
   }, [queueKey]);
 

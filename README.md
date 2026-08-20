@@ -105,6 +105,8 @@ O comando `npm run check` executa testes do núcleo, da configuração de deploy
 
 O deploy agenda uma consulta diária em `/api/health` para registrar atividade real no Supabase Free. O teste `test:deployment` protege essa configuração contra remoções acidentais. A rotina reduz o risco de pausa, mas somente um plano pago oferece garantia oficial contra suspensão por inatividade.
 
+A homologação de produção executada em 20 de agosto de 2026 está registrada em `docs/HOMOLOGACAO_PRODUCAO_2026-08-20.md`. Ela cobre os três perfis, idempotência, GPS, foto privada, painel e limpeza integral dos dados temporários.
+
 ## Banco Supabase
 
 Use um projeto exclusivo para o PAF. Aplique as migrations em ordem e não faça alterações de schema manualmente no painel:

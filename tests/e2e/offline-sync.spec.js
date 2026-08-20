@@ -200,4 +200,39 @@ test.describe.serial("fila offline de relatórios do produtor", () => {
     const total = getDb().prepare("SELECT count(*) AS total FROM reports WHERE producer_id = ?").get(producer.id).total;
     expect(total).toBe(2);
   });
+
+  test("repete automaticamente um envio online após falha transitória", async ({ page }) => {
+    let failedOnce = false;
+    await page.route("**/api/producer/reports", async (route) => {
+      if (!failedOnce && route.request().method() === "POST") {
+        failedOnce = true;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "Falha transitória controlada." }) });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto("/produtor");
+    await page.getByLabel("Login").fill(login);
+    await page.getByLabel("Código de acesso").fill(accessCode);
+    await page.getByRole("button", { name: "Entrar" }).click();
+    await expect(page.getByRole("heading", { name: producer.name })).toBeVisible();
+
+    const totalBefore = getDb().prepare("SELECT count(*) AS total FROM reports WHERE producer_id = ?").get(producer.id).total;
+    await page.getByLabel("Telefone para contato").fill("(91) 99999-0000");
+    await page.getByRole("button", { name: "02 Produção" }).click();
+    await page.getByRole("button", { name: "03 Finalização" }).click();
+    await page.getByLabel("Produção ou andamento").fill("Retry automático após indisponibilidade transitória");
+    await page.getByRole("button", { name: "Enviar relatório" }).dispatchEvent("click");
+    await expect(page.getByText("Falha na sincronização. O envio continuará salvo para nova tentativa.")).toBeVisible();
+
+    await expect.poll(
+      () => getDb().prepare("SELECT count(*) AS total FROM reports WHERE producer_id = ?").get(producer.id).total,
+      { timeout: 20000 }
+    ).toBe(totalBefore + 1);
+    await expect.poll(
+      () => page.evaluate((key) => localStorage.getItem(key), `paf:producer-report-queue:${producer.id}`),
+      { timeout: 5000 }
+    ).toBeNull();
+  });
 });

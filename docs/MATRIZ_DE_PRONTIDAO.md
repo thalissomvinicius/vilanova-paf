@@ -4,9 +4,9 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 
 ## Situação executiva
 
-- Prontidão geral calculada no produto: **87%**.
+- Prontidão geral calculada no produto: **97%**.
 - Aplicação e operação local: prontas para homologação controlada.
-- Produção: o endpoint do Supabase PAF foi restaurado, mas o projeto precisa ser conectado para receber as migrations e a Edge Function atuais.
+- Produção: Supabase conectado, migrations aplicadas, Edge Function publicada e jornada completa homologada.
 - Android: APK de piloto gerado; instalação e uso em aparelho físico ainda precisam de aceite.
 
 ## Requisitos e evidências
@@ -38,17 +38,16 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 | Atividade preventiva do Supabase Free | Implementada | Cron diário da Vercel em `/api/health` e `tests/deployment-config.test.mjs` |
 | APK Android | Gerado e assinado para depuração | `releases/VilaNova-PAF-piloto-debug.apk` |
 | Rotas públicas em produção | Validadas em desktop e celular | `/admin`, `/tecnico` e `/produtor`, sem overflow, erro de console ou API `5xx` |
-| Supabase de produção | Parcialmente restaurado | `/api/health` responde e consulta o banco; o projeto ainda não aparece no conector para aplicar a versão atual |
+| Supabase de produção | Validado | Projeto `paf-vna`, migrations atuais e Edge Function `paf-api` v5 |
+| Jornada completa em produção | Validada e limpa | Admin, produtor, técnico, relatório, visita, GPS, foto, idempotência e isolamento de perfis |
 | Teste em Android físico | Pendente | Requer aparelho conectado e roteiro de aceite |
 
 ## Critérios para liberar o primeiro piloto
 
-1. Conectar o projeto Supabase PAF existente (`auisvfbloziehspzpnvg`) ou autorizar a criação de um substituto exclusivo.
-2. Aplicar migrations, publicar a Edge Function atual e confirmar o administrador definitivo.
-3. Configurar Vercel e APK para o novo backend e validar `/api/health`.
-4. Cadastrar um técnico e de três a cinco produtores reais de teste.
-5. Executar o roteiro de aceite em um Android físico com 4G e modo avião.
-6. Registrar o aceite da gestão e da equipe de campo.
+1. Trocar a senha administrativa temporária no primeiro acesso.
+2. Cadastrar um técnico e de três a cinco produtores reais para o piloto.
+3. Executar o roteiro de aceite em um Android físico com 4G e modo avião.
+4. Registrar o aceite da gestão e da equipe de campo.
 
 ## Limites conhecidos do piloto
 

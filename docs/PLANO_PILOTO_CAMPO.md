@@ -6,14 +6,14 @@ Validar o fluxo completo com um grupo pequeno: a gestão cria os acessos e vínc
 
 ## Prontidão atual
 
-**87% para o primeiro piloto em campo.**
+**97% para o primeiro piloto em campo.**
 
 | Etapa | Progresso | Situação |
 | --- | ---: | --- |
 | Núcleo e cadastros | 98% | Pronto |
 | Dashboard e gestão | 95% | Pronto |
 | Operação de campo | 98% | Pronto |
-| Integração remota | 45% | Endpoint restaurado; acesso de gestão ao projeto pendente |
+| Integração remota | 95% | Supabase migrado, função publicada e jornada homologada em produção |
 | Qualidade do piloto | 97% | Perfis, sessões e jornadas offline aprovados; falta teste em aparelho real |
 
 ## O que já está disponível
@@ -36,11 +36,9 @@ Validar o fluxo completo com um grupo pequeno: a gestão cria os acessos e vínc
 
 ## Bloqueadores antes do piloto
 
-1. Conectar o projeto Supabase PAF (`auisvfbloziehspzpnvg`) ao conector/CLI. O endpoint voltou a responder, mas o projeto ainda não aparece entre os projetos disponíveis para administração.
-2. Aplicar todas as migrations de `supabase/migrations/` e publicar a função `paf-api` atual nesse projeto, ou em um substituto exclusivo autorizado.
-3. Confirmar o administrador definitivo e trocar qualquer senha temporária.
-4. Criar dados controlados para o piloto: 1 técnico, 3 a 5 produtores e seus acessos.
-5. Executar o roteiro abaixo em um celular Android real usando 4G e modo avião.
+1. Entrar com o administrador definitivo e trocar a senha temporária.
+2. Criar dados controlados para o piloto: 1 técnico, 3 a 5 produtores e seus acessos.
+3. Executar o roteiro abaixo em um celular Android real usando 4G e modo avião.
 
 ## Roteiro de aceite
 

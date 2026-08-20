@@ -10,7 +10,7 @@ test("admin entra e visualiza a prontidão do piloto", async ({ page }) => {
   await page.getByRole("button", { name: "Entrar" }).click();
 
   await expect(page.getByRole("heading", { name: "Prontidão do sistema" })).toBeVisible();
-  await expect(page.getByText("87%", { exact: true })).toBeVisible();
+  await expect(page.locator(".pilot-readiness-ring strong")).toHaveText("97%");
   await expect(page.getByRole("button", { name: "Preparar acessos" })).toBeVisible();
   await page.request.post("/api/auth/logout");
 });
