@@ -3,6 +3,8 @@ import {
   clientIp,
   hashSecret,
   makeAccessCode,
+  mapDocument,
+  mapReport,
   normalizeApiPath,
   normalizeDate,
   normalizeLogin,
@@ -53,4 +55,18 @@ Deno.test("mantém todas as categorias aceitas pelo formulário", () => {
   for (const category of ["IDENTIFICAÇÃO", "DAP/CAF", "LICENÇA", "LAUDO", "FOTO"]) {
     assert(DOCUMENT_CATEGORIES.includes(category), `categoria ausente: ${category}`);
   }
+});
+
+Deno.test("preserva metadados de idempotência e armazenamento", () => {
+  const report = mapReport({ id: 1, producer_id: 2, client_submission_id: "report-test-123" });
+  const document = mapDocument({
+    id: 3,
+    producer_id: 2,
+    storage_bucket: "paf-documents",
+    storage_path: "2/teste.png",
+    client_submission_id: "photo-test-123"
+  });
+  assert(report.clientSubmissionId === "report-test-123", "id da submissão do relatório foi perdido");
+  assert(document.storageBucket === "paf-documents", "bucket do documento foi perdido");
+  assert(document.clientSubmissionId === "photo-test-123", "id da submissão do documento foi perdido");
 });

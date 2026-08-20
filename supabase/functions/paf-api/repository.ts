@@ -845,6 +845,14 @@ export class PafRepository {
     return this.getDocumentById(id);
   }
 
+  async deleteDocument(id: number) {
+    const current = await this.getDocumentById(id);
+    if (!current) return null;
+    const { error } = await this.db.from("paf_documents").delete().eq("id", id);
+    assertNoError(error, "Não foi possível excluir o documento.");
+    return current;
+  }
+
   async listFuel(filters: Filters = {}) {
     const [{ data: recordRows, error: recordError }, { data: vehicleRows, error: vehicleError }, { data: driverRows, error: driverError }] = await Promise.all([
       this.db.from("paf_fuel_records").select("*").order("served_date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).range(0, 9999),

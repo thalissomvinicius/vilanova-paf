@@ -358,6 +358,21 @@ async function route(context: RouteContext): Promise<Response | null> {
     return json({ document });
   }
 
+  if (method === "DELETE" && documentMatch) {
+    if (!isAdmin(auth)) return apiError("Acesso administrativo necessário.", 401);
+    const document = await repository.getDocumentById(Number(documentMatch[1]));
+    if (!document) return apiError("Documento não encontrado.", 404);
+    if (document.filePath) {
+      const { error } = await db.storage
+        .from(document.storageBucket || "paf-documents")
+        .remove([document.filePath]);
+      if (error) throw new Error("Não foi possível remover o arquivo do armazenamento.");
+    }
+    await repository.deleteDocument(document.id);
+    await repository.audit(auth.account, "DELETE", "DOCUMENT", document.id, ipAddress);
+    return json({ ok: true });
+  }
+
   if (method === "GET" && path === "/api/admin/fuel") {
     if (!isAdmin(auth)) return apiError("Acesso administrativo necessário.", 401);
     return json(await repository.listFuel(filters));

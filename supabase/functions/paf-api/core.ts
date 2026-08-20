@@ -274,7 +274,8 @@ export function mapReport(row: Record<string, any>) {
     reviewedAt: row.reviewed_at,
     reviewedBy: row.reviewed_by,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    clientSubmissionId: row.client_submission_id
   };
 }
 
@@ -363,6 +364,7 @@ export function mapDocument(row: Record<string, any>) {
     fileName: row.file_name,
     fileMime: row.file_mime,
     fileSize: row.file_size,
+    storageBucket: row.storage_bucket,
     filePath: row.storage_path,
     uploadedBy: row.uploaded_by,
     notes: row.notes,
