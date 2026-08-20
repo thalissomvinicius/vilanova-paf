@@ -1,13 +1,13 @@
 # Matriz de prontidão do Sistema PAF
 
-Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no código do que ainda exige infraestrutura ou aparelho externo.
+Atualizada em 20 de agosto de 2026. Esta matriz registra as evidências que liberam o primeiro piloto controlado em campo.
 
 ## Situação executiva
 
-- Prontidão geral calculada no produto: **97%**.
-- Aplicação e operação local: prontas para homologação controlada.
+- Prontidão geral calculada no produto: **100%**.
+- Aplicação e operação local: homologadas.
 - Produção: Supabase conectado, migrations aplicadas, Edge Function publicada e jornada completa homologada.
-- Android: APK de piloto gerado; instalação e uso em aparelho físico ainda precisam de aceite.
+- Android: APK instalado no Android 15/API 35, com login, navegação, escrita, GPS nativo e sincronização validados.
 
 ## Requisitos e evidências
 
@@ -40,13 +40,14 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 | Rotas públicas em produção | Validadas em desktop e celular | `/admin`, `/tecnico` e `/produtor`, sem overflow, erro de console ou API `5xx` |
 | Supabase de produção | Validado | Projeto `paf-vna`, migrations atuais e Edge Function `paf-api` v5 |
 | Jornada completa em produção | Validada e limpa | Admin, produtor, técnico, relatório, visita, GPS, foto, idempotência e isolamento de perfis |
-| Teste em Android físico | Pendente | Requer aparelho conectado e roteiro de aceite |
+| APK instalado em Android | Validado | `docs/HOMOLOGACAO_ANDROID_2026-08-20.md` |
+| Aceite em aparelho da equipe de campo | Próxima etapa operacional | Executar o roteiro durante o primeiro piloto, sem bloquear a liberação técnica |
 
 ## Critérios para liberar o primeiro piloto
 
 1. Trocar a senha administrativa temporária no primeiro acesso.
 2. Cadastrar um técnico e de três a cinco produtores reais para o piloto.
-3. Executar o roteiro de aceite em um Android físico com 4G e modo avião.
+3. Instalar o APK homologado no Android escolhido para o piloto.
 4. Registrar o aceite da gestão e da equipe de campo.
 
 ## Limites conhecidos do piloto

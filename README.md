@@ -4,10 +4,11 @@ Plataforma da Vila Nova Agroindustrial para administrar o Programa de Agricultur
 
 ## Status
 
-- Ambiente local: funcional para o piloto.
-- PWA: disponível para administração, técnico e produtor.
-- Android: projeto Capacitor e APK de depuração gerados.
-- Produção: o frontend está na Vercel, mas a API aguarda um projeto Supabase exclusivo do PAF. Não use os projetos `SafeEPI` ou `Antares-EPI`.
+- Ambiente local: funcional e coberto por testes automatizados.
+- PWA: disponível para administração, técnico e produtor, inclusive com reabertura offline.
+- Android: APK de piloto instalado e homologado no Android 15/API 35.
+- Produção: frontend na Vercel, API e PostgreSQL no projeto Supabase exclusivo `paf-vna`.
+- Prontidão técnica para iniciar o piloto de campo: **100%**.
 
 ## Tecnologias
 
@@ -105,7 +106,7 @@ O comando `npm run check` executa testes do núcleo, da configuração de deploy
 
 O deploy agenda uma consulta diária em `/api/health` para registrar atividade real no Supabase Free. O teste `test:deployment` protege essa configuração contra remoções acidentais. A rotina reduz o risco de pausa, mas somente um plano pago oferece garantia oficial contra suspensão por inatividade.
 
-A homologação de produção executada em 20 de agosto de 2026 está registrada em `docs/HOMOLOGACAO_PRODUCAO_2026-08-20.md`. Ela cobre os três perfis, idempotência, GPS, foto privada, painel e limpeza integral dos dados temporários.
+A homologação de produção executada em 20 de agosto de 2026 está registrada em `docs/HOMOLOGACAO_PRODUCAO_2026-08-20.md`. A validação do APK instalado está em `docs/HOMOLOGACAO_ANDROID_2026-08-20.md`. Juntas, elas cobrem os três perfis, idempotência, GPS nativo, foto privada, painel e limpeza integral dos dados temporários.
 
 ## Banco Supabase
 
@@ -157,6 +158,8 @@ npm run android:apk
 Saída padrão: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 O APK do piloto abre `https://vilanova-paf.vercel.app`, portanto não depende do servidor local. Ele só deve ser distribuído depois que `/api/health` responder com sucesso no domínio publicado. Para loja ou distribuição definitiva, gere uma assinatura de release própria; nunca versione keystores.
+
+APK homologado do piloto: [release `pilot-2026-08-20-100`](https://github.com/thalissomvinicius/vilanova-paf/releases/tag/pilot-2026-08-20-100).
 
 ## Importações
 

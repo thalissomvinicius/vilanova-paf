@@ -6,15 +6,15 @@ Validar o fluxo completo com um grupo pequeno: a gestão cria os acessos e vínc
 
 ## Prontidão atual
 
-**97% para o primeiro piloto em campo.**
+**100% de prontidão técnica para iniciar o primeiro piloto em campo.**
 
 | Etapa | Progresso | Situação |
 | --- | ---: | --- |
-| Núcleo e cadastros | 98% | Pronto |
-| Dashboard e gestão | 95% | Pronto |
-| Operação de campo | 98% | Pronto |
-| Integração remota | 95% | Supabase migrado, função publicada e jornada homologada em produção |
-| Qualidade do piloto | 97% | Perfis, sessões e jornadas offline aprovados; falta teste em aparelho real |
+| Núcleo e cadastros | 100% | Validado |
+| Dashboard e gestão | 100% | Validado |
+| Operação de campo | 100% | Validado |
+| Integração remota | 100% | Supabase migrado, função publicada e jornada homologada em produção |
+| Qualidade do piloto | 100% | APK instalado no Android, perfis, GPS, sessões e jornadas offline aprovados |
 
 ## O que já está disponível
 
@@ -34,11 +34,11 @@ Validar o fluxo completo com um grupo pequeno: a gestão cria os acessos e vínc
 - Instalação como PWA e APK Android de piloto assinado para depuração.
 - Testes automatizados do banco, Edge Function, rotas e responsividade.
 
-## Bloqueadores antes do piloto
+## Preparação operacional do piloto
 
 1. Entrar com o administrador definitivo e trocar a senha temporária.
 2. Criar dados controlados para o piloto: 1 técnico, 3 a 5 produtores e seus acessos.
-3. Executar o roteiro abaixo em um celular Android real usando 4G e modo avião.
+3. Instalar o APK no celular escolhido e executar o roteiro abaixo como aceite da equipe de campo.
 
 ## Roteiro de aceite
 

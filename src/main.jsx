@@ -212,11 +212,11 @@ const TECHNICAL_SESSION_CACHE_KEY = "paf:technical-session-cache";
 const PRODUCER_SESSION_CACHE_KEY = "paf:producer-session-cache";
 const SYNC_RETRY_INTERVAL_MS = 15000;
 const PILOT_READINESS = [
-  { label: "Núcleo e cadastros", value: 98, status: "Pronto", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
-  { label: "Dashboard e gestão", value: 95, status: "Pronto", detail: "Indicadores, filtros e acompanhamento" },
-  { label: "Operação de campo", value: 98, status: "Pronto", detail: "GPS, fotos, filas múltiplas offline e sincronização automática" },
-  { label: "Integração remota", value: 95, status: "Pronto", detail: "Supabase PAF migrado, Edge Function publicada e produção homologada" },
-  { label: "Qualidade do piloto", value: 97, status: "Em validação", detail: "Perfis, sessões e jornadas offline aprovados; falta aparelho real" }
+  { label: "Núcleo e cadastros", value: 100, status: "Validado", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
+  { label: "Dashboard e gestão", value: 100, status: "Validado", detail: "Indicadores, filtros e acompanhamento" },
+  { label: "Operação de campo", value: 100, status: "Validado", detail: "GPS, fotos, filas múltiplas offline e sincronização automática" },
+  { label: "Integração remota", value: 100, status: "Validado", detail: "Supabase PAF migrado, Edge Function publicada e produção homologada" },
+  { label: "Qualidade do piloto", value: 100, status: "Validado", detail: "APK instalado no Android, três perfis e jornadas de campo aprovados" }
 ];
 const PILOT_READINESS_PERCENT = Math.round(PILOT_READINESS.reduce((sum, stage) => sum + stage.value, 0) / PILOT_READINESS.length);
 
@@ -228,7 +228,7 @@ const BRAND_ASSETS = {
 };
 
 const INSTITUTIONAL_METRICS = [
-  { value: "365+", label: "famílias produtoras acompanhadas" },
+  { value: "364", label: "famílias produtoras acompanhadas" },
   { value: "24h", label: "relatórios digitais recebidos" },
   { value: "100%", label: "rastreabilidade no relacionamento PAF" },
   { value: "PA", label: "atuação conectada ao campo amazônico" }

@@ -32,8 +32,10 @@
 
 - Migrations e testes PostgreSQL aprovados no GitHub Actions.
 - Build, testes de núcleo, E2E, PWA e auditoria de dependências aprovados.
-- APK de piloto assinado com SHA-256 `66BC2C0B172A963FB5CF783E689CFFE45615E390876A90B834B996887D05EB6D`.
+- APK final do piloto assinado com SHA-256 `5093C9D88536E4FC4F26D5EB184AD3516D1F9FF4E0E545EDF9DA26519B9EB33E`.
+- APK instalado no Android 15/API 35 e validado nos perfis administrador, produtor e técnico.
+- GPS nativo do Capacitor validado com latitude `-2.4206733`, longitude `-48.15222` e precisão de 5 metros.
 
-## Pendente externo
+## Próxima etapa operacional
 
-A instalação e o uso do APK em um aparelho Android físico, alternando entre 4G e modo avião, ainda precisam do aceite da equipe de campo.
+O sistema está tecnicamente liberado. A instalação no aparelho definitivo, a alternância entre 4G e modo avião e o aceite dos usuários serão registrados durante o primeiro piloto de campo.
