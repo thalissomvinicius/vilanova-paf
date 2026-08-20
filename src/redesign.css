@@ -1298,15 +1298,25 @@ tbody tr:hover {
 }
 
 .registration-directory-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
 .registration-panel {
+  border: 1px solid rgba(35, 74, 41, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
   min-width: 0;
   overflow: hidden;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .registration-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   min-height: 68px;
   border-bottom: 1px solid var(--app-line);
   padding: 13px 15px;
@@ -1320,11 +1330,16 @@ tbody tr:hover {
 }
 
 .registration-list {
+  display: grid;
   gap: 0;
   padding: 0;
 }
 
 .registration-list-item {
+  display: grid;
+  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
   min-height: 68px;
   border: 0;
   border-bottom: 1px solid #e8ede8;
@@ -1339,6 +1354,10 @@ tbody tr:hover {
 
 .registration-list-item:not(.technician) {
   grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.registration-list-item.technician {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
 }
 
 .registration-avatar {
@@ -1358,14 +1377,29 @@ tbody tr:hover {
 }
 
 .registration-aux-panel {
-  gap: 20px;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.55fr) minmax(0, 1fr);
+  gap: 16px;
   padding: 20px;
+  border: 1px solid rgba(35, 74, 41, 0.16);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--app-shadow-sm);
 }
 
 .registration-chip-card {
-  border-color: var(--app-line);
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  border: 1px solid var(--app-line);
   border-radius: 7px;
-  background: var(--app-surface-soft);
+  background: #fbfef6;
+}
+
+.registration-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .registration-chip-card span {
@@ -1523,7 +1557,14 @@ tbody tr:hover {
 
 /* Modals and wizards */
 .modal-backdrop {
+  position: fixed;
+  inset: 0;
   z-index: 100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  overscroll-behavior: contain;
   padding: 22px;
   background: rgba(18, 35, 26, 0.58);
   backdrop-filter: blur(5px);
@@ -2174,6 +2215,73 @@ tbody tr:hover {
   gap: 8px;
 }
 
+.access-producer-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--app-line);
+  border-radius: 7px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  background: var(--app-surface-soft);
+}
+
+.access-producer-chip {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.access-producer-chip span {
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.access-producer-chip span:first-child {
+  color: var(--app-green-900);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.access-producer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.access-producer-actions .ghost-button {
+  min-height: 34px;
+  padding-inline: 10px;
+  font-size: 0.72rem;
+}
+
+.access-producer-pager {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px dashed var(--app-line);
+  border-radius: 7px;
+  padding: 8px 10px;
+  margin-top: 4px;
+}
+
+.access-producer-pager .stepper-inline {
+  display: flex;
+  gap: 6px;
+}
+
+.access-producer-pager .stepper-inline .icon-text-button {
+  min-height: 32px;
+  padding-block: 0;
+  font-size: 0.7rem;
+}
+
 .access-danger-actions {
   display: flex;
   justify-content: space-between;
@@ -2212,6 +2320,26 @@ tbody tr:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
+}
+
+.fuel-section-filter {
+  padding: 12px 12px 0;
+}
+
+.fuel-pager {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 7px;
+  margin: 8px 0 0;
+  color: var(--app-muted);
+  font-size: 0.78rem;
+}
+
+.fuel-pager .ghost-button {
+  min-height: 32px;
+  padding-inline: 12px;
 }
 
 .fuel-vehicle-copy,
@@ -2484,6 +2612,15 @@ tbody tr:hover {
 
   .access-filters .search-field {
     grid-column: 1 / -1;
+  }
+
+  .access-producer-toolbar,
+  .access-producer-pager {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .access-producer-actions {
+    justify-content: stretch;
   }
 }
 
@@ -2787,6 +2924,8 @@ tbody tr:hover {
   }
 
   .modal-backdrop {
+    position: fixed;
+    inset: 0;
     padding: 0;
   }
 

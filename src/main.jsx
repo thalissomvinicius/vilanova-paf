@@ -3591,6 +3591,7 @@ function AccessRegistrationForm({ access, credential, onCancel, onCopyCredential
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [producerSearch, setProducerSearch] = useState("");
+  const [selectedScopePage, setSelectedScopePage] = useState(1);
   const [form, setForm] = useState(() => ({
     name: access?.name || "",
     login: access?.login || "",
@@ -3604,9 +3605,20 @@ function AccessRegistrationForm({ access, credential, onCancel, onCopyCredential
     canManageVisits: access?.canManageVisits ?? false,
     notes: access?.notes || ""
   }));
+  const isProducerProfile = form.accountType === "PRODUTOR";
+  const profileLabel = isProducerProfile ? "Perfil produtor" : "Perfil técnico";
+  const producerSearchTerm = normalizeForSearch(producerSearch);
   const filteredProducers = producers
-    .filter((producer) => [producer.name, producer.cpf, producer.agency].some((value) => normalizeForSearch(value).includes(normalizeForSearch(producerSearch))))
-    .slice(0, 80);
+    .filter((producer) => [producer.name, producer.cpf, producer.agency].some((value) => normalizeForSearch(value).includes(producerSearchTerm)))
+    .slice(0, 120);
+
+  const scopePageSize = 30;
+  const visibleProducers = filteredProducers.slice((selectedScopePage - 1) * scopePageSize, selectedScopePage * scopePageSize);
+  const maxScopePages = Math.max(1, Math.ceil(filteredProducers.length / scopePageSize));
+
+  useEffect(() => {
+    setSelectedScopePage(1);
+  }, [producerSearch, form.accountType]);
 
   useEffect(() => {
     setForm({
@@ -3653,6 +3665,20 @@ function AccessRegistrationForm({ access, credential, onCancel, onCopyCredential
           : [...current.producerIds, producerId]
       };
     });
+  }
+
+  function selectVisibleProducers() {
+    if (form.accountType === "PRODUTOR") return;
+
+    const visibleIds = visibleProducers.map((producer) => producer.id);
+    setForm((current) => ({
+      ...current,
+      producerIds: Array.from(new Set([...(current.producerIds || []), ...visibleIds]))
+    }));
+  }
+
+  function clearProducerSelection() {
+    setForm((current) => ({ ...current, producerIds: [] }));
   }
 
   async function submit(event) {
@@ -3750,8 +3776,43 @@ function AccessRegistrationForm({ access, credential, onCancel, onCopyCredential
                   <Search size={17} />
                   <input value={producerSearch} onChange={(event) => setProducerSearch(event.target.value)} placeholder="Buscar produtor, CPF ou agência" />
                 </label>
+                <div className="access-producer-toolbar">
+                  <div className="access-producer-chip">
+                    <span>{form.producerIds.length} {form.producerIds.length === 1 ? "produtor selecionado" : "produtores selecionados"} · {profileLabel}</span>
+                    <span>{filteredProducers.length} produtores disponíveis</span>
+                  </div>
+                  <div className="access-producer-actions">
+                    {!isProducerProfile && (
+                      <>
+                        <button className="ghost-button" type="button" onClick={selectVisibleProducers}>Selecionar visíveis</button>
+                        <button className="ghost-button" type="button" onClick={clearProducerSelection}>Limpar seleção</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <label className="access-producer-pager" aria-label="Página de seleção de produtores">
+                  <small className="eyebrow">Página {selectedScopePage} de {maxScopePages}</small>
+                  <div className="stepper-inline">
+                    <button
+                      className="icon-text-button"
+                      type="button"
+                      disabled={selectedScopePage <= 1}
+                      onClick={() => setSelectedScopePage((current) => Math.max(current - 1, 1))}
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      className="icon-text-button"
+                      type="button"
+                      disabled={selectedScopePage >= maxScopePages}
+                      onClick={() => setSelectedScopePage((current) => Math.min(current + 1, maxScopePages))}
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                </label>
                 <div className="access-producer-list">
-                  {filteredProducers.map((producer) => (
+                  {visibleProducers.map((producer) => (
                     <label className={form.producerIds.includes(producer.id) ? "selected" : ""} key={producer.id}>
                       <input
                         type={form.accountType === "PRODUTOR" ? "radio" : "checkbox"}
@@ -5626,7 +5687,39 @@ function FuelWorkspace({
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState("");
   const [importError, setImportError] = useState("");
+  const [vehicleSearch, setVehicleSearch] = useState("");
+  const [driverSearch, setDriverSearch] = useState("");
   const pagination = usePagedItems(records, FUEL_PAGE_SIZE);
+  const vehicleList = useMemo(() => {
+    const query = normalizeForSearch(vehicleSearch);
+    if (!query) return vehicles;
+    return vehicles.filter((vehicle) => [
+      vehicle.plate,
+      vehicle.vehicle,
+      vehicle.driverName,
+      vehicle.assignedTo,
+      vehicle.fleetType,
+      vehicle.area
+    ].some((value) => normalizeForSearch(value).includes(query)));
+  }, [normalizeForSearch, vehicleSearch, vehicles]);
+  const driverList = useMemo(() => {
+    const query = normalizeForSearch(driverSearch);
+    if (!query) return drivers;
+    return drivers.filter((driver) => [driver.name, driver.licenseNumber, driver.phone].some((value) => normalizeForSearch(value).includes(query)));
+  }, [normalizeForSearch, driverSearch, drivers]);
+  const [vehiclePage, setVehiclePage] = useState(1);
+  const [driverPage, setDriverPage] = useState(1);
+  const driverCardSize = 8;
+  const vehicleCardSize = 8;
+  const pagedVehicleList = vehicleList.slice((vehiclePage - 1) * vehicleCardSize, vehiclePage * vehicleCardSize);
+  const pagedDriverList = driverList.slice((driverPage - 1) * driverCardSize, driverPage * driverCardSize);
+  const maxVehiclePages = Math.max(1, Math.ceil(vehicleList.length / vehicleCardSize));
+  const maxDriverPages = Math.max(1, Math.ceil(driverList.length / driverCardSize));
+
+  useEffect(() => {
+    setVehiclePage(1);
+    setDriverPage(1);
+  }, [vehicleSearch, driverSearch]);
   const monthly = summary?.byMonth || [];
   const monthlyRows = monthly.slice(-10);
   const driverRows = summary?.byDriver || [];
@@ -5993,7 +6086,7 @@ function FuelWorkspace({
         <div className="table-heading">
           <div>
             <h2>Frota e placas</h2>
-            <p>{vehicles.length} veículos cadastrados</p>
+            <p>{vehicleList.length} de {vehicles.length} veículos localizados</p>
           </div>
           <div className="table-heading-actions">
             <button className="icon-text-button" type="button" onClick={() => { setEditingVehicle(null); setVehicleOpen(true); }}>
@@ -6002,9 +6095,15 @@ function FuelWorkspace({
             </button>
           </div>
         </div>
+        <div className="fuel-section-filter">
+          <label className="search-field">
+            <Search size={17} />
+            <input value={vehicleSearch} onChange={(event) => setVehicleSearch(event.target.value)} placeholder="Buscar placa, motorista ou tipo de veículo" />
+          </label>
+        </div>
 
         <div className="fuel-vehicle-grid">
-          {vehicles.slice(0, 8).map((vehicle) => (
+          {pagedVehicleList.map((vehicle) => (
             <article className="fuel-vehicle-card" key={vehicle.id}>
               <div className="fuel-vehicle-copy">
                 <code>{vehicle.plate}</code>
@@ -6038,11 +6137,22 @@ function FuelWorkspace({
               </div>
             </article>
           ))}
-          {!vehicles.length && (
+          {!vehicleList.length && (
             <div className="fuel-empty-card">
               <Truck size={22} />
               <strong>Nenhum veículo cadastrado</strong>
-              <span>Cadastre placas, responsáveis e cotas para qualificar a análise.</span>
+              <span>Refine a busca ou cadastre placas, responsáveis e cotas para qualificar a análise.</span>
+            </div>
+          )}
+          {vehicleList.length > vehicleCardSize && (
+            <div className="fuel-pager">
+              <button className="ghost-button" type="button" disabled={vehiclePage <= 1} onClick={() => setVehiclePage((current) => Math.max(current - 1, 1))}>
+                Página anterior
+              </button>
+              <span>{vehiclePage} de {maxVehiclePages}</span>
+              <button className="ghost-button" type="button" disabled={vehiclePage >= maxVehiclePages} onClick={() => setVehiclePage((current) => Math.min(current + 1, maxVehiclePages))}>
+                Próxima
+              </button>
             </div>
           )}
         </div>
@@ -6052,7 +6162,7 @@ function FuelWorkspace({
         <div className="table-heading">
           <div>
             <h2>Motoristas</h2>
-            <p>{drivers.length} motoristas cadastrados</p>
+            <p>{driverList.length} de {drivers.length} motoristas localizados</p>
           </div>
           <div className="table-heading-actions">
             <button className="icon-text-button" type="button" onClick={() => { setEditingDriver(null); setDriverOpen(true); }}>
@@ -6061,9 +6171,15 @@ function FuelWorkspace({
             </button>
           </div>
         </div>
+        <div className="fuel-section-filter">
+          <label className="search-field">
+            <Search size={17} />
+            <input value={driverSearch} onChange={(event) => setDriverSearch(event.target.value)} placeholder="Buscar nome, CNH ou telefone" />
+          </label>
+        </div>
 
         <div className="fuel-driver-grid">
-          {drivers.map((driver) => (
+          {pagedDriverList.map((driver) => (
             <article className={`fuel-driver-card ${driver.active ? "" : "inactive"}`} key={driver.id}>
               <span className="registration-avatar"><UserRound size={18} /></span>
               <div>
@@ -6089,11 +6205,22 @@ function FuelWorkspace({
               </div>
             </article>
           ))}
-          {!drivers.length && (
+          {!driverList.length && (
             <div className="fuel-empty-card">
               <UserRound size={22} />
               <strong>Nenhum motorista cadastrado</strong>
-              <span>Cadastre os condutores antes de registrar os abastecimentos.</span>
+              <span>Refine a busca ou cadastre os condutores antes de registrar os abastecimentos.</span>
+            </div>
+          )}
+          {driverList.length > driverCardSize && (
+            <div className="fuel-pager">
+              <button className="ghost-button" type="button" disabled={driverPage <= 1} onClick={() => setDriverPage((current) => Math.max(current - 1, 1))}>
+                Página anterior
+              </button>
+              <span>{driverPage} de {maxDriverPages}</span>
+              <button className="ghost-button" type="button" disabled={driverPage >= maxDriverPages} onClick={() => setDriverPage((current) => Math.min(current + 1, maxDriverPages))}>
+                Próxima
+              </button>
             </div>
           )}
         </div>
