@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { existsSync, unlinkSync } from "node:fs";
+import path from "node:path";
 import {
   createAccessAccount,
   createProducer,
@@ -51,6 +53,10 @@ test.describe.serial("jornada operacional do piloto", () => {
   test.afterAll(() => {
     const database = getDb();
     const accountIds = [producerAccess?.id, technicalAccess?.id].filter(Boolean);
+    const uploadRoot = path.resolve("data", "uploads");
+    const evidenceFiles = producer?.id
+      ? database.prepare("SELECT file_path FROM documents WHERE producer_id = ? AND file_path IS NOT NULL").all(producer.id)
+      : [];
     database.exec("BEGIN IMMEDIATE");
     try {
       for (const accountId of accountIds) {
@@ -60,6 +66,10 @@ test.describe.serial("jornada operacional do piloto", () => {
       }
       if (producer?.id) database.prepare("DELETE FROM producers WHERE id = ?").run(producer.id);
       database.exec("COMMIT");
+      for (const evidence of evidenceFiles) {
+        const target = path.resolve(evidence.file_path);
+        if (target.startsWith(uploadRoot) && existsSync(target)) unlinkSync(target);
+      }
     } catch (error) {
       database.exec("ROLLBACK");
       throw error;
@@ -91,7 +101,9 @@ test.describe.serial("jornada operacional do piloto", () => {
     expect(forbidden.status()).toBe(403);
   });
 
-  test("técnico registra visita somente para produtor vinculado", async ({ page }) => {
+  test("técnico registra visita com GPS e foto somente para produtor vinculado", async ({ context, page }) => {
+    await context.grantPermissions(["geolocation"], { origin: "http://127.0.0.1:5173" });
+    await context.setGeolocation({ latitude: -2.420674, longitude: -48.152221 });
     await page.goto("/tecnico");
     await page.getByLabel("Login").fill(technicalLogin);
     await page.getByLabel("Código de acesso").fill(technicalCode);
@@ -109,6 +121,10 @@ test.describe.serial("jornada operacional do piloto", () => {
     await page.getByRole("button", { name: "03 Resultado" }).click();
     await expect(page.getByLabel("Resultado e orientação técnica")).toBeVisible();
     await page.getByLabel("Resultado e orientação técnica").fill("Produtor orientado e visita concluída.");
+    await page.getByRole("button", { name: "Registrar GPS" }).click();
+    await expect(page.getByText("-2.420674, -48.152221", { exact: false })).toBeVisible();
+    await page.locator('.visit-evidence-control input[type="file"]').setInputFiles(path.resolve("public", "paf-app-192.png"));
+    await expect(page.getByAltText("Evidência 1 da visita")).toBeVisible();
     const saveVisit = page.getByRole("button", { name: "Salvar visita" });
     await expect(saveVisit).toBeVisible();
     await saveVisit.dispatchEvent("click");
@@ -134,6 +150,16 @@ test.describe.serial("jornada operacional do piloto", () => {
 
     const visits = await page.request.get(`/api/admin/visits?search=${encodeURIComponent(producer.name)}`);
     expect(visits.ok()).toBeTruthy();
-    expect((await visits.json()).visits).toHaveLength(1);
+    const visitRows = (await visits.json()).visits;
+    expect(visitRows).toHaveLength(1);
+    expect(visitRows[0].latitude).toBe(-2.420674);
+    expect(visitRows[0].longitude).toBe(-48.152221);
+
+    const documents = await page.request.get(`/api/admin/documents?search=${encodeURIComponent(producer.name)}`);
+    expect(documents.ok()).toBeTruthy();
+    const documentRows = (await documents.json()).documents;
+    expect(documentRows).toHaveLength(1);
+    expect(documentRows[0].category).toBe("FOTO DE CAMPO");
+    await page.request.post("/api/auth/logout");
   });
 });

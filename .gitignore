@@ -5,6 +5,7 @@ verification/
 test-results/
 playwright-report/
 releases/*.apk
+supabase/.temp/
 *.log
 data/*
 !data/.gitkeep

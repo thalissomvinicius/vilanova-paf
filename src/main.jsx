@@ -208,12 +208,14 @@ const TASK_PAGE_SIZE = 18;
 const DOCUMENT_PAGE_SIZE = 18;
 const FUEL_PAGE_SIZE = 22;
 const MAX_DOCUMENT_UPLOAD_BYTES = 6 * 1024 * 1024;
+const TECHNICAL_SESSION_CACHE_KEY = "paf:technical-session-cache";
+const PRODUCER_SESSION_CACHE_KEY = "paf:producer-session-cache";
 const PILOT_READINESS = [
   { label: "Núcleo e cadastros", value: 98, status: "Pronto", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
   { label: "Dashboard e gestão", value: 95, status: "Pronto", detail: "Indicadores, filtros e acompanhamento" },
-  { label: "Operação de campo", value: 93, status: "Pronto", detail: "GPS, fotos, rascunhos e sincronização automática" },
+  { label: "Operação de campo", value: 96, status: "Pronto", detail: "GPS, fotos, fila múltipla offline e sincronização automática" },
   { label: "Integração remota", value: 45, status: "Pendente", detail: "Criar Supabase PAF e corrigir o endpoint publicado" },
-  { label: "Qualidade do piloto", value: 88, status: "Em validação", detail: "Testes automatizados aprovados; falta aparelho real" }
+  { label: "Qualidade do piloto", value: 94, status: "Em validação", detail: "Jornadas online e offline aprovadas; falta aparelho real" }
 ];
 const PILOT_READINESS_PERCENT = Math.round(PILOT_READINESS.reduce((sum, stage) => sum + stage.value, 0) / PILOT_READINESS.length);
 
@@ -7006,8 +7008,19 @@ function TechnicalPortal() {
   function applyTechnicalData(data) {
     setAccount(data.account || null);
     setProducers(data.producers || []);
-    setVisits(data.visits || []);
+    setVisits((current) => {
+      const pending = current.filter((visit) => visit.pendingSync);
+      const pendingIds = new Set(pending.map((visit) => visit.clientSubmissionId).filter(Boolean));
+      return [...pending, ...(data.visits || []).filter((visit) => !pendingIds.has(visit.clientSubmissionId))];
+    });
     setSummary(data.summary || null);
+  }
+
+  function restoreCachedTechnicalData() {
+    const cached = readLocalSessionCache(TECHNICAL_SESSION_CACHE_KEY);
+    if (!cached?.account) return false;
+    applyTechnicalData(cached);
+    return true;
   }
 
   function refreshTechnicalData() {
@@ -7022,9 +7035,23 @@ function TechnicalPortal() {
         }
         return null;
       })
-      .catch(() => null)
+      .catch((error) => {
+        if (!error.status || error.status >= 500) restoreCachedTechnicalData();
+        else if (error.status === 401) removeLocalDraft(TECHNICAL_SESSION_CACHE_KEY);
+      })
       .finally(() => setChecking(false));
   }, []);
+
+  useEffect(() => {
+    if (!account?.id) return;
+    writeLocalDraft(TECHNICAL_SESSION_CACHE_KEY, {
+      account,
+      producers,
+      visits,
+      summary,
+      cachedAt: new Date().toISOString()
+    });
+  }, [account, producers, visits, summary]);
 
   useEffect(() => {
     if (!account?.id) return undefined;
@@ -7042,11 +7069,18 @@ function TechnicalPortal() {
   useEffect(() => {
     if (!account?.id) return undefined;
     const queueKey = `paf:technical-visit-queue:${account.id}`;
-    if (window.localStorage.getItem(queueKey)) setSyncStatus("pending");
-    const synchronize = () => {
+    const initialQueue = readLocalQueue(queueKey);
+    if (initialQueue.length) {
+      setSyncStatus("pending");
+      setVisits((current) => mergePendingTechnicalVisits(current, initialQueue, producers, account));
+    }
+    const synchronize = async () => {
       if (!navigator.onLine || syncingRef.current) return;
-      const queued = readLocalDraft(queueKey, null);
-      if (queued) sendTechnicalVisitPayload(queued, true).catch(() => null);
+      const queued = readLocalQueue(queueKey);
+      for (const payload of queued) {
+        const synchronized = await sendTechnicalVisitPayload(payload, true).catch(() => null);
+        if (!synchronized) break;
+      }
     };
     window.addEventListener("online", synchronize);
     const timer = window.setTimeout(synchronize, 700);
@@ -7065,10 +7099,19 @@ function TechnicalPortal() {
   }
 
   async function logout() {
-    await fetchJson("/api/auth/logout", { method: "POST" }).catch(() => null);
-    setAccount(null);
-    setProducers([]);
-    setVisits([]);
+    if (!navigator.onLine) {
+      window.alert("Conecte-se à internet antes de sair para preservar o acesso e os registros pendentes neste aparelho.");
+      return;
+    }
+    try {
+      await fetchJson("/api/auth/logout", { method: "POST", timeoutMs: 2500 });
+      removeLocalDraft(TECHNICAL_SESSION_CACHE_KEY);
+      setAccount(null);
+      setProducers([]);
+      setVisits([]);
+    } catch {
+      window.alert("Não foi possível encerrar o acesso agora. Tente novamente quando a conexão estiver estável.");
+    }
   }
 
   async function sendTechnicalVisitPayload(payload, automatic = false) {
@@ -7082,17 +7125,19 @@ function TechnicalPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      setVisits((current) => [data.visit, ...current.filter((visit) => visit.id !== data.visit.id)]);
-      removeLocalDraft(queueKey);
+      setVisits((current) => [
+        data.visit,
+        ...current.filter((visit) => visit.id !== data.visit.id && visit.clientSubmissionId !== data.visit.clientSubmissionId)
+      ]);
+      const remaining = removeLocalQueueItem(queueKey, payload.clientSubmissionId);
       removeLocalDraft(`paf:technical-visit-draft:${account.id}`);
-      setSyncStatus("synced");
+      setSyncStatus(remaining.length ? "pending" : "synced");
       refreshTechnicalData().catch(() => null);
       return data.visit;
     } catch (requestError) {
       const retryable = !requestError.status || requestError.status >= 500 || [408, 429].includes(requestError.status);
-      if (retryable) writeLocalDraft(queueKey, payload);
-      else removeLocalDraft(queueKey);
-      setSyncStatus(retryable && !navigator.onLine ? "pending" : "error");
+      enqueueLocalQueue(queueKey, payload);
+      setSyncStatus(retryable ? "pending" : "error");
       if (!automatic) throw requestError;
       return null;
     } finally {
@@ -7103,15 +7148,21 @@ function TechnicalPortal() {
   async function createTechnicalVisit(payload) {
     const queueKey = `paf:technical-visit-queue:${account.id}`;
     if (!navigator.onLine) {
-      writeLocalDraft(queueKey, payload);
+      enqueueLocalQueue(queueKey, payload);
+      removeLocalDraft(`paf:technical-visit-draft:${account.id}`);
+      setVisits((current) => mergePendingTechnicalVisits(current, [payload], producers, account));
       setSyncStatus("pending");
-      throw new Error("Sem internet. A visita está pendente e será sincronizada quando a conexão voltar.");
+      return buildPendingTechnicalVisit(payload, producers, account);
     }
     try {
       return await sendTechnicalVisitPayload(payload);
     } catch (requestError) {
       if (!requestError.status || requestError.status >= 500 || [408, 429].includes(requestError.status)) {
-        writeLocalDraft(queueKey, payload);
+        enqueueLocalQueue(queueKey, payload);
+        removeLocalDraft(`paf:technical-visit-draft:${account.id}`);
+        setVisits((current) => mergePendingTechnicalVisits(current, [payload], producers, account));
+        setSyncStatus("pending");
+        return buildPendingTechnicalVisit(payload, producers, account);
       }
       throw requestError;
     }
@@ -7276,7 +7327,7 @@ function TechnicalWorkspace({ account, createVisit, onLogout, producers, saveVis
 
         <section className="overview-band technical-summary">
           <Metric label="Produtores" value={producers.length} icon={<Users size={20} />} />
-          <Metric label="Visitas" value={summary?.total ?? visits.length} icon={<MapPin size={20} />} />
+          <Metric label="Visitas" value={visits.length} icon={<MapPin size={20} />} />
           <Metric label="Programadas" value={summary?.scheduled ?? 0} icon={<CalendarDays size={20} />} />
           <Metric label="Concluídas" value={summary?.completed ?? 0} icon={<Check size={20} />} />
         </section>
@@ -7301,17 +7352,17 @@ function TechnicalWorkspace({ account, createVisit, onLogout, producers, saveVis
                 {pagination.items.map((visit) => (
                   <tr
                     key={visit.id}
-                    tabIndex="0"
-                    aria-label={`Editar visita de ${visit.producerName}`}
-                    onClick={() => openEdit(visit)}
-                    onKeyDown={(event) => activateRow(event, () => openEdit(visit))}
+                    tabIndex={visit.pendingSync ? undefined : "0"}
+                    aria-label={visit.pendingSync ? `Visita de ${visit.producerName} aguardando sincronização` : `Editar visita de ${visit.producerName}`}
+                    onClick={() => { if (!visit.pendingSync) openEdit(visit); }}
+                    onKeyDown={(event) => { if (!visit.pendingSync) activateRow(event, () => openEdit(visit)); }}
                   >
                     <td><strong>{visit.producerName}</strong><span>{visit.producerAgency || "Sem agência"}</span></td>
                     <td>{visit.scheduledDate ? formatDate(visit.scheduledDate) : "A definir"}</td>
                     <td><VisitStatusBadge status={visit.status} /></td>
                     <td><VisitPriorityBadge priority={visit.priority} /></td>
-                    <td>{visit.objective || "Sem objetivo registrado"}</td>
-                    <td><button className="icon-button" type="button" title="Editar visita" onClick={(event) => { event.stopPropagation(); openEdit(visit); }}><Pencil size={16} /></button></td>
+                    <td>{visit.objective || "Sem objetivo registrado"}{visit.pendingSync && <small className="offline-record-badge"><CloudOff size={13} /> Aguardando sincronização</small>}</td>
+                    <td>{!visit.pendingSync && <button className="icon-button" type="button" title="Editar visita" onClick={(event) => { event.stopPropagation(); openEdit(visit); }}><Pencil size={16} /></button>}</td>
                   </tr>
                 ))}
                 {!pagination.items.length && <tr><td colSpan="6"><span className="empty-row">{producers.length ? "Nenhuma visita cadastrada. Use “Cadastrar visita” para começar." : "Nenhum produtor está vinculado a este acesso. Solicite o vínculo à gestão PAF."}</span></td></tr>}
@@ -7644,6 +7695,15 @@ function ProducerPortal() {
   const [reports, setReports] = useState([]);
   const [visits, setVisits] = useState([]);
 
+  function restoreCachedProducerData() {
+    const cached = readLocalSessionCache(PRODUCER_SESSION_CACHE_KEY);
+    if (!cached?.producer) return false;
+    setProducer(cached.producer);
+    setReports(cached.reports || []);
+    setVisits(cached.visits || []);
+    return true;
+  }
+
   useEffect(() => {
     fetchJson("/api/auth/me")
       .then((data) => {
@@ -7653,9 +7713,22 @@ function ProducerPortal() {
           setVisits(data.visits || []);
         }
       })
-      .catch(() => null)
+      .catch((error) => {
+        if (!error.status || error.status >= 500) restoreCachedProducerData();
+        else if (error.status === 401) removeLocalDraft(PRODUCER_SESSION_CACHE_KEY);
+      })
       .finally(() => setChecking(false));
   }, []);
+
+  useEffect(() => {
+    if (!producer?.id) return;
+    writeLocalDraft(PRODUCER_SESSION_CACHE_KEY, {
+      producer,
+      reports,
+      visits,
+      cachedAt: new Date().toISOString()
+    });
+  }, [producer, reports, visits]);
 
   useEffect(() => {
     if (!producer?.id) return undefined;
@@ -7689,6 +7762,22 @@ function ProducerPortal() {
     }} />;
   }
 
+  async function logout() {
+    if (!navigator.onLine) {
+      window.alert("Conecte-se à internet antes de sair para preservar o acesso e o relatório pendente neste aparelho.");
+      return;
+    }
+    try {
+      await fetchJson("/api/auth/logout", { method: "POST", timeoutMs: 2500 });
+      removeLocalDraft(PRODUCER_SESSION_CACHE_KEY);
+      setProducer(null);
+      setReports([]);
+      setVisits([]);
+    } catch {
+      window.alert("Não foi possível encerrar o acesso agora. Tente novamente quando a conexão estiver estável.");
+    }
+  }
+
   return (
     <ProducerFormPage
       producer={producer}
@@ -7697,6 +7786,7 @@ function ProducerPortal() {
       onProducerChange={setProducer}
       onReportsChange={setReports}
       onVisitsChange={setVisits}
+      onLogout={logout}
     />
   );
 }
@@ -7805,7 +7895,7 @@ function ProducerLogin({ onLogin }) {
   );
 }
 
-function ProducerFormPage({ producer, reports, visits, onProducerChange, onReportsChange, onVisitsChange }) {
+function ProducerFormPage({ producer, reports, visits, onProducerChange, onReportsChange, onVisitsChange, onLogout }) {
   const draftKey = `paf:producer-report-draft:${producer.id}`;
   const queueKey = `paf:producer-report-queue:${producer.id}`;
   const syncingRef = useRef(false);
@@ -7876,11 +7966,6 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
     setError("");
     setSent(false);
     setSyncStatus("saved");
-  }
-
-  async function logout() {
-    await fetchJson("/api/auth/logout", { method: "POST" }).catch(() => null);
-    window.location.reload();
   }
 
   async function sendReportPayload(payload, automatic = false) {
@@ -7963,7 +8048,7 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
         </div>
         <div className="field-app-actions">
           <InstallAppButton compact />
-          <button className="icon-text-button" type="button" onClick={logout}>
+          <button className="icon-text-button" type="button" onClick={onLogout}>
             <LogOut size={17} />
             Sair
           </button>
@@ -8316,6 +8401,66 @@ function writeLocalDraft(key, value) {
   }
 }
 
+function readLocalQueue(key) {
+  try {
+    const stored = window.localStorage.getItem(key);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    if (Array.isArray(parsed)) return parsed.filter((item) => item && typeof item === "object");
+    return parsed && typeof parsed === "object" ? [parsed] : [];
+  } catch {
+    return [];
+  }
+}
+
+function readLocalSessionCache(key, maxAgeHours = 72) {
+  const cached = readLocalDraft(key, null);
+  const cachedAt = Date.parse(cached?.cachedAt || "");
+  if (!cached || !Number.isFinite(cachedAt) || Date.now() - cachedAt > maxAgeHours * 60 * 60 * 1000) {
+    removeLocalDraft(key);
+    return null;
+  }
+  return cached;
+}
+
+function enqueueLocalQueue(key, payload) {
+  const queue = readLocalQueue(key);
+  const submissionId = payload?.clientSubmissionId;
+  const index = submissionId ? queue.findIndex((item) => item.clientSubmissionId === submissionId) : -1;
+  const next = index >= 0
+    ? queue.map((item, itemIndex) => itemIndex === index ? payload : item)
+    : [...queue, payload];
+  writeLocalDraft(key, next);
+  return next;
+}
+
+function removeLocalQueueItem(key, clientSubmissionId) {
+  const next = readLocalQueue(key).filter((item) => item.clientSubmissionId !== clientSubmissionId);
+  if (next.length) writeLocalDraft(key, next);
+  else removeLocalDraft(key);
+  return next;
+}
+
+function buildPendingTechnicalVisit(payload, producers, account) {
+  const producer = producers.find((item) => String(item.id) === String(payload.producerId));
+  return {
+    ...payload,
+    id: `pending-${payload.clientSubmissionId}`,
+    producerName: producer?.name || "Produtor vinculado",
+    producerCpf: producer?.cpf || "",
+    producerAgency: producer?.agency || "",
+    technician: payload.technician || account.technicianName || account.name,
+    createdAt: new Date().toISOString(),
+    pendingSync: true
+  };
+}
+
+function mergePendingTechnicalVisits(current, payloads, producers, account) {
+  const pending = payloads.map((payload) => buildPendingTechnicalVisit(payload, producers, account));
+  const pendingIds = new Set(pending.map((visit) => visit.clientSubmissionId));
+  return [...pending, ...current.filter((visit) => !pendingIds.has(visit.clientSubmissionId))];
+}
+
 function removeLocalDraft(key) {
   try {
     window.localStorage.removeItem(key);
@@ -8506,19 +8651,44 @@ function LoadingScreen({ label }) {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, {
-    credentials: "same-origin",
-    ...options
-  });
-  const data = await response.json().catch(() => ({}));
+  const { timeoutMs = 15000, ...requestOptions } = options;
+  const controller = requestOptions.signal ? null : new AbortController();
+  let timedOut = false;
+  let timeout;
 
-  if (!response.ok) {
-    const error = new Error(data.error || "Erro na requisição.");
-    error.status = response.status;
+  try {
+    const request = fetch(url, {
+      credentials: "same-origin",
+      ...requestOptions,
+      signal: requestOptions.signal || controller?.signal
+    });
+    const response = controller
+      ? await Promise.race([
+          request,
+          new Promise((_, reject) => {
+            timeout = window.setTimeout(() => {
+              timedOut = true;
+              controller.abort();
+              reject(new Error("A conexão demorou mais que o esperado. Tente novamente."));
+            }, timeoutMs);
+          })
+        ])
+      : await request;
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const error = new Error(data.error || "Erro na requisição.");
+      error.status = response.status;
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    if (timedOut) throw new Error("A conexão demorou mais que o esperado. Tente novamente.");
     throw error;
+  } finally {
+    if (timeout) window.clearTimeout(timeout);
   }
-
-  return data;
 }
 
 function fileToBase64(file) {

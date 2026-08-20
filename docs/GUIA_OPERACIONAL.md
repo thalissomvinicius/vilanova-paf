@@ -63,7 +63,7 @@ O código completo não volta a aparecer. Quando necessário, use **Redefinir c�
 3. Registre a análise e o retorno técnico.
 4. Quando houver necessidade de campo, crie uma pendência e encaminhe a visita à equipe responsável.
 5. O técnico confirma a propriedade, registra a visita, GPS e evidências e atualiza o andamento até a conclusão.
-6. Quando houver perda de conexão, acompanhe o indicador pendente até a sincronização automática.
+6. Quando houver perda de conexão, continue registrando visitas ou o relatório. O aparelho mantém a sessão por até 72 horas e sincroniza cada item pendente automaticamente quando a conexão voltar.
 7. Use **Documentos** para anexar comprovantes e evidências ao produtor correto.
 8. Finalize ou cancele pendências que não exigem mais ação.
 
@@ -102,9 +102,11 @@ O branch `main` publica automaticamente o frontend na Vercel. Antes de qualquer 
 ```powershell
 npm run check
 npm run audit
+npm run test:e2e
+npm run test:pwa
 ```
 
-O GitHub Actions valida a aplicação, recria um Supabase limpo, reaplica todas as migrations e executa os testes transacionais do banco.
+O GitHub Actions valida a aplicação, as jornadas administrativas e de campo, a abertura offline do PWA, recria um Supabase limpo, reaplica todas as migrations e executa os testes transacionais do banco.
 
 ## Checklist de entrada em produção
 

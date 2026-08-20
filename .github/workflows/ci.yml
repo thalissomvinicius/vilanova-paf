@@ -20,6 +20,16 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run audit
+      - name: Instalar navegador dos testes
+        run: npx playwright install --with-deps chrome
+      - name: Validar jornadas administrativas e de campo
+        run: |
+          PAF_CI_PASSWORD="$(node -e "process.stdout.write(require('node:crypto').randomBytes(24).toString('hex'))")"
+          export PAF_ADMIN_PASSWORD="$PAF_CI_PASSWORD"
+          export PAF_E2E_ADMIN_PASSWORD="$PAF_CI_PASSWORD"
+          npm run test:e2e
+      - name: Validar abertura offline do PWA
+        run: npm run test:pwa
 
   migrations:
     runs-on: ubuntu-latest
