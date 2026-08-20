@@ -29,6 +29,7 @@ import {
   getAccessAccountById,
   getAuthSession,
   getDocumentById,
+  getDocumentByClientSubmission,
   getFuelOptions,
   getOptions,
   getProducersForAccessAccount,
@@ -651,13 +652,21 @@ app.post("/api/technical/visits", requireAccessPermission("canManageVisits", ["T
     return;
   }
 
+  let evidence = [];
+  try {
+    evidence = saveVisitEvidence(visit, req.body?.evidencePhotos, req.access.name);
+  } catch (error) {
+    res.status(400).json({ error: error.message || "A visita foi salva, mas as fotos não puderam ser registradas.", visitSaved: true, visit });
+    return;
+  }
+
   io.emit("visit:updated", {
     visit,
     producerId: visit.producerId,
     reportId: visit.reportId,
     at: new Date().toISOString()
   });
-  res.status(201).json({ visit });
+  res.status(201).json({ visit, evidence });
 });
 
 app.patch("/api/technical/visits/:id", requireAccessPermission("canManageVisits", ["TECNICO", "ORGANIZACAO"]), (req, res) => {
@@ -762,7 +771,9 @@ function buildSummary(producers) {
   const status = {};
   const agencies = {};
   const designers = {};
+  const communities = {};
   let totalArea = 0;
+  let propertyCount = 0;
   let reported = 0;
   let needsVisit = 0;
   let planted = 0;
@@ -773,7 +784,10 @@ function buildSummary(producers) {
     agencies[producer.agency || "SEM AGÊNCIA"] = (agencies[producer.agency || "SEM AGÊNCIA"] || 0) + 1;
     designers[producer.designer || "SEM PROJETISTA"] =
       (designers[producer.designer || "SEM PROJETISTA"] || 0) + 1;
+    communities[producer.community || "SEM COMUNIDADE"] =
+      (communities[producer.community || "SEM COMUNIDADE"] || 0) + 1;
     totalArea += Number(producer.areaHa || 0);
+    if (producer.propertyName || producer.address) propertyCount += 1;
 
     if (producer.lastReportAt) reported += 1;
     if (producer.latestReport?.needsVisit) needsVisit += 1;
@@ -787,12 +801,14 @@ function buildSummary(producers) {
     pending: producers.length - reported,
     needsVisit,
     totalArea,
+    propertyCount,
     planted,
     approved,
     responseRate: producers.length ? Math.round((reported / producers.length) * 100) : 0,
     status,
     agencies,
-    designers
+    designers,
+    communities
   };
 }
 
@@ -925,6 +941,37 @@ function saveUploadedFile(payload = {}) {
     fileSize: buffer.length,
     filePath
   };
+}
+
+function saveVisitEvidence(visit, photos, uploadedBy) {
+  if (!Array.isArray(photos) || !photos.length) return [];
+  if (photos.length > 3) throw new Error("Envie no máximo 3 fotos por visita.");
+  return photos.map((photo, index) => {
+    const clientSubmissionId = String(photo?.id || "");
+    const existing = getDocumentByClientSubmission(visit.id, clientSubmissionId);
+    if (existing) return existing;
+    const fileMime = String(photo?.fileMime || "").toLowerCase();
+    if (!["image/jpeg", "image/png", "image/webp"].includes(fileMime)) throw new Error("Formato de foto não permitido.");
+    let fileData = {};
+    try {
+      fileData = saveUploadedFile({ fileBase64: photo.fileBase64, fileName: photo.fileName || `visita-${visit.id}-${index + 1}.jpg`, fileMime });
+      return createDocumentRecord({
+        producerId: visit.producerId,
+        visitId: visit.id,
+        title: `Foto de campo ${index + 1}`,
+        category: "FOTO DE CAMPO",
+        status: "PENDENTE",
+        notes: "Evidência registrada durante a visita técnica.",
+        clientSubmissionId,
+        ...fileData
+      }, uploadedBy);
+    } catch (error) {
+      if (fileData.filePath && existsSync(fileData.filePath)) {
+        try { unlinkSync(fileData.filePath); } catch { /* Preserve the original validation error. */ }
+      }
+      throw error;
+    }
+  });
 }
 
 function sanitizeFileName(name) {

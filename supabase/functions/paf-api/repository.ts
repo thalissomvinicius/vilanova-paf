@@ -59,6 +59,7 @@ export class PafRepository {
       documentCategories: DOCUMENT_CATEGORIES,
       accessAccountTypes: ACCESS_ACCOUNT_TYPES,
       agencies: distinct(producers.map((row) => row.agency)),
+      communities: distinct(producers.map((row) => row.community)),
       designers: distinct(producers.map((row) => row.designer)),
       years: [...new Set(producers.map((row) => row.planting_year).filter(Boolean))].sort((left, right) => Number(right) - Number(left)),
       technicians: technicians.filter((technician) => technician.active).map((technician) => technician.name)
@@ -82,6 +83,7 @@ export class PafRepository {
     }
     if (filters.status) producers = producers.filter((producer) => producer.processStatus === normalizeUpper(filters.status));
     if (filters.agency) producers = producers.filter((producer) => producer.agency === normalizeText(filters.agency));
+    if (filters.community) producers = producers.filter((producer) => producer.community === normalizeText(filters.community));
     if (filters.designer) producers = producers.filter((producer) => producer.designer === normalizeText(filters.designer));
     if (filters.year) producers = producers.filter((producer) => producer.plantingYear === toIntegerOrNull(filters.year));
     if (filters.reported === "yes") producers = producers.filter((producer) => Boolean(producer.lastReportAt));
@@ -125,6 +127,8 @@ export class PafRepository {
       cpf_digits: normalizeDigits(cpf),
       phone: nullableText(payload.phone, 40),
       address: nullableText(payload.address, 260),
+      property_name: nullableText(payload.propertyName, 180) || "Propriedade principal",
+      community: nullableText(payload.community, 160),
       agency: nullableText(payload.agency, 140),
       area_ha: toNumberOrNull(payload.areaHa) || 0,
       process_status: normalizeEnum(payload.processStatus, PROCESS_STATUSES, "INTERNALIZAR"),
@@ -147,6 +151,8 @@ export class PafRepository {
       cpf_digits: normalizeDigits(cpf),
       phone: payload.phone === undefined ? current.phone : nullableText(payload.phone, 40),
       address: payload.address === undefined ? current.address : nullableText(payload.address, 260),
+      property_name: payload.propertyName === undefined ? current.propertyName : nullableText(payload.propertyName, 180) || "Propriedade principal",
+      community: payload.community === undefined ? current.community : nullableText(payload.community, 160),
       agency: payload.agency === undefined ? current.agency : nullableText(payload.agency, 140),
       area_ha: payload.areaHa === undefined ? current.areaHa : toNumberOrNull(payload.areaHa) || 0,
       process_status: payload.processStatus === undefined ? current.processStatus : normalizeEnum(payload.processStatus, PROCESS_STATUSES, current.processStatus),
@@ -497,6 +503,17 @@ export class PafRepository {
     if (!producer) return null;
     const processStatus = normalizeEnum(payload.processStatus || producer.processStatus, PROCESS_STATUSES, producer.processStatus);
     const reportDate = normalizeDate(payload.reportDate) || new Date().toISOString().slice(0, 10);
+    const clientSubmissionId = normalizeClientSubmissionId(payload.clientSubmissionId);
+    if (clientSubmissionId) {
+      const { data: existing, error: existingError } = await this.db
+        .from("paf_reports")
+        .select("id")
+        .eq("producer_id", producerId)
+        .eq("client_submission_id", clientSubmissionId)
+        .maybeSingle();
+      assertNoError(existingError, "Não foi possível validar o envio do relatório.");
+      if (existing) return this.getProducerById(producerId);
+    }
     const insert = {
       producer_id: producerId,
       report_date: reportDate,
@@ -511,9 +528,11 @@ export class PafRepository {
       production_note: nullableText(payload.productionNote, 3000),
       needs_visit: Boolean(payload.needsVisit),
       notes: nullableText(payload.notes, 3000),
-      submitted_by_access_id: submittedByAccessId
+      submitted_by_access_id: submittedByAccessId,
+      client_submission_id: clientSubmissionId
     };
     const { data, error } = await this.db.from("paf_reports").insert(insert).select("id,created_at").single();
+    if (error?.code === "23505" && clientSubmissionId) return this.getProducerById(producerId);
     assertNoError(error, "Não foi possível enviar o relatório.");
     const { error: producerError } = await this.db.from("paf_producers").update({
       phone: insert.contact_phone || producer.phone,
@@ -543,7 +562,7 @@ export class PafRepository {
   async listVisits(filters: Filters = {}, producerIds?: number[]) {
     const { data, error } = await this.db
       .from("paf_technical_visits")
-      .select("*, producer:paf_producers(name,cpf,agency,address,area_ha), report:paf_reports(area_status,created_at)")
+      .select("*, producer:paf_producers(name,cpf,agency,address,area_ha,property_name,community), report:paf_reports(area_status,created_at)")
       .order("scheduled_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(0, 9999);
@@ -559,6 +578,7 @@ export class PafRepository {
     if (filters.status) visits = visits.filter((visit) => visit.status === normalizeUpper(filters.status));
     if (filters.priority) visits = visits.filter((visit) => visit.priority === normalizeUpper(filters.priority));
     if (filters.agency) visits = visits.filter((visit) => visit.producerAgency === normalizeText(filters.agency));
+    if (filters.community) visits = visits.filter((visit) => visit.community === normalizeText(filters.community));
     if (filters.technician) visits = visits.filter((visit) => normalizedSearch(visit.technician).includes(normalizedSearch(filters.technician)));
     return { visits, summary: buildVisitSummary(visits) };
   }
@@ -571,7 +591,7 @@ export class PafRepository {
   async getVisitById(id: number) {
     const { data, error } = await this.db
       .from("paf_technical_visits")
-      .select("*, producer:paf_producers(name,cpf,agency,address,area_ha), report:paf_reports(area_status,created_at)")
+      .select("*, producer:paf_producers(name,cpf,agency,address,area_ha,property_name,community), report:paf_reports(area_status,created_at)")
       .eq("id", id)
       .maybeSingle();
     assertNoError(error, "Não foi possível consultar a visita.");
@@ -580,8 +600,22 @@ export class PafRepository {
 
   async createVisit(payload: Row, actorAccessId: number | null, actorName: string) {
     const producerId = toIntegerOrNull(payload.producerId);
-    if (!producerId || !(await this.getProducerById(producerId))) return null;
+    const producer = producerId ? await this.getProducerById(producerId) : null;
+    if (!producerId || !producer) return null;
+    const clientSubmissionId = normalizeClientSubmissionId(payload.clientSubmissionId);
+    if (clientSubmissionId) {
+      const { data: existing, error: existingError } = await this.db
+        .from("paf_technical_visits")
+        .select("id")
+        .eq("producer_id", producerId)
+        .eq("client_submission_id", clientSubmissionId)
+        .maybeSingle();
+      assertNoError(existingError, "Não foi possível validar o envio da visita.");
+      if (existing) return this.getVisitById(existing.id);
+    }
     const status = normalizeEnum(payload.status, VISIT_STATUSES, "PROGRAMADA");
+    const location = normalizeVisitLocation(payload);
+    const now = new Date().toISOString();
     const { data, error } = await this.db.from("paf_technical_visits").insert({
       report_id: toIntegerOrNull(payload.reportId),
       producer_id: producerId,
@@ -589,12 +623,24 @@ export class PafRepository {
       priority: normalizeEnum(payload.priority, VISIT_PRIORITIES, "NORMAL"),
       scheduled_date: normalizeDate(payload.scheduledDate),
       technician: nullableText(payload.technician, 180) || actorName,
+      property_name: nullableText(payload.propertyName, 180) || producer.propertyName || "Propriedade principal",
+      community: nullableText(payload.community, 160) || producer.community,
       objective: nullableText(payload.objective, 3000),
       result_note: nullableText(payload.resultNote || payload.technicalNote, 4000),
       created_by_access_id: actorAccessId,
       updated_by: actorName,
-      completed_at: status === "CONCLUÍDA" ? new Date().toISOString() : null
+      completed_at: status === "CONCLUÍDA" ? now : null,
+      started_at: ["EM CAMPO", "CONCLUÍDA"].includes(status) ? now : null,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      location_accuracy: location.accuracy,
+      client_submission_id: clientSubmissionId
     }).select("id").single();
+    if (error?.code === "23505" && clientSubmissionId) {
+      const { data: existing } = await this.db.from("paf_technical_visits").select("id")
+        .eq("producer_id", producerId).eq("client_submission_id", clientSubmissionId).single();
+      return existing ? this.getVisitById(existing.id) : null;
+    }
     assertNoError(error, "Não foi possível cadastrar a visita.");
     return this.getVisitById(data.id);
   }
@@ -603,15 +649,23 @@ export class PafRepository {
     const current = await this.getVisitById(id);
     if (!current) return null;
     const status = payload.status === undefined ? current.status : normalizeEnum(payload.status, VISIT_STATUSES, current.status);
+    const location = normalizeVisitLocation(payload, current);
+    const now = new Date().toISOString();
     const { error } = await this.db.from("paf_technical_visits").update({
       status,
       priority: payload.priority === undefined ? current.priority : normalizeEnum(payload.priority, VISIT_PRIORITIES, current.priority),
       scheduled_date: payload.scheduledDate === undefined ? current.scheduledDate : normalizeDate(payload.scheduledDate),
       technician: payload.technician === undefined ? current.technician : nullableText(payload.technician, 180),
+      property_name: payload.propertyName === undefined ? current.propertyName : nullableText(payload.propertyName, 180) || current.propertyName,
+      community: payload.community === undefined ? current.community : nullableText(payload.community, 160),
       objective: payload.objective === undefined ? current.objective : nullableText(payload.objective, 3000),
       result_note: payload.resultNote === undefined ? current.resultNote : nullableText(payload.resultNote, 4000),
       updated_by: actorName,
-      completed_at: status === "CONCLUÍDA" ? current.completedAt || new Date().toISOString() : null
+      completed_at: status === "CONCLUÍDA" ? current.completedAt || now : null,
+      started_at: ["EM CAMPO", "CONCLUÍDA"].includes(status) ? current.startedAt || now : current.startedAt,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      location_accuracy: location.accuracy
     }).eq("id", id);
     assertNoError(error, "Não foi possível atualizar a visita.");
     return this.getVisitById(id);
@@ -723,6 +777,18 @@ export class PafRepository {
     return data ? mapDocument(data) : null;
   }
 
+  async getDocumentByClientSubmission(visitId: number, clientSubmissionId: unknown) {
+    const normalizedId = normalizeClientSubmissionId(clientSubmissionId);
+    if (!normalizedId) return null;
+    const { data, error } = await this.db.from("paf_documents")
+      .select("*, producer:paf_producers(name,cpf,agency), report:paf_reports(area_status), visit:paf_technical_visits(status), task:paf_operational_tasks(title)")
+      .eq("visit_id", visitId)
+      .eq("client_submission_id", normalizedId)
+      .maybeSingle();
+    assertNoError(error, "Não foi possível validar a evidência da visita.");
+    return data ? mapDocument(data) : null;
+  }
+
   async createDocument(payload: Row, actorName: string, file: Row = {}) {
     const title = normalizeText(payload.title).slice(0, 240);
     if (!title) throw new Error("Informe o título do documento.");
@@ -737,6 +803,11 @@ export class PafRepository {
     if (reportId && !report) throw new Error("Relatório vinculado não encontrado.");
     if (visitId && !visit) throw new Error("Visita vinculada não encontrada.");
     if (taskId && !task) throw new Error("Pendência vinculada não encontrada.");
+    const clientSubmissionId = normalizeClientSubmissionId(payload.clientSubmissionId);
+    if (visitId && clientSubmissionId) {
+      const existing = await this.getDocumentByClientSubmission(visitId, clientSubmissionId);
+      if (existing) return existing;
+    }
     const relatedProducerIds = [toIntegerOrNull(payload.producerId), report?.producerId, visit?.producerId, task?.producerId].filter(Boolean);
     if (new Set(relatedProducerIds).size > 1) throw new Error("Os vínculos do documento devem pertencer ao mesmo produtor.");
     const { data, error } = await this.db.from("paf_documents").insert({
@@ -754,7 +825,11 @@ export class PafRepository {
       storage_path: file.storagePath || null,
       uploaded_by: actorName,
       notes: nullableText(payload.notes, 4000)
+      ,client_submission_id: clientSubmissionId
     }).select("id").single();
+    if (error?.code === "23505" && visitId && clientSubmissionId) {
+      return this.getDocumentByClientSubmission(visitId, clientSubmissionId);
+    }
     assertNoError(error, "Não foi possível salvar o documento.");
     return this.getDocumentById(data.id);
   }
@@ -1036,6 +1111,22 @@ function duplicateMessage(error: any, fallback: string) {
 
 function nullableText(value: unknown, maxLength: number) {
   return normalizeText(value).slice(0, maxLength) || null;
+}
+
+function normalizeClientSubmissionId(value: unknown) {
+  const normalized = normalizeText(value).toLowerCase();
+  return /^[a-z0-9][a-z0-9._:-]{7,79}$/.test(normalized) ? normalized : null;
+}
+
+function normalizeVisitLocation(payload: Row = {}, fallback: Row = {}) {
+  const latitude = payload.latitude === undefined ? toNumberOrNull(fallback.latitude) : toNumberOrNull(payload.latitude);
+  const longitude = payload.longitude === undefined ? toNumberOrNull(fallback.longitude) : toNumberOrNull(payload.longitude);
+  const accuracy = payload.locationAccuracy === undefined ? toNumberOrNull(fallback.locationAccuracy) : toNumberOrNull(payload.locationAccuracy);
+  if ((latitude === null) !== (longitude === null)) throw new Error("Latitude e longitude devem ser informadas juntas.");
+  if (latitude !== null && (latitude < -90 || latitude > 90)) throw new Error("Latitude inválida.");
+  if (longitude !== null && (longitude < -180 || longitude > 180)) throw new Error("Longitude inválida.");
+  if (accuracy !== null && accuracy < 0) throw new Error("Precisão de localização inválida.");
+  return { latitude, longitude, accuracy };
 }
 
 function normalizeEnum(value: unknown, allowed: string[], fallback: string) {

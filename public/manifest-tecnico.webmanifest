@@ -1,0 +1,14 @@
+{
+  "name": "PAF Vila Nova - Equipe Técnica",
+  "short_name": "PAF Técnico",
+  "description": "Visitas e acompanhamento de campo do Programa de Agricultura Familiar.",
+  "start_url": "/tecnico",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFDDE",
+  "theme_color": "#3F6B2A",
+  "icons": [
+    { "src": "/paf-app-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/paf-app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

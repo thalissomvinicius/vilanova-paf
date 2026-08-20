@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Vila Nova PAF</string>
+    <string name="title_activity_main">Vila Nova PAF</string>
+    <string name="package_name">br.com.vilanova.paf</string>
+    <string name="custom_url_scheme">br.com.vilanova.paf</string>
+</resources>

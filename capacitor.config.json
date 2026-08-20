@@ -1,0 +1,14 @@
+{
+  "appId": "br.com.vilanova.paf",
+  "appName": "Vila Nova PAF",
+  "webDir": "dist",
+  "server": {
+    "url": "https://vilanova-paf.vercel.app",
+    "cleartext": false,
+    "allowNavigation": ["vilanova-paf.vercel.app"]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#123528"
+  }
+}

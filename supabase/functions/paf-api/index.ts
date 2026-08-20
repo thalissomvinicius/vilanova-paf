@@ -440,8 +440,9 @@ async function route(context: RouteContext): Promise<Response | null> {
     if (!producerId || !(await repository.accessCanUseProducer(technical.id, producerId))) return apiError("Esse produtor não está vinculado ao seu acesso.", 403);
     const visit = await repository.createVisit(body, technical.id, technical.name);
     if (!visit) return apiError("Não foi possível cadastrar a visita.", 400);
+    const evidence = await saveTechnicalEvidence(db, repository, visit, body.evidencePhotos, technical.name);
     await repository.audit(auth!.account, "CREATE", "VISIT", visit.id, ipAddress, { producerId });
-    return json({ visit }, 201);
+    return json({ visit, evidence }, 201);
   }
 
   const technicalVisitMatch = path.match(/^\/api\/technical\/visits\/(\d+)$/);
@@ -583,6 +584,46 @@ async function uploadDocument(db: any, payload: Record<string, any>) {
   const { error } = await db.storage.from("paf-documents").upload(storagePath, bytes, { contentType: fileMime, upsert: false });
   if (error) throw new Error("Não foi possível armazenar o arquivo.");
   return { fileName, fileMime, fileSize: bytes.length, storageBucket: "paf-documents", storagePath };
+}
+
+async function saveTechnicalEvidence(db: any, repository: PafRepository, visit: Record<string, any>, photos: unknown, actorName: string) {
+  if (!Array.isArray(photos) || !photos.length) return [];
+  if (photos.length > 3) throw new Error("Envie no máximo 3 fotos por visita.");
+  const evidence = [];
+  for (let index = 0; index < photos.length; index += 1) {
+    const photo = photos[index] as Record<string, any>;
+    const existing = await repository.getDocumentByClientSubmission(visit.id, photo.id);
+    if (existing) {
+      evidence.push(existing);
+      continue;
+    }
+    const fileMime = normalizeText(photo.fileMime).toLowerCase();
+    if (!["image/jpeg", "image/png", "image/webp"].includes(fileMime)) throw new Error("Formato de foto não permitido.");
+    const payload = {
+      ...photo,
+      producerId: visit.producerId,
+      visitId: visit.id,
+      fileName: photo.fileName || `visita-${visit.id}-${index + 1}.jpg`,
+      fileMime
+    };
+    const uploaded = await uploadDocument(db, payload);
+    try {
+      const document = await repository.createDocument({
+        producerId: visit.producerId,
+        visitId: visit.id,
+        title: `Foto de campo ${index + 1}`,
+        category: "FOTO DE CAMPO",
+        status: "PENDENTE",
+        notes: "Evidência registrada durante a visita técnica.",
+        clientSubmissionId: photo.id
+      }, actorName, uploaded);
+      evidence.push(document);
+    } catch (error) {
+      await db.storage.from("paf-documents").remove([uploaded.storagePath]);
+      throw error;
+    }
+  }
+  return evidence;
 }
 
 function decodeBase64(value: string) {

@@ -2,6 +2,9 @@ node_modules/
 dist/
 logs/
 verification/
+test-results/
+playwright-report/
+releases/*.apk
 *.log
 data/*
 !data/.gitkeep

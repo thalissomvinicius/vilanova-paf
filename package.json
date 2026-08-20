@@ -7,15 +7,24 @@
     "dev": "node --env-file-if-exists=.env server/index.mjs",
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "build": "vite build",
-    "test": "npx -y deno-bin test --config supabase/functions/paf-api/deno.json supabase/functions/paf-api/core.test.ts",
+    "test": "npm run test:edge && npm run test:local-db",
+    "test:edge": "npx -y deno-bin test --config supabase/functions/paf-api/deno.json supabase/functions/paf-api/core.test.ts",
+    "test:local-db": "node --test tests/local-db.test.mjs",
+    "test:e2e": "playwright test",
     "typecheck:edge": "npx -y deno-bin check --config supabase/functions/paf-api/deno.json supabase/functions/paf-api/index.ts",
     "check": "npm run test && npm run typecheck:edge && npm run build",
     "audit": "npm audit --audit-level=high",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "bootstrap:admin": "node --env-file-if-exists=.env scripts/bootstrapAdmin.mjs",
     "import": "node server/importExcel.mjs \"../PROJETOS INTERNALIZADOS PAF 26_27.xlsx\"",
     "import:fuel": "node server/importFuelExcel.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/geolocation": "^8.2.2",
     "@vitejs/plugin-react": "^5.1.1",
     "express": "^5.2.1",
     "lucide-react": "^0.561.0",
@@ -26,9 +35,14 @@
     "vite": "^7.3.0"
   },
   "overrides": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "uuid": "^11.1.1"
   },
   "engines": {
     "node": ">=24"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
+    "@playwright/test": "^1.62.1"
   }
 }

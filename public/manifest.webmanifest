@@ -1,0 +1,23 @@
+{
+  "name": "PAF Vila Nova Agroindustrial",
+  "short_name": "PAF Vila Nova",
+  "description": "Gestão de produtores, relatórios e visitas técnicas do Programa de Agricultura Familiar.",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFDDE",
+  "theme_color": "#3F6B2A",
+  "icons": [
+    {
+      "src": "/paf-app-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/paf-app-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

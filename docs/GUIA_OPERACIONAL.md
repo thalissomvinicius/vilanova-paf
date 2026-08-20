@@ -8,7 +8,7 @@ Este guia descreve o uso diário do sistema da Vila Nova Agroindustrial. Ele nã
 - Administração: `https://vilanova-paf.vercel.app/admin`
 - Equipe técnica e organizações: `https://vilanova-paf.vercel.app/tecnico`
 - Produtor individual: `https://vilanova-paf.vercel.app/produtor`
-- Ambiente local: `http://localhost:5180/admin`
+- Ambiente local: `http://localhost:5173/admin` (ou a porta definida no `.env`)
 
 ## Perfis e responsabilidades
 
@@ -24,7 +24,7 @@ Este guia descreve o uso diário do sistema da Vila Nova Agroindustrial. Ele nã
 
 - Entra pelo Portal da Equipe Técnica.
 - Visualiza somente os produtores vinculados ao seu acesso.
-- Cadastra e atualiza visitas técnicas desses produtores.
+- Confirma propriedade e comunidade, registra GPS, fotos e atualiza visitas técnicas.
 - Uma organização, como uma cooperativa, pode receber vários produtores no mesmo acesso.
 
 ### Produtor
@@ -36,7 +36,7 @@ Este guia descreve o uso diário do sistema da Vila Nova Agroindustrial. Ele nã
 ## Implantação inicial
 
 1. Entre como administrador e altere a senha temporária em **Alterar senha**.
-2. Abra **Cadastros** e revise os produtores importados.
+2. Abra **Cadastros** e revise produtores, propriedade principal e comunidade.
 3. Cadastre os técnicos responsáveis.
 4. Abra **Acessos** e crie primeiro os acessos da equipe técnica e das organizações.
 5. Vincule a cada técnico ou organização apenas os produtores sob sua responsabilidade.
@@ -62,9 +62,10 @@ O código completo não volta a aparecer. Quando necessário, use **Redefinir c�
 2. Abra **Relatórios** e filtre os registros pendentes de análise.
 3. Registre a análise e o retorno técnico.
 4. Quando houver necessidade de campo, crie uma pendência e encaminhe a visita à equipe responsável.
-5. O técnico registra a visita no portal e atualiza seu andamento até a conclusão.
-6. Use **Documentos** para anexar comprovantes e evidências ao produtor correto.
-7. Finalize ou cancele pendências que não exigem mais ação.
+5. O técnico confirma a propriedade, registra a visita, GPS e evidências e atualiza o andamento até a conclusão.
+6. Quando houver perda de conexão, acompanhe o indicador pendente até a sincronização automática.
+7. Use **Documentos** para anexar comprovantes e evidências ao produtor correto.
+8. Finalize ou cancele pendências que não exigem mais ação.
 
 ## Abastecimento
 

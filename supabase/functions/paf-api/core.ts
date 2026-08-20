@@ -183,6 +183,8 @@ export function mapProducer(row: Record<string, any>, latestReport?: Record<stri
     cpfDigits: row.cpf_digits,
     phone: row.phone,
     address: row.address,
+    propertyName: row.property_name || "Propriedade principal",
+    community: row.community,
     agency: row.agency,
     areaHa: Number(row.area_ha || 0),
     processStatus: row.process_status,
@@ -294,11 +296,18 @@ export function mapVisit(row: Record<string, any>) {
     priority: row.priority,
     scheduledDate: row.scheduled_date,
     technician: row.technician,
+    propertyName: row.property_name || producer.property_name || "Propriedade principal",
+    community: row.community || producer.community,
     objective: row.objective,
     resultNote: row.result_note,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    completedAt: row.completed_at
+    completedAt: row.completed_at,
+    startedAt: row.started_at,
+    latitude: row.latitude === null ? null : Number(row.latitude),
+    longitude: row.longitude === null ? null : Number(row.longitude),
+    locationAccuracy: row.location_accuracy === null ? null : Number(row.location_accuracy),
+    clientSubmissionId: row.client_submission_id
   };
 }
 
@@ -360,6 +369,7 @@ export function mapDocument(row: Record<string, any>) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     reviewedAt: row.reviewed_at
+    ,clientSubmissionId: row.client_submission_id
   };
 }
 
@@ -438,7 +448,9 @@ export function buildProducerSummary(producers: Array<Record<string, any>>) {
   const status: Record<string, number> = {};
   const agencies: Record<string, number> = {};
   const designers: Record<string, number> = {};
+  const communities: Record<string, number> = {};
   let totalArea = 0;
+  let propertyCount = 0;
   let reported = 0;
   let needsVisit = 0;
   let planted = 0;
@@ -449,7 +461,10 @@ export function buildProducerSummary(producers: Array<Record<string, any>>) {
     agencies[agency] = (agencies[agency] || 0) + 1;
     const designer = producer.designer || "SEM PROJETISTA";
     designers[designer] = (designers[designer] || 0) + 1;
+    const community = producer.community || "SEM COMUNIDADE";
+    communities[community] = (communities[community] || 0) + 1;
     totalArea += Number(producer.areaHa || 0);
+    if (producer.propertyName || producer.address) propertyCount += 1;
     if (producer.lastReportAt) reported += 1;
     if (producer.latestReport?.needsVisit) needsVisit += 1;
     if (producer.processStatus === "PLANTADO") planted += 1;
@@ -461,12 +476,14 @@ export function buildProducerSummary(producers: Array<Record<string, any>>) {
     pending: producers.length - reported,
     needsVisit,
     totalArea,
+    propertyCount,
     planted,
     approved,
     responseRate: producers.length ? Math.round((reported / producers.length) * 100) : 0,
     status,
     agencies,
-    designers
+    designers,
+    communities
   };
 }
 

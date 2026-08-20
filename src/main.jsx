@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { Capacitor } from "@capacitor/core";
+import { Geolocation } from "@capacitor/geolocation";
 import {
   Activity,
   ArrowRight,
@@ -10,6 +12,7 @@ import {
   CalendarDays,
   Check,
   ClipboardList,
+  CloudOff,
   Copy,
   Download,
   Droplets,
@@ -205,6 +208,14 @@ const TASK_PAGE_SIZE = 18;
 const DOCUMENT_PAGE_SIZE = 18;
 const FUEL_PAGE_SIZE = 22;
 const MAX_DOCUMENT_UPLOAD_BYTES = 6 * 1024 * 1024;
+const PILOT_READINESS = [
+  { label: "Núcleo e cadastros", value: 98, status: "Pronto", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
+  { label: "Dashboard e gestão", value: 95, status: "Pronto", detail: "Indicadores, filtros e acompanhamento" },
+  { label: "Operação de campo", value: 93, status: "Pronto", detail: "GPS, fotos, rascunhos e sincronização automática" },
+  { label: "Integração remota", value: 45, status: "Pendente", detail: "Criar Supabase PAF e corrigir o endpoint publicado" },
+  { label: "Qualidade do piloto", value: 88, status: "Em validação", detail: "Testes automatizados aprovados; falta aparelho real" }
+];
+const PILOT_READINESS_PERCENT = Math.round(PILOT_READINESS.reduce((sum, stage) => sum + stage.value, 0) / PILOT_READINESS.length);
 
 const BRAND_ASSETS = {
   vilaLogo: "/brand/logo-vilanova.png",
@@ -313,18 +324,132 @@ const PARTNER_GROUPS = [
   "Vila Nova Agroindustrial"
 ];
 
+let pendingInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  pendingInstallPrompt = event;
+  window.dispatchEvent(new Event("paf:install-ready"));
+});
+
+const manifestLink = document.querySelector('link[rel="manifest"]');
+if (manifestLink) {
+  manifestLink.href = window.location.pathname.startsWith("/tecnico")
+    ? "/manifest-tecnico.webmanifest"
+    : window.location.pathname.startsWith("/produtor")
+      ? "/manifest-produtor.webmanifest"
+      : "/manifest.webmanifest";
+}
+
 function App() {
   const path = window.location.pathname;
 
   if (path.startsWith("/tecnico")) {
-    return <TechnicalPortal />;
+    return <><ConnectionStatus /><TechnicalPortal /></>;
   }
 
   if (path.startsWith("/produtor")) {
-    return <ProducerPortal />;
+    return <><ConnectionStatus /><ProducerPortal /></>;
   }
 
-  return <AdminGate />;
+  return <><ConnectionStatus /><AdminGate /></>;
+}
+
+function ConnectionStatus() {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [restored, setRestored] = useState(false);
+  const wasOffline = useRef(!navigator.onLine);
+
+  useEffect(() => {
+    let restoredTimer;
+    const markOnline = () => {
+      setOnline(true);
+      if (wasOffline.current) {
+        setRestored(true);
+        restoredTimer = window.setTimeout(() => setRestored(false), 4500);
+      }
+      wasOffline.current = false;
+    };
+    const markOffline = () => {
+      wasOffline.current = true;
+      setRestored(false);
+      setOnline(false);
+    };
+    window.addEventListener("online", markOnline);
+    window.addEventListener("offline", markOffline);
+    return () => {
+      window.removeEventListener("online", markOnline);
+      window.removeEventListener("offline", markOffline);
+      window.clearTimeout(restoredTimer);
+    };
+  }, []);
+
+  if (online && !restored) return null;
+
+  if (restored) {
+    return (
+      <div className="connection-banner connection-restored" role="status" aria-live="polite">
+        <Check size={17} />
+        <span><strong>Internet restabelecida.</strong> Os rascunhos já podem ser enviados com segurança.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="connection-banner" role="status" aria-live="polite">
+      <CloudOff size={17} />
+      <span><strong>Sem internet.</strong> Continue preenchendo; seu rascunho fica salvo neste aparelho.</span>
+    </div>
+  );
+}
+
+function InstallAppButton({ compact = false }) {
+  const [available, setAvailable] = useState(() => Boolean(pendingInstallPrompt));
+
+  useEffect(() => {
+    const showInstall = () => setAvailable(true);
+    const hideInstall = () => {
+      pendingInstallPrompt = null;
+      setAvailable(false);
+    };
+    window.addEventListener("paf:install-ready", showInstall);
+    window.addEventListener("appinstalled", hideInstall);
+    return () => {
+      window.removeEventListener("paf:install-ready", showInstall);
+      window.removeEventListener("appinstalled", hideInstall);
+    };
+  }, []);
+
+  if (!available) return null;
+
+  return (
+    <button
+      className={compact ? "icon-text-button install-app-button compact" : "icon-text-button install-app-button"}
+      type="button"
+      title="Instalar aplicativo neste aparelho"
+      onClick={async () => {
+        if (!pendingInstallPrompt) return;
+        await pendingInstallPrompt.prompt();
+        await pendingInstallPrompt.userChoice.catch(() => null);
+        pendingInstallPrompt = null;
+        setAvailable(false);
+      }}
+    >
+      <Download size={17} />
+      Instalar app
+    </button>
+  );
+}
+
+function SyncStatusBanner({ status }) {
+  if (!status || status === "saved") return null;
+  const content = {
+    pending: { icon: <CloudOff size={17} />, title: "Pendente de sincronização", text: "Os dados estão salvos neste aparelho e serão enviados quando a internet voltar." },
+    syncing: { icon: <Loader2 className="spin" size={17} />, title: "Sincronizando", text: "Mantenha o aplicativo aberto por alguns segundos." },
+    synced: { icon: <Check size={17} />, title: "Sincronizado", text: "Os dados chegaram ao sistema com segurança." },
+    error: { icon: <X size={17} />, title: "Erro de sincronização", text: "O rascunho foi preservado. Revise a mensagem e tente novamente." }
+  }[status];
+  if (!content) return null;
+  return <div className={`sync-status-banner ${status}`} role="status" aria-live="polite">{content.icon}<span><strong>{content.title}</strong>{content.text}</span></div>;
 }
 
 function InstitutionalHome() {
@@ -771,6 +896,7 @@ function AdminDashboard({ user, onLogout }) {
     search: "",
     status: "",
     agency: "",
+    community: "",
     designer: "",
     year: "",
     reported: ""
@@ -787,6 +913,7 @@ function AdminDashboard({ user, onLogout }) {
     status: "",
     priority: "",
     agency: "",
+    community: "",
     technician: ""
   });
   const [taskFilters, setTaskFilters] = useState({
@@ -814,6 +941,7 @@ function AdminDashboard({ user, onLogout }) {
   const [options, setOptions] = useState({
     statuses: [],
     agencies: [],
+    communities: [],
     designers: [],
     years: [],
     technicians: []
@@ -1137,6 +1265,7 @@ function AdminDashboard({ user, onLogout }) {
       search: "",
       status: "",
       agency: "",
+      community: "",
       designer: "",
       year: "",
       reported: ""
@@ -1159,6 +1288,7 @@ function AdminDashboard({ user, onLogout }) {
       status: "",
       priority: "",
       agency: "",
+      community: "",
       technician: ""
     });
   }
@@ -2247,11 +2377,13 @@ function ExecutiveDashboard({
       </div>
 
       <section className="executive-kpi-grid">
-        <ExecutiveKpi label="Produtores ativos" value={total} helper={`${formatArea(totalArea)} ha mapeados`} icon={<Users size={20} />} tone="green" />
+        <ExecutiveKpi label="Produtores ativos" value={total} helper={`${summary?.propertyCount ?? total} propriedades · ${formatArea(totalArea)} ha`} icon={<Users size={20} />} tone="green" />
         <ExecutiveKpi label="Recebidos hoje" value={reportsToday} helper={`${reportSummary?.total ?? reports.length} relatórios no total`} icon={<Activity size={20} />} tone="orange" />
         <ExecutiveKpi label="Visita técnica" value={needsVisit} helper={`${visitSummary?.scheduled ?? 0} programadas`} icon={<MapPin size={20} />} tone="sand" />
         <ExecutiveKpi label="Rendimento da base" value={`${productiveRate}%`} helper={`${planted + approved} entre plantados/aprovados`} icon={<TreePalm size={20} />} tone="earth" />
       </section>
+
+      <PilotReadinessPanel onNavigate={onNavigate} />
 
       <section className="executive-chart-grid">
         <article className="dashboard-card status-chart-card">
@@ -2430,6 +2562,38 @@ function ExecutiveDashboard({
   );
 }
 
+function PilotReadinessPanel({ onNavigate }) {
+  return (
+    <section className="pilot-readiness" aria-label={`Prontidão do piloto: ${PILOT_READINESS_PERCENT}%`}>
+      <div className="pilot-readiness-score">
+        <div className="pilot-readiness-ring" style={{ "--readiness-angle": `${PILOT_READINESS_PERCENT * 3.6}deg` }}>
+          <strong>{PILOT_READINESS_PERCENT}%</strong>
+          <span>pronto</span>
+        </div>
+        <div>
+          <p className="eyebrow">Primeiro teste em campo</p>
+          <h3>Prontidão do sistema</h3>
+          <p>O fluxo principal está funcional. A prioridade agora é validar banco remoto, celulares reais e os três perfis.</p>
+        </div>
+      </div>
+      <div className="pilot-stage-list">
+        {PILOT_READINESS.map((stage) => (
+          <div className="pilot-stage" key={stage.label}>
+            <div><strong>{stage.label}</strong><span className={stage.value >= 85 ? "ready" : stage.value >= 70 ? "validation" : "pending"}>{stage.status}</span></div>
+            <p>{stage.detail}</p>
+            <div className="pilot-stage-track"><span style={{ width: `${stage.value}%` }} /></div>
+            <em>{stage.value}%</em>
+          </div>
+        ))}
+      </div>
+      <div className="pilot-readiness-actions">
+        <button className="primary-button" type="button" onClick={() => onNavigate("logins")}><KeyRound size={17} /> Preparar acessos</button>
+        <button className="icon-text-button" type="button" onClick={() => onNavigate("visits")}><UserCheck size={17} /> Validar visitas</button>
+      </div>
+    </section>
+  );
+}
+
 function ExecutiveKpi({ helper, icon, label, tone, value }) {
   return (
     <article className={`executive-kpi ${tone}`}>
@@ -2451,7 +2615,7 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
         <input
           value={filters.search}
           onChange={(event) => onChange("search", event.target.value)}
-          placeholder="Buscar nome, CPF, login ou endereço"
+          placeholder="Buscar nome, CPF, propriedade, comunidade ou endereço"
         />
       </label>
 
@@ -2481,6 +2645,13 @@ function ProducerFilters({ compact = false, filters, onChange, onReset, options 
               <option key={designer} value={designer}>
                 {designer}
               </option>
+            ))}
+          </SelectFilter>
+
+          <SelectFilter ariaLabel="Filtrar produtores por comunidade" value={filters.community} onChange={(value) => onChange("community", value)}>
+            <option value="">Todas as comunidades</option>
+            {(options.communities || []).map((community) => (
+              <option key={community} value={community}>{community}</option>
             ))}
           </SelectFilter>
 
@@ -2649,6 +2820,8 @@ function ProducerDetail({ producer, saveProducer }) {
       cpf: producer.cpf || "",
       phone: producer.phone || "",
       address: producer.address || "",
+      propertyName: producer.propertyName || "Propriedade principal",
+      community: producer.community || "",
       agency: producer.agency || "",
       areaHa: producer.areaHa || "",
       processStatus: producer.processStatus || "INTERNALIZAR",
@@ -2722,6 +2895,15 @@ function ProducerDetail({ producer, saveProducer }) {
         </Field>
 
         <div className="inline-grid">
+          <Field label="Propriedade">
+            <input value={form.propertyName} onChange={(event) => updateField("propertyName", event.target.value)} required />
+          </Field>
+          <Field label="Comunidade">
+            <input value={form.community} onChange={(event) => updateField("community", event.target.value)} />
+          </Field>
+        </div>
+
+        <div className="inline-grid">
           <Field label="Área">
             <input type="number" step="0.01" value={form.areaHa} onChange={(event) => updateField("areaHa", event.target.value)} />
           </Field>
@@ -2774,7 +2956,9 @@ function emptyProducerRegistrationForm() {
     areaHa: "",
     plantingYear: "",
     designer: "",
-    address: ""
+    address: "",
+    propertyName: "Propriedade principal",
+    community: ""
   };
 }
 
@@ -3032,6 +3216,7 @@ function RegistrationChipGroup({ empty, title, values }) {
 
 function StepWizard({ cancelLabel = "Cancelar", className = "", error, onCancel, resetKey, saving, steps, submitLabel }) {
   const [stepIndex, setStepIndex] = useState(0);
+  const [stepError, setStepError] = useState("");
   const wizardRef = useRef(null);
   const safeSteps = steps.filter(Boolean);
   const currentStep = safeSteps[stepIndex] || safeSteps[0];
@@ -3042,6 +3227,12 @@ function StepWizard({ cancelLabel = "Cancelar", className = "", error, onCancel,
   }, [steps.length, resetKey]);
 
   function canAdvance() {
+    const validationMessage = currentStep?.validate?.();
+    if (validationMessage) {
+      setStepError(validationMessage);
+      return false;
+    }
+
     const panel = wizardRef.current?.querySelector(`[data-step-panel="${currentStep?.id}"]`);
     const fields = Array.from(panel?.querySelectorAll("input, select, textarea") || []);
     const invalid = fields.find((field) => !field.checkValidity());
@@ -3051,11 +3242,13 @@ function StepWizard({ cancelLabel = "Cancelar", className = "", error, onCancel,
       return false;
     }
 
+    setStepError("");
     return true;
   }
 
   function goToStep(index) {
     if (index <= stepIndex) {
+      setStepError("");
       setStepIndex(index);
       return;
     }
@@ -3115,7 +3308,7 @@ function StepWizard({ cancelLabel = "Cancelar", className = "", error, onCancel,
         </div>
       </div>
 
-      {error && <p className="form-error">{error}</p>}
+      {(stepError || error) && <p className="form-error">{stepError || error}</p>}
 
       <div className="step-actions">
         <button className="ghost-button" type="button" onClick={isLast ? onCancel : () => setStepIndex(Math.max(stepIndex - 1, 0))}>
@@ -3246,6 +3439,16 @@ function ProducerRegistrationForm({ createProducer, onCancel, options }) {
                     {options.designers.map((designer) => <option key={designer} value={designer} />)}
                   </datalist>
                 </Field>
+
+                <div className="inline-grid">
+                  <Field label="Nome da propriedade">
+                    <input required value={form.propertyName} onChange={(event) => updateField("propertyName", event.target.value)} />
+                  </Field>
+
+                  <Field label="Comunidade">
+                    <input value={form.community} onChange={(event) => updateField("community", event.target.value)} />
+                  </Field>
+                </div>
 
                 <Field label="Endereço / localização">
                   <textarea rows="3" value={form.address} onChange={(event) => updateField("address", event.target.value)} />
@@ -4332,7 +4535,7 @@ function VisitsWorkspace({ createTask, filters, loading, onChange, onReset, onVi
           <input
             value={filters.search}
             onChange={(event) => onChange("search", event.target.value)}
-            placeholder="Buscar produtor, CPF, endereço ou objetivo"
+            placeholder="Buscar produtor, propriedade, comunidade ou objetivo"
           />
         </label>
 
@@ -4354,6 +4557,13 @@ function VisitsWorkspace({ createTask, filters, loading, onChange, onReset, onVi
           <option value="">Todas as agências</option>
           {options.agencies.map((agency) => (
             <option key={agency} value={agency}>{agency}</option>
+          ))}
+        </SelectFilter>
+
+        <SelectFilter ariaLabel="Filtrar visitas por comunidade" value={filters.community} onChange={(value) => onChange("community", value)}>
+          <option value="">Todas as comunidades</option>
+          {(options.communities || []).map((community) => (
+            <option key={community} value={community}>{community}</option>
           ))}
         </SelectFilter>
 
@@ -4579,8 +4789,28 @@ function VisitDetailPanel({ createTask, onVisitSave, visit }) {
           <dd>{visit.producerAgency || "-"}</dd>
         </div>
         <div>
+          <dt>Propriedade</dt>
+          <dd>{visit.propertyName || "Propriedade principal"}</dd>
+        </div>
+        <div>
+          <dt>Comunidade</dt>
+          <dd>{visit.community || "Não informada"}</dd>
+        </div>
+        <div>
           <dt>CPF</dt>
           <dd>{maskCpf(visit.producerCpf)}</dd>
+        </div>
+        <div>
+          <dt>Início em campo</dt>
+          <dd>{visit.startedAt ? formatDateTime(visit.startedAt) : "Não iniciado"}</dd>
+        </div>
+        <div>
+          <dt>Localização</dt>
+          <dd>{visit.latitude !== null && visit.latitude !== undefined ? (
+            <a className="visit-map-link" href={`https://www.google.com/maps?q=${visit.latitude},${visit.longitude}`} target="_blank" rel="noreferrer">
+              <MapPin size={14} /> Abrir mapa
+            </a>
+          ) : "Não registrada"}</dd>
         </div>
       </dl>
 
@@ -6770,6 +7000,8 @@ function TechnicalPortal() {
   const [producers, setProducers] = useState([]);
   const [visits, setVisits] = useState([]);
   const [summary, setSummary] = useState(null);
+  const [syncStatus, setSyncStatus] = useState("saved");
+  const syncingRef = useRef(false);
 
   function applyTechnicalData(data) {
     setAccount(data.account || null);
@@ -6807,6 +7039,23 @@ function TechnicalPortal() {
     };
   }, [account?.id]);
 
+  useEffect(() => {
+    if (!account?.id) return undefined;
+    const queueKey = `paf:technical-visit-queue:${account.id}`;
+    if (window.localStorage.getItem(queueKey)) setSyncStatus("pending");
+    const synchronize = () => {
+      if (!navigator.onLine || syncingRef.current) return;
+      const queued = readLocalDraft(queueKey, null);
+      if (queued) sendTechnicalVisitPayload(queued, true).catch(() => null);
+    };
+    window.addEventListener("online", synchronize);
+    const timer = window.setTimeout(synchronize, 700);
+    return () => {
+      window.removeEventListener("online", synchronize);
+      window.clearTimeout(timer);
+    };
+  }, [account?.id]);
+
   if (checking) {
     return <LoadingScreen label="Carregando portal técnico" />;
   }
@@ -6822,15 +7071,50 @@ function TechnicalPortal() {
     setVisits([]);
   }
 
+  async function sendTechnicalVisitPayload(payload, automatic = false) {
+    const queueKey = `paf:technical-visit-queue:${account.id}`;
+    if (syncingRef.current) return null;
+    syncingRef.current = true;
+    setSyncStatus("syncing");
+    try {
+      const data = await fetchJson("/api/technical/visits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      setVisits((current) => [data.visit, ...current.filter((visit) => visit.id !== data.visit.id)]);
+      removeLocalDraft(queueKey);
+      removeLocalDraft(`paf:technical-visit-draft:${account.id}`);
+      setSyncStatus("synced");
+      refreshTechnicalData().catch(() => null);
+      return data.visit;
+    } catch (requestError) {
+      const retryable = !requestError.status || requestError.status >= 500 || [408, 429].includes(requestError.status);
+      if (retryable) writeLocalDraft(queueKey, payload);
+      else removeLocalDraft(queueKey);
+      setSyncStatus(retryable && !navigator.onLine ? "pending" : "error");
+      if (!automatic) throw requestError;
+      return null;
+    } finally {
+      syncingRef.current = false;
+    }
+  }
+
   async function createTechnicalVisit(payload) {
-    const data = await fetchJson("/api/technical/visits", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    setVisits((current) => [data.visit, ...current.filter((visit) => visit.id !== data.visit.id)]);
-    refreshTechnicalData().catch(() => null);
-    return data.visit;
+    const queueKey = `paf:technical-visit-queue:${account.id}`;
+    if (!navigator.onLine) {
+      writeLocalDraft(queueKey, payload);
+      setSyncStatus("pending");
+      throw new Error("Sem internet. A visita está pendente e será sincronizada quando a conexão voltar.");
+    }
+    try {
+      return await sendTechnicalVisitPayload(payload);
+    } catch (requestError) {
+      if (!requestError.status || requestError.status >= 500 || [408, 429].includes(requestError.status)) {
+        writeLocalDraft(queueKey, payload);
+      }
+      throw requestError;
+    }
   }
 
   async function saveTechnicalVisit(visitId, payload) {
@@ -6851,6 +7135,7 @@ function TechnicalPortal() {
       producers={producers}
       saveVisit={saveTechnicalVisit}
       summary={summary}
+      syncStatus={syncStatus}
       visits={visits}
     />
   );
@@ -6931,7 +7216,7 @@ function TechnicalLogin({ onLogin }) {
   );
 }
 
-function TechnicalWorkspace({ account, createVisit, onLogout, producers, saveVisit, summary, visits }) {
+function TechnicalWorkspace({ account, createVisit, onLogout, producers, saveVisit, summary, syncStatus, visits }) {
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVisit, setEditingVisit] = useState(null);
@@ -6972,10 +7257,14 @@ function TechnicalWorkspace({ account, createVisit, onLogout, producers, saveVis
             <span>{account.organization || account.technicianName || "Equipe técnica Vila Nova"}</span>
           </div>
         </div>
-        <button className="icon-text-button" type="button" onClick={onLogout}><LogOut size={17} /> Sair</button>
+        <div className="field-app-actions">
+          <InstallAppButton compact />
+          <button className="icon-text-button" type="button" onClick={onLogout}><LogOut size={17} /> Sair</button>
+        </div>
       </header>
 
       <main className="technical-main">
+        <SyncStatusBanner status={syncStatus} />
         <section className="technical-hero">
           <div>
             <p className="eyebrow">Operação de campo</p>
@@ -7057,20 +7346,99 @@ function TechnicalWorkspace({ account, createVisit, onLogout, producers, saveVis
 }
 
 function TechnicalVisitForm({ account, initial, onCancel, onSubmit, producers }) {
+  const draftKey = `paf:technical-visit-draft:${account.id}`;
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({
-    producerId: initial?.producerId || producers[0]?.id || "",
-    scheduledDate: initial?.scheduledDate || new Date().toISOString().slice(0, 10),
-    status: initial?.status || "PROGRAMADA",
-    priority: initial?.priority || "NORMAL",
-    technician: initial?.technician || account.technicianName || account.name,
-    objective: initial?.objective || "",
-    resultNote: initial?.resultNote || ""
+  const [producerSearch, setProducerSearch] = useState("");
+  const [form, setForm] = useState(() => {
+    const defaults = {
+      clientSubmissionId: initial?.clientSubmissionId || makeSubmissionId(),
+      producerId: initial?.producerId || producers[0]?.id || "",
+      scheduledDate: initial?.scheduledDate || new Date().toISOString().slice(0, 10),
+      status: initial?.status || "PROGRAMADA",
+      priority: initial?.priority || "NORMAL",
+      technician: initial?.technician || account.technicianName || account.name,
+      objective: initial?.objective || "",
+      resultNote: initial?.resultNote || "",
+      propertyName: initial?.propertyName || producers[0]?.propertyName || "Propriedade principal",
+      community: initial?.community || producers[0]?.community || "",
+      latitude: initial?.latitude ?? null,
+      longitude: initial?.longitude ?? null,
+      locationAccuracy: initial?.locationAccuracy ?? null,
+      evidencePhotos: []
+    };
+    const saved = initial ? null : readLocalDraft(draftKey, null);
+    return saved ? { ...defaults, ...saved, evidencePhotos: saved.evidencePhotos || [] } : defaults;
   });
+
+  useEffect(() => {
+    if (!initial) writeLocalDraft(draftKey, form);
+  }, [draftKey, form, initial]);
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectProducer(producerId) {
+    const producer = producers.find((item) => String(item.id) === String(producerId));
+    setForm((current) => ({
+      ...current,
+      producerId,
+      propertyName: producer?.propertyName || "Propriedade principal",
+      community: producer?.community || ""
+    }));
+  }
+
+  async function captureLocation() {
+    setLocating(true);
+    setError("");
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const permission = await Geolocation.checkPermissions();
+        if (permission.location !== "granted" && permission.coarseLocation !== "granted") {
+          await Geolocation.requestPermissions();
+        }
+      }
+      const position = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 30000
+      });
+      setForm((current) => ({
+        ...current,
+        latitude: Number(position.coords.latitude.toFixed(6)),
+        longitude: Number(position.coords.longitude.toFixed(6)),
+        locationAccuracy: Number(position.coords.accuracy.toFixed(1))
+      }));
+    } catch (locationError) {
+      const message = String(locationError?.message || "").toLowerCase();
+      setError(message.includes("permission") || message.includes("denied")
+        ? "Permita o acesso à localização para registrar o ponto da visita."
+        : "Não foi possível obter o GPS. Vá para uma área aberta e tente novamente.");
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  async function addEvidencePhotos(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length) return;
+    const remaining = Math.max(0, 3 - form.evidencePhotos.length);
+    if (!remaining) {
+      setError("O limite é de 3 fotos por visita.");
+      return;
+    }
+    setError("");
+    try {
+      const photos = [];
+      for (const file of files.slice(0, remaining)) photos.push(await compressEvidencePhoto(file));
+      setForm((current) => ({ ...current, evidencePhotos: [...current.evidencePhotos, ...photos] }));
+      if (files.length > remaining) setError("Somente as primeiras fotos foram adicionadas. O limite é de 3 por visita.");
+    } catch (photoError) {
+      setError(photoError.message || "Não foi possível preparar a foto.");
+    }
   }
 
   async function submit(event) {
@@ -7079,8 +7447,11 @@ function TechnicalVisitForm({ account, initial, onCancel, onSubmit, producers })
     setError("");
     try {
       await onSubmit(form);
+      if (!initial) removeLocalDraft(draftKey);
     } catch (requestError) {
-      setError(requestError.message || "Não foi possível salvar a visita.");
+      setError(navigator.onLine
+        ? requestError.message || "Não foi possível salvar a visita."
+        : "Sem internet para enviar. O rascunho foi salvo neste aparelho e poderá ser enviado quando a conexão voltar.");
     } finally {
       setSaving(false);
     }
@@ -7088,6 +7459,7 @@ function TechnicalVisitForm({ account, initial, onCancel, onSubmit, producers })
 
   return (
     <form className="detail-panel technical-visit-form" onSubmit={submit}>
+      {!initial && <p className="draft-save-note"><Save size={15} /> Rascunho salvo automaticamente neste aparelho.</p>}
       <StepWizard
         cancelLabel="Cancelar"
         error={error}
@@ -7099,13 +7471,25 @@ function TechnicalVisitForm({ account, initial, onCancel, onSubmit, producers })
             id: "technical-visit-producer",
             title: "Produtor",
             description: "Selecione o produtor atendido e a data da visita.",
+            validate: () => form.producerId ? "" : "Selecione um produtor para continuar.",
             content: (
               <>
-                <Field label="Produtor">
-                  <select value={form.producerId} onChange={(event) => updateField("producerId", event.target.value)} disabled={Boolean(initial)} required>
-                    {producers.map((producer) => <option key={producer.id} value={producer.id}>{producer.name} · {producer.agency || "Sem agência"}</option>)}
-                  </select>
-                </Field>
+                <ProducerSearchPicker
+                  disabled={Boolean(initial)}
+                  onChange={selectProducer}
+                  producers={producers}
+                  search={producerSearch}
+                  setSearch={setProducerSearch}
+                  value={form.producerId}
+                />
+                <div className="inline-grid">
+                  <Field label="Propriedade atendida">
+                    <input required value={form.propertyName || ""} onChange={(event) => updateField("propertyName", event.target.value)} />
+                  </Field>
+                  <Field label="Comunidade">
+                    <input value={form.community || ""} onChange={(event) => updateField("community", event.target.value)} />
+                  </Field>
+                </div>
                 <div className="inline-grid">
                   <Field label="Data da visita"><input type="date" value={form.scheduledDate} onChange={(event) => updateField("scheduledDate", event.target.value)} /></Field>
                   <Field label="Prioridade"><select value={form.priority} onChange={(event) => updateField("priority", event.target.value)}>{VISIT_PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select></Field>
@@ -7132,12 +7516,125 @@ function TechnicalVisitForm({ account, initial, onCancel, onSubmit, producers })
             title: "Resultado",
             description: "Descreva o que foi encontrado e os próximos encaminhamentos.",
             content: (
-              <Field label="Resultado e orientação técnica"><textarea rows="7" value={form.resultNote} onChange={(event) => updateField("resultNote", event.target.value)} /></Field>
+              <>
+                <Field label="Resultado e orientação técnica"><textarea rows="7" value={form.resultNote} onChange={(event) => updateField("resultNote", event.target.value)} /></Field>
+                <div className="visit-location-control">
+                  <div>
+                    <span><MapPin size={18} /></span>
+                    <div>
+                      <strong>Localização da visita</strong>
+                      <p>{form.latitude !== null && form.longitude !== null
+                        ? `${Number(form.latitude).toFixed(6)}, ${Number(form.longitude).toFixed(6)} · precisão ${Math.round(Number(form.locationAccuracy || 0))} m`
+                        : "Registre o ponto GPS quando estiver na propriedade."}</p>
+                    </div>
+                  </div>
+                  <button className="icon-text-button" type="button" disabled={locating} onClick={captureLocation}>
+                    {locating ? <Loader2 className="spin" size={17} /> : <MapPin size={17} />}
+                    {form.latitude !== null ? "Atualizar GPS" : "Registrar GPS"}
+                  </button>
+                </div>
+                {!initial && (
+                  <div className="visit-evidence-control">
+                    <div className="visit-evidence-heading">
+                      <div><strong>Fotos de campo</strong><p>Até 3 imagens. Elas serão comprimidas antes do envio.</p></div>
+                      <label className="icon-text-button">
+                        <Plus size={17} /> Adicionar foto
+                        <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" multiple onChange={addEvidencePhotos} />
+                      </label>
+                    </div>
+                    {form.evidencePhotos.length > 0 && (
+                      <div className="visit-evidence-grid">
+                        {form.evidencePhotos.map((photo, index) => (
+                          <figure key={photo.id}>
+                            <img src={photo.fileBase64} alt={`Evidência ${index + 1} da visita`} />
+                            <figcaption><span>Foto {index + 1}</span><button type="button" title="Remover foto" onClick={() => setForm((current) => ({ ...current, evidencePhotos: current.evidencePhotos.filter((item) => item.id !== photo.id) }))}><X size={15} /></button></figcaption>
+                          </figure>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )
           }
         ]}
       />
     </form>
+  );
+}
+
+function ProducerSearchPicker({ disabled, onChange, producers, search, setSearch, value }) {
+  const selected = producers.find((producer) => String(producer.id) === String(value));
+  const normalizedSearch = normalizeForSearch(search);
+  const results = producers
+    .filter((producer) => [producer.name, producer.cpf, producer.agency, producer.phone]
+      .some((field) => normalizeForSearch(field).includes(normalizedSearch)))
+    .slice(0, 12);
+
+  if (disabled && selected) {
+    return (
+      <div className="selected-producer-summary">
+        <span><UserRound size={17} /></span>
+        <div>
+          <small>Produtor da visita</small>
+          <strong>{selected.name}</strong>
+          <p>{selected.agency || "Sem agência"} · {maskCpf(selected.cpf)}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="producer-search-picker">
+      <Field label="Buscar produtor">
+        <label className="search-field">
+          <Search size={17} />
+          <input
+            data-modal-autofocus
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Nome, CPF, agência ou telefone"
+            autoComplete="off"
+          />
+        </label>
+      </Field>
+
+      {selected && (
+        <div className="selected-producer-summary">
+          <span><Check size={17} /></span>
+          <div>
+            <small>Produtor selecionado</small>
+            <strong>{selected.name}</strong>
+            <p>{selected.agency || "Sem agência"} · {maskCpf(selected.cpf)}</p>
+          </div>
+          <button className="icon-button" type="button" title="Trocar produtor" onClick={() => { onChange(""); setSearch(""); }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {!selected && (
+        <div className="producer-search-results" role="listbox" aria-label="Produtores encontrados">
+          {results.map((producer) => (
+            <button
+              aria-selected="false"
+              key={producer.id}
+              role="option"
+              type="button"
+              onClick={() => {
+                onChange(producer.id);
+                setSearch(producer.name);
+              }}
+            >
+              <span><strong>{producer.name}</strong><small>{maskCpf(producer.cpf)}</small></span>
+              <span>{producer.agency || "Sem agência"}<ArrowRight size={15} /></span>
+            </button>
+          ))}
+          {!results.length && <p>Nenhum produtor encontrado com essa busca.</p>}
+        </div>
+      )}
+
+    </div>
   );
 }
 
@@ -7309,12 +7806,17 @@ function ProducerLogin({ onLogin }) {
 }
 
 function ProducerFormPage({ producer, reports, visits, onProducerChange, onReportsChange, onVisitsChange }) {
+  const draftKey = `paf:producer-report-draft:${producer.id}`;
+  const queueKey = `paf:producer-report-queue:${producer.id}`;
+  const syncingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(() => window.localStorage.getItem(queueKey) ? "pending" : "saved");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const latestReport = reports[0] || null;
   const nextVisit = getNextVisit(visits);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => readLocalDraft(draftKey, {
+    clientSubmissionId: makeSubmissionId(),
     reportDate: new Date().toISOString().slice(0, 10),
     contactPhone: "",
     areaStatus: "Sem alteração",
@@ -7326,18 +7828,39 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
     productionNote: "",
     needsVisit: false,
     notes: ""
-  });
+  }));
+
+  useEffect(() => {
+    writeLocalDraft(draftKey, form);
+  }, [draftKey, form]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, []);
+
+  useEffect(() => {
+    const synchronize = () => {
+      if (!navigator.onLine || syncingRef.current) return;
+      const queued = readLocalDraft(queueKey, null);
+      if (queued) sendReportPayload(queued, true);
+    };
+    window.addEventListener("online", synchronize);
+    const timer = window.setTimeout(synchronize, 600);
+    return () => {
+      window.removeEventListener("online", synchronize);
+      window.clearTimeout(timer);
+    };
+  }, [queueKey]);
 
   function updateField(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
   function clearReportForm() {
+    removeLocalDraft(draftKey);
+    removeLocalDraft(queueKey);
     setForm({
+      clientSubmissionId: makeSubmissionId(),
       reportDate: new Date().toISOString().slice(0, 10),
       contactPhone: "",
       areaStatus: "Sem alteração",
@@ -7352,6 +7875,7 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
     });
     setError("");
     setSent(false);
+    setSyncStatus("saved");
   }
 
   async function logout() {
@@ -7359,22 +7883,25 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
     window.location.reload();
   }
 
-  async function submitReport(event) {
-    event.preventDefault();
+  async function sendReportPayload(payload, automatic = false) {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSubmitting(true);
-    setError("");
-
+    setSyncStatus("syncing");
     try {
       const data = await fetchJson("/api/producer/reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
+        body: JSON.stringify(payload)
       });
 
       onProducerChange(data.producer);
       onReportsChange(data.reports || []);
       onVisitsChange(data.visits || visits);
+      removeLocalDraft(draftKey);
+      removeLocalDraft(queueKey);
       setForm((current) => ({
+        clientSubmissionId: makeSubmissionId(),
         reportDate: new Date().toISOString().slice(0, 10),
         contactPhone: current.contactPhone,
         areaStatus: "Sem alteração",
@@ -7388,11 +7915,32 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
         notes: ""
       }));
       setSent(true);
+      setSyncStatus("synced");
+      setError("");
     } catch (requestError) {
-      setError(requestError.message || "Não foi possível enviar.");
+      const retryable = !requestError.status || requestError.status >= 500 || [408, 429].includes(requestError.status);
+      if (retryable) writeLocalDraft(queueKey, payload);
+      else removeLocalDraft(queueKey);
+      setSyncStatus(retryable && !navigator.onLine ? "pending" : "error");
+      setError(retryable
+        ? (navigator.onLine ? "Falha na sincronização. O envio continuará salvo para nova tentativa." : "Sem internet. O relatório está pendente e será sincronizado quando a conexão voltar.")
+        : requestError.message || "Revise os dados informados.");
     } finally {
+      syncingRef.current = false;
       setSubmitting(false);
     }
+  }
+
+  async function submitReport(event) {
+    event.preventDefault();
+    setError("");
+    if (!navigator.onLine) {
+      writeLocalDraft(queueKey, form);
+      setSyncStatus("pending");
+      setError("Sem internet. O relatório está pendente e será sincronizado quando a conexão voltar.");
+      return;
+    }
+    await sendReportPayload(form);
   }
 
   return (
@@ -7408,17 +7956,22 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
             <p className="producer-meta">
               <UserRound size={16} /> {maskCpf(producer.cpf)}
               <MapPin size={16} /> {producer.agency || "Sem agência"}
+              <TreePalm size={16} /> {producer.propertyName || "Propriedade principal"}{producer.community ? ` · ${producer.community}` : ""}
               <CalendarDays size={16} /> {producer.plantingYear || "-"}
             </p>
           </div>
         </div>
-        <button className="icon-text-button" type="button" onClick={logout}>
-          <LogOut size={17} />
-          Sair
-        </button>
+        <div className="field-app-actions">
+          <InstallAppButton compact />
+          <button className="icon-text-button" type="button" onClick={logout}>
+            <LogOut size={17} />
+            Sair
+          </button>
+        </div>
       </header>
 
       <main className="producer-main">
+        <SyncStatusBanner status={syncStatus} />
         <ProducerUpcomingVisitCard visit={nextVisit} />
 
         <section className="producer-summary">
@@ -7444,7 +7997,7 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
                 <p className="eyebrow">Novo acompanhamento</p>
                 <h2>Atualize os dados da sua produção</h2>
               </div>
-              <span>Leva poucos minutos</span>
+              <span className="draft-heading-note"><Save size={14} /> Rascunho automático</span>
             </div>
 
             <StepWizard
@@ -7746,6 +8299,36 @@ function normalizeForSearch(value) {
     .trim();
 }
 
+function readLocalDraft(key, fallback) {
+  try {
+    const stored = window.localStorage.getItem(key);
+    return stored ? { ...fallback, ...JSON.parse(stored) } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalDraft(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Browsers in private mode may refuse local storage; the form still remains usable.
+  }
+}
+
+function removeLocalDraft(key) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Nothing to clear when storage is unavailable.
+  }
+}
+
+function makeSubmissionId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `paf-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 function PaginationControls({ label, pagination }) {
   const { end, page, setPage, start, total, totalPages } = pagination;
 
@@ -7947,6 +8530,29 @@ function fileToBase64(file) {
   });
 }
 
+async function compressEvidencePhoto(file) {
+  if (!file.type.startsWith("image/")) throw new Error("Selecione somente arquivos de imagem.");
+  if (file.size > 12 * 1024 * 1024) throw new Error("A foto original excede 12 MB.");
+  const bitmap = await createImageBitmap(file);
+  const maxDimension = 1600;
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close?.();
+  const fileBase64 = canvas.toDataURL("image/jpeg", 0.78);
+  const estimatedBytes = Math.ceil((fileBase64.length - fileBase64.indexOf(",") - 1) * 0.75);
+  if (estimatedBytes > 2 * 1024 * 1024) throw new Error("A foto não pôde ser reduzida para o limite de 2 MB.");
+  return {
+    id: makeSubmissionId(),
+    fileName: `${file.name.replace(/\.[^.]+$/, "").slice(0, 80) || "foto-campo"}.jpg`,
+    fileMime: "image/jpeg",
+    fileBase64
+  };
+}
+
 function buildQuery(filters) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
@@ -8131,3 +8737,7 @@ function csvCell(value) {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => null));
+}

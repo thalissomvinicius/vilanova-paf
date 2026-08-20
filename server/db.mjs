@@ -110,6 +110,8 @@ function migrate(database) {
       cpf_digits TEXT NOT NULL,
       phone TEXT,
       address TEXT,
+      property_name TEXT,
+      community TEXT,
       agency TEXT,
       area_ha REAL NOT NULL DEFAULT 0,
       process_status TEXT NOT NULL DEFAULT 'INTERNALIZAR',
@@ -164,6 +166,8 @@ function migrate(database) {
       priority TEXT NOT NULL DEFAULT 'NORMAL',
       scheduled_date TEXT,
       technician TEXT,
+      property_name TEXT,
+      community TEXT,
       objective TEXT,
       result_note TEXT,
       created_at TEXT NOT NULL,
@@ -315,6 +319,8 @@ function migrate(database) {
   `);
 
   ensureColumn(database, "producers", "phone", "TEXT");
+  ensureColumn(database, "producers", "property_name", "TEXT");
+  ensureColumn(database, "producers", "community", "TEXT");
   ensureColumn(database, "producers", "access_login", "TEXT");
   ensureColumn(database, "producers", "access_code_hash", "TEXT");
   ensureColumn(database, "producers", "access_issued_at", "TEXT");
@@ -322,6 +328,15 @@ function migrate(database) {
   ensureColumn(database, "reports", "technical_note", "TEXT");
   ensureColumn(database, "reports", "reviewed_at", "TEXT");
   ensureColumn(database, "reports", "reviewed_by", "TEXT");
+  ensureColumn(database, "reports", "client_submission_id", "TEXT");
+  ensureColumn(database, "technical_visits", "client_submission_id", "TEXT");
+  ensureColumn(database, "technical_visits", "started_at", "TEXT");
+  ensureColumn(database, "technical_visits", "latitude", "REAL");
+  ensureColumn(database, "technical_visits", "longitude", "REAL");
+  ensureColumn(database, "technical_visits", "location_accuracy", "REAL");
+  ensureColumn(database, "technical_visits", "property_name", "TEXT");
+  ensureColumn(database, "technical_visits", "community", "TEXT");
+  ensureColumn(database, "documents", "client_submission_id", "TEXT");
   ensureColumn(database, "auth_sessions", "access_account_id", "INTEGER");
   ensureColumn(database, "fuel_vehicles", "driver_id", "INTEGER");
   ensureColumn(database, "fuel_records", "driver_id", "INTEGER");
@@ -330,16 +345,23 @@ function migrate(database) {
     CREATE INDEX IF NOT EXISTS idx_producers_token ON producers(token);
     CREATE INDEX IF NOT EXISTS idx_producers_status ON producers(process_status);
     CREATE INDEX IF NOT EXISTS idx_producers_agency ON producers(agency);
+    CREATE INDEX IF NOT EXISTS idx_producers_community ON producers(community);
     CREATE INDEX IF NOT EXISTS idx_producers_designer ON producers(designer);
     CREATE INDEX IF NOT EXISTS idx_producers_year ON producers(planting_year);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_producers_access_login ON producers(access_login);
     CREATE INDEX IF NOT EXISTS idx_reports_producer ON reports(producer_id);
     CREATE INDEX IF NOT EXISTS idx_reports_created ON reports(created_at);
     CREATE INDEX IF NOT EXISTS idx_reports_review_status ON reports(review_status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_client_submission
+      ON reports(producer_id, client_submission_id)
+      WHERE client_submission_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_visits_report ON technical_visits(report_id);
     CREATE INDEX IF NOT EXISTS idx_visits_producer ON technical_visits(producer_id);
     CREATE INDEX IF NOT EXISTS idx_visits_status ON technical_visits(status);
     CREATE INDEX IF NOT EXISTS idx_visits_scheduled ON technical_visits(scheduled_date);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_visits_client_submission
+      ON technical_visits(producer_id, client_submission_id)
+      WHERE client_submission_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_tasks_producer ON operational_tasks(producer_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_report ON operational_tasks(report_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_visit ON operational_tasks(visit_id);
@@ -351,6 +373,9 @@ function migrate(database) {
     CREATE INDEX IF NOT EXISTS idx_documents_task ON documents(task_id);
     CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
     CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_client_submission
+      ON documents(visit_id, client_submission_id)
+      WHERE visit_id IS NOT NULL AND client_submission_id IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_technicians_name ON technicians(name);
     CREATE INDEX IF NOT EXISTS idx_technicians_active ON technicians(active);
     CREATE INDEX IF NOT EXISTS idx_technicians_role ON technicians(role);
@@ -377,13 +402,27 @@ function migrate(database) {
     CREATE INDEX IF NOT EXISTS idx_sessions_access_account ON auth_sessions(access_account_id);
   `);
 
-  database.prepare(`
-    INSERT OR IGNORE INTO system_settings (key, value, updated_at)
-    VALUES ('admin_password_hash', $value, $updatedAt)
-  `).run({
-    $value: hashSecret(process.env.PAF_ADMIN_PASSWORD || "paf2027"),
-    $updatedAt: nowIso()
-  });
+  const hasAdminPassword = database
+    .prepare("SELECT 1 AS found FROM system_settings WHERE key = 'admin_password_hash'")
+    .get();
+  if (!hasAdminPassword) {
+    database.prepare(`
+      INSERT INTO system_settings (key, value, updated_at)
+      VALUES ('admin_password_hash', $value, $updatedAt)
+    `).run({
+      $value: hashSecret(getInitialAdminPassword()),
+      $updatedAt: nowIso()
+    });
+  }
+}
+
+function getInitialAdminPassword() {
+  const configured = normalizeText(process.env.PAF_ADMIN_PASSWORD);
+  if (configured) return configured;
+
+  const generated = `PAF-${makeAccessCode()}-${randomBytes(3).toString("hex").toUpperCase()}`;
+  console.warn(`[PAF] PAF_ADMIN_PASSWORD não foi definida. Senha temporária desta base: ${generated}`);
+  return generated;
 }
 
 function ensureColumn(database, table, column, definition) {
@@ -635,6 +674,8 @@ export function createProducer(payload = {}) {
             cpf_digits,
             phone,
             address,
+            property_name,
+            community,
             agency,
             area_ha,
             process_status,
@@ -654,6 +695,8 @@ export function createProducer(payload = {}) {
             $cpfDigits,
             $phone,
             $address,
+            $propertyName,
+            $community,
             $agency,
             $areaHa,
             $processStatus,
@@ -674,6 +717,8 @@ export function createProducer(payload = {}) {
           $cpfDigits: cpfDigits,
           $phone: normalizeText(payload.phone).slice(0, 40) || null,
           $address: normalizeText(payload.address).slice(0, 240) || null,
+          $propertyName: normalizeText(payload.propertyName).slice(0, 180) || "Propriedade principal",
+          $community: normalizeText(payload.community).slice(0, 160) || null,
           $agency: normalizeText(payload.agency).slice(0, 120) || null,
           $areaHa: toNumberOrNull(payload.areaHa) ?? 0,
           $processStatus: normalizeStatus(payload.processStatus),
@@ -708,7 +753,7 @@ export function listProducers(filters = {}) {
     params.$search = `%${normalizeText(filters.search)}%`;
     params.$searchDigits = `%${normalizeCpfDigits(filters.search)}%`;
     where.push(
-      "(p.name LIKE $search OR p.cpf LIKE $search OR p.cpf_digits LIKE $searchDigits OR p.phone LIKE $search OR p.address LIKE $search OR p.access_login LIKE $search)"
+      "(p.name LIKE $search OR p.cpf LIKE $search OR p.cpf_digits LIKE $searchDigits OR p.phone LIKE $search OR p.address LIKE $search OR p.property_name LIKE $search OR p.community LIKE $search OR p.access_login LIKE $search)"
     );
   }
 
@@ -720,6 +765,11 @@ export function listProducers(filters = {}) {
   if (filters.agency) {
     params.$agency = normalizeText(filters.agency);
     where.push("p.agency = $agency");
+  }
+
+  if (filters.community) {
+    params.$community = normalizeText(filters.community);
+    where.push("p.community = $community");
   }
 
   if (filters.reviewStatus) {
@@ -790,6 +840,8 @@ export function updateProducer(producerId, payload = {}) {
     cpfDigits: normalizeCpfDigits(payload.cpf) || current.cpfDigits,
     phone: normalizeText(payload.phone).slice(0, 40) || current.phone || null,
     address: normalizeText(payload.address).slice(0, 240) || current.address || null,
+    propertyName: payload.propertyName === undefined ? current.propertyName : normalizeText(payload.propertyName).slice(0, 180) || "Propriedade principal",
+    community: payload.community === undefined ? current.community : normalizeText(payload.community).slice(0, 160) || null,
     agency: normalizeText(payload.agency).slice(0, 120) || current.agency || null,
     areaHa: toNumberOrNull(payload.areaHa) ?? current.areaHa,
     processStatus: normalizeStatus(payload.processStatus || current.processStatus),
@@ -807,6 +859,8 @@ export function updateProducer(producerId, payload = {}) {
         cpf_digits = $cpfDigits,
         phone = $phone,
         address = $address,
+        property_name = $propertyName,
+        community = $community,
         agency = $agency,
         area_ha = $areaHa,
         process_status = $processStatus,
@@ -821,6 +875,8 @@ export function updateProducer(producerId, payload = {}) {
       $cpfDigits: updated.cpfDigits,
       $phone: updated.phone,
       $address: updated.address,
+      $propertyName: updated.propertyName,
+      $community: updated.community,
       $agency: updated.agency,
       $areaHa: updated.areaHa,
       $processStatus: updated.processStatus,
@@ -950,6 +1006,14 @@ export function createReportForProducer(producerId, payload) {
   }
 
   const createdAt = nowIso();
+  const clientSubmissionId = normalizeClientSubmissionId(payload.clientSubmissionId);
+  if (clientSubmissionId) {
+    const existing = database.prepare(`
+      SELECT id FROM reports
+      WHERE producer_id = $producerId AND client_submission_id = $clientSubmissionId
+    `).get({ $producerId: producer.id, $clientSubmissionId: clientSubmissionId });
+    if (existing) return getProducerById(producer.id);
+  }
   const report = {
     producerId: producer.id,
     reportDate: normalizeText(payload.reportDate) || createdAt.slice(0, 10),
@@ -983,7 +1047,8 @@ export function createReportForProducer(producerId, payload) {
         needs_visit,
         notes,
         review_status,
-        created_at
+        created_at,
+        client_submission_id
       )
       VALUES (
         $producerId,
@@ -1000,7 +1065,8 @@ export function createReportForProducer(producerId, payload) {
         $needsVisit,
         $notes,
         'PENDENTE',
-        $createdAt
+        $createdAt,
+        $clientSubmissionId
       )
     `)
     .run({
@@ -1017,7 +1083,8 @@ export function createReportForProducer(producerId, payload) {
       $productionNote: report.productionNote,
       $needsVisit: report.needsVisit,
       $notes: report.notes,
-      $createdAt: createdAt
+      $createdAt: createdAt,
+      $clientSubmissionId: clientSubmissionId
     });
 
   database
@@ -1084,7 +1151,7 @@ export function listVisits(filters = {}) {
     params.$search = `%${normalizeText(filters.search)}%`;
     params.$searchDigits = `%${normalizeCpfDigits(filters.search)}%`;
     where.push(
-      "(p.name LIKE $search OR p.cpf LIKE $search OR p.cpf_digits LIKE $searchDigits OR p.address LIKE $search OR v.objective LIKE $search OR v.result_note LIKE $search)"
+      "(p.name LIKE $search OR p.cpf LIKE $search OR p.cpf_digits LIKE $searchDigits OR p.address LIKE $search OR p.property_name LIKE $search OR p.community LIKE $search OR v.property_name LIKE $search OR v.community LIKE $search OR v.objective LIKE $search OR v.result_note LIKE $search)"
     );
   }
 
@@ -1101,6 +1168,11 @@ export function listVisits(filters = {}) {
   if (filters.agency) {
     params.$agency = normalizeText(filters.agency);
     where.push("p.agency = $agency");
+  }
+
+  if (filters.community) {
+    params.$community = normalizeText(filters.community);
+    where.push("COALESCE(v.community, p.community) = $community");
   }
 
   if (filters.technician) {
@@ -1151,7 +1223,17 @@ export function createVisit(payload = {}, createdBy = "admin") {
     return null;
   }
 
+  const clientSubmissionId = normalizeClientSubmissionId(payload.clientSubmissionId);
+  if (clientSubmissionId) {
+    const existing = database.prepare(`
+      SELECT id FROM technical_visits
+      WHERE producer_id = $producerId AND client_submission_id = $clientSubmissionId
+    `).get({ $producerId: producer.id, $clientSubmissionId: clientSubmissionId });
+    if (existing) return getVisitById(existing.id);
+  }
+
   const now = nowIso();
+  const location = normalizeVisitLocation(payload);
   const visit = {
     reportId: report?.id || null,
     producerId: producer.id,
@@ -1159,6 +1241,8 @@ export function createVisit(payload = {}, createdBy = "admin") {
     priority: normalizeVisitPriority(payload.priority || (report?.needsVisit ? "ALTA" : "NORMAL")),
     scheduledDate: normalizeText(payload.scheduledDate) || null,
     technician: normalizeText(payload.technician).slice(0, 120) || normalizeText(createdBy).slice(0, 120) || "Equipe técnica",
+    propertyName: normalizeText(payload.propertyName).slice(0, 180) || producer.propertyName || "Propriedade principal",
+    community: normalizeText(payload.community).slice(0, 160) || producer.community || null,
     objective:
       normalizeText(payload.objective).slice(0, 500) ||
       `Visita técnica para ${producer.name}${report?.areaStatus ? ` - ${report.areaStatus}` : ""}`,
@@ -1174,11 +1258,18 @@ export function createVisit(payload = {}, createdBy = "admin") {
         priority,
         scheduled_date,
         technician,
+        property_name,
+        community,
         objective,
         result_note,
         created_at,
         updated_at,
-        completed_at
+        completed_at,
+        started_at,
+        latitude,
+        longitude,
+        location_accuracy,
+        client_submission_id
       )
       VALUES (
         $reportId,
@@ -1187,11 +1278,18 @@ export function createVisit(payload = {}, createdBy = "admin") {
         $priority,
         $scheduledDate,
         $technician,
+        $propertyName,
+        $community,
         $objective,
         $resultNote,
         $createdAt,
         $updatedAt,
-        $completedAt
+        $completedAt,
+        $startedAt,
+        $latitude,
+        $longitude,
+        $locationAccuracy,
+        $clientSubmissionId
       )
     `)
     .run({
@@ -1201,11 +1299,18 @@ export function createVisit(payload = {}, createdBy = "admin") {
       $priority: visit.priority,
       $scheduledDate: visit.scheduledDate,
       $technician: visit.technician,
+      $propertyName: visit.propertyName,
+      $community: visit.community,
       $objective: visit.objective,
       $resultNote: visit.resultNote,
       $createdAt: now,
       $updatedAt: now,
-      $completedAt: visit.status === "CONCLUÍDA" ? now : null
+      $completedAt: visit.status === "CONCLUÍDA" ? now : null,
+      $startedAt: ["EM CAMPO", "CONCLUÍDA"].includes(visit.status) ? now : null,
+      $latitude: location.latitude,
+      $longitude: location.longitude,
+      $locationAccuracy: location.accuracy,
+      $clientSubmissionId: clientSubmissionId
     });
 
   if (report?.id) {
@@ -1229,6 +1334,8 @@ export function updateVisit(visitId, payload = {}, reviewedBy = "admin") {
   const status = normalizeVisitStatus(payload.status || current.status);
   const updatedAt = nowIso();
   const completedAt = status === "CONCLUÍDA" ? current.completedAt || updatedAt : null;
+  const startedAt = ["EM CAMPO", "CONCLUÍDA"].includes(status) ? current.startedAt || updatedAt : current.startedAt;
+  const location = normalizeVisitLocation(payload, current);
 
   database
     .prepare(`
@@ -1238,10 +1345,16 @@ export function updateVisit(visitId, payload = {}, reviewedBy = "admin") {
         priority = $priority,
         scheduled_date = $scheduledDate,
         technician = $technician,
+        property_name = $propertyName,
+        community = $community,
         objective = $objective,
         result_note = $resultNote,
         updated_at = $updatedAt,
-        completed_at = $completedAt
+        completed_at = $completedAt,
+        started_at = $startedAt,
+        latitude = $latitude,
+        longitude = $longitude,
+        location_accuracy = $locationAccuracy
       WHERE id = $id
     `)
     .run({
@@ -1250,10 +1363,16 @@ export function updateVisit(visitId, payload = {}, reviewedBy = "admin") {
       $scheduledDate:
         payload.scheduledDate === undefined ? current.scheduledDate : normalizeText(payload.scheduledDate) || null,
       $technician: normalizeText(payload.technician).slice(0, 120) || current.technician || normalizeText(reviewedBy) || "Equipe técnica",
+      $propertyName: payload.propertyName === undefined ? current.propertyName : normalizeText(payload.propertyName).slice(0, 180) || current.propertyName,
+      $community: payload.community === undefined ? current.community : normalizeText(payload.community).slice(0, 160) || null,
       $objective: normalizeText(payload.objective).slice(0, 500) || current.objective || null,
       $resultNote: payload.resultNote === undefined ? current.resultNote : normalizeText(payload.resultNote).slice(0, 1000) || null,
       $updatedAt: updatedAt,
       $completedAt: completedAt,
+      $startedAt: startedAt,
+      $latitude: location.latitude,
+      $longitude: location.longitude,
+      $locationAccuracy: location.accuracy,
       $id: visitId
     });
 
@@ -1538,6 +1657,11 @@ export function createDocumentRecord(payload = {}, uploadedBy = "admin") {
   const relatedProducerIds = [toIntegerOrNull(payload.producerId), report?.producerId, visit?.producerId, task?.producerId].filter(Boolean);
   if (new Set(relatedProducerIds).size > 1) throw new Error("Os vínculos do documento devem pertencer ao mesmo produtor.");
   const producerId = relatedProducerIds[0] || null;
+  const clientSubmissionId = normalizeClientSubmissionId(payload.clientSubmissionId);
+  if (visit?.id && clientSubmissionId) {
+    const existing = getDocumentByClientSubmission(visit.id, clientSubmissionId);
+    if (existing) return existing;
+  }
   const now = nowIso();
   const title = normalizeText(payload.title).slice(0, 180) || normalizeText(payload.fileName).slice(0, 180) || "Documento PAF";
 
@@ -1559,7 +1683,8 @@ export function createDocumentRecord(payload = {}, uploadedBy = "admin") {
         notes,
         created_at,
         updated_at,
-        reviewed_at
+        reviewed_at,
+        client_submission_id
       )
       VALUES (
         $producerId,
@@ -1577,7 +1702,8 @@ export function createDocumentRecord(payload = {}, uploadedBy = "admin") {
         $notes,
         $createdAt,
         $updatedAt,
-        $reviewedAt
+        $reviewedAt,
+        $clientSubmissionId
       )
     `)
     .run({
@@ -1596,10 +1722,21 @@ export function createDocumentRecord(payload = {}, uploadedBy = "admin") {
       $notes: normalizeText(payload.notes).slice(0, 1000) || null,
       $createdAt: now,
       $updatedAt: now,
-      $reviewedAt: normalizeDocumentStatus(payload.status) === "VALIDADO" ? now : null
+      $reviewedAt: normalizeDocumentStatus(payload.status) === "VALIDADO" ? now : null,
+      $clientSubmissionId: clientSubmissionId
     });
 
   return getDocumentById(Number(result.lastInsertRowid));
+}
+
+export function getDocumentByClientSubmission(visitId, clientSubmissionId) {
+  const normalizedId = normalizeClientSubmissionId(clientSubmissionId);
+  if (!normalizedId) return null;
+  const row = getDb().prepare(`
+    SELECT id FROM documents
+    WHERE visit_id = $visitId AND client_submission_id = $clientSubmissionId
+  `).get({ $visitId: toIntegerOrNull(visitId), $clientSubmissionId: normalizedId });
+  return row?.id ? getDocumentById(row.id) : null;
 }
 
 export function updateDocument(documentId, payload = {}, reviewedBy = "admin") {
@@ -1673,6 +1810,7 @@ export function getOptions() {
     documentStatuses: DOCUMENT_STATUSES,
     documentCategories: DOCUMENT_CATEGORIES,
     agencies: distinct("agency"),
+    communities: distinct("community"),
     designers: distinct("designer"),
     years: distinct("planting_year"),
     technicians: activeTechnicians
@@ -3003,6 +3141,22 @@ function normalizePlate(value) {
   return normalizeText(value).toUpperCase().replace(/\s+/g, "").slice(0, 20);
 }
 
+function normalizeClientSubmissionId(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return /^[a-z0-9][a-z0-9._:-]{7,79}$/.test(normalized) ? normalized : null;
+}
+
+function normalizeVisitLocation(payload = {}, fallback = {}) {
+  const latitude = payload.latitude === undefined ? toNumberOrNull(fallback.latitude) : toNumberOrNull(payload.latitude);
+  const longitude = payload.longitude === undefined ? toNumberOrNull(fallback.longitude) : toNumberOrNull(payload.longitude);
+  const accuracy = payload.locationAccuracy === undefined ? toNumberOrNull(fallback.locationAccuracy) : toNumberOrNull(payload.locationAccuracy);
+  if ((latitude === null) !== (longitude === null)) throw new Error("Latitude e longitude devem ser informadas juntas.");
+  if (latitude !== null && (latitude < -90 || latitude > 90)) throw new Error("Latitude inválida.");
+  if (longitude !== null && (longitude < -180 || longitude > 180)) throw new Error("Longitude inválida.");
+  if (accuracy !== null && accuracy < 0) throw new Error("Precisão de localização inválida.");
+  return { latitude, longitude, accuracy };
+}
+
 function normalizeFuelMonth(value) {
   return normalizeText(value).toUpperCase().slice(0, 40);
 }
@@ -3233,11 +3387,18 @@ function mapVisitRow(visit) {
     priority: visit.priority,
     scheduledDate: visit.scheduled_date,
     technician: visit.technician,
+    propertyName: visit.property_name,
+    community: visit.community,
     objective: visit.objective,
     resultNote: visit.result_note,
     createdAt: visit.created_at,
     updatedAt: visit.updated_at,
-    completedAt: visit.completed_at
+    completedAt: visit.completed_at,
+    startedAt: visit.started_at,
+    latitude: visit.latitude,
+    longitude: visit.longitude,
+    locationAccuracy: visit.location_accuracy,
+    clientSubmissionId: visit.client_submission_id
   };
 }
 
@@ -3291,7 +3452,8 @@ function mapDocumentRow(document) {
     notes: document.notes,
     createdAt: document.created_at,
     updatedAt: document.updated_at,
-    reviewedAt: document.reviewed_at
+    reviewedAt: document.reviewed_at,
+    clientSubmissionId: document.client_submission_id
   };
 }
 
@@ -3454,6 +3616,8 @@ function mapProducerRow(row, options = {}) {
     cpfDigits: row.cpf_digits,
     phone: row.phone,
     address: row.address,
+    propertyName: row.property_name || "Propriedade principal",
+    community: row.community,
     agency: row.agency,
     areaHa: row.area_ha,
     processStatus: row.process_status,
