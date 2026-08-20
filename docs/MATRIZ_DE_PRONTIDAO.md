@@ -36,6 +36,7 @@ Atualizada em 20 de agosto de 2026. Esta matriz registra as evidências que libe
 | Criação atômica de acesso e vínculo | Validada localmente e no PostgreSQL | `20260820101500_paf_atomic_access_creation.sql` |
 | RLS, escopo e migrations Supabase | Validado em CI | `.github/workflows/ci.yml` e `supabase/tests/paf_access_scope_test.sql` |
 | Atividade preventiva do Supabase Free | Implementada | Cron diário da Vercel em `/api/health` e `tests/deployment-config.test.mjs` |
+| Hardening e auditoria do Supabase | Validado em produção | `paf_database_security_hardening`, testes pgTAP e `docs/AUDITORIA_SUPABASE_2026-08-20.md` |
 | APK Android | Gerado e assinado para depuração | `releases/VilaNova-PAF-piloto-debug.apk` |
 | Rotas públicas em produção | Validadas em desktop e celular | `/admin`, `/tecnico` e `/produtor`, sem overflow, erro de console ou API `5xx` |
 | Supabase de produção | Validado | Projeto `paf-vna`, migrations atuais e Edge Function `paf-api` v5 |
