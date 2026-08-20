@@ -1,6 +1,6 @@
 begin;
 
-select plan(14);
+select plan(22);
 
 insert into public.paf_producers (id, token, name, cpf, cpf_digits)
 values
@@ -18,6 +18,72 @@ values (
 
 insert into public.paf_access_account_producers (access_account_id, producer_id)
 values (-9101, -9101);
+
+select lives_ok(
+  $$
+    select * from public.paf_create_access_account(
+      'Produtor Atômico', 'ATOMIC-PRODUCER', 'hash-atômico', 'mico',
+      'PRODUTOR', null, null, true, true, true, null,
+      array[-9101]::bigint[]
+    )
+  $$,
+  'cria conta e escopo de produtor na mesma transação'
+);
+
+select is(
+  (select count(*) from public.paf_access_accounts where login = 'ATOMIC-PRODUCER'),
+  1::bigint,
+  'persiste uma única conta criada pela função'
+);
+
+select is(
+  (
+    select count(*)
+    from public.paf_access_account_producers scope
+    join public.paf_access_accounts account on account.id = scope.access_account_id
+    where account.login = 'ATOMIC-PRODUCER' and scope.producer_id = -9101
+  ),
+  1::bigint,
+  'persiste exatamente um vínculo para o produtor'
+);
+
+select is(
+  (select can_manage_visits from public.paf_access_accounts where login = 'ATOMIC-PRODUCER'),
+  false,
+  'normaliza permissões incompatíveis com o perfil produtor'
+);
+
+select throws_ok(
+  $$
+    select * from public.paf_create_access_account(
+      'Produtor Inválido', 'ATOMIC-INVALID', 'hash-inválido', 'lido',
+      'PRODUTOR', null, null, true, true, false, null,
+      array[-9101, -9102]::bigint[]
+    )
+  $$
+);
+
+select is(
+  (select count(*) from public.paf_access_accounts where login = 'ATOMIC-INVALID'),
+  0::bigint,
+  'não deixa conta parcial quando há dois produtores'
+);
+
+select throws_ok(
+  $$
+    select * from public.paf_create_access_account(
+      'Produtor Inexistente', 'ATOMIC-MISSING', 'hash-inválido', 'lido',
+      'PRODUTOR', null, null, true, true, false, null,
+      array[-9999]::bigint[]
+    )
+  $$
+);
+
+select is(
+  (select count(*) from public.paf_access_accounts where login = 'ATOMIC-MISSING'),
+  0::bigint,
+  'não deixa conta parcial quando o produtor não existe'
+);
 
 insert into public.paf_auth_sessions (token_hash, role, access_account_id, expires_at)
 values (repeat('a', 64), 'access', -9101, now() + interval '1 hour');

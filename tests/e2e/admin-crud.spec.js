@@ -7,7 +7,7 @@ test.describe.serial("cadastros e acessos administrativos", () => {
   const technicianName = `Técnico Cadastro ${suffix}`;
   const accessName = `Acesso Cadastro ${suffix}`;
   const accessLogin = `TECNICO-${suffix}`;
-  const accessCode = `Acesso-${suffix}`;
+  const accessCode = `ACESSO-${suffix}`;
 
   test.afterAll(() => {
     const database = getDb();
@@ -72,6 +72,15 @@ test.describe.serial("cadastros e acessos administrativos", () => {
 
     await page.locator('.access-filters input[placeholder*="Buscar nome"]').fill(accessLogin);
     await expect(page.getByText(accessName, { exact: true })).toBeVisible();
+
+    const activeContext = await browser.newContext();
+    const activePage = await activeContext.newPage();
+    await activePage.goto("http://127.0.0.1:5173/tecnico");
+    await activePage.getByLabel("Login").fill(accessLogin);
+    await activePage.getByLabel("Código de acesso").fill(accessCode);
+    await activePage.getByRole("button", { name: "Entrar" }).click();
+    await expect(activePage.getByRole("heading", { name: accessName })).toBeVisible();
+
     await page.getByRole("row", { name: new RegExp(`Editar acesso de ${escapeRegExp(accessName)}`) }).click();
     await page.getByRole("button", { name: "02 Produtores" }).click();
     await page.getByRole("button", { name: "03 Permissões" }).click();
@@ -80,14 +89,14 @@ test.describe.serial("cadastros e acessos administrativos", () => {
     await page.getByRole("button", { name: "Fechar", exact: true }).click();
     await expect(page.getByText("BLOQUEADO", { exact: true })).toBeVisible();
 
-    const blockedContext = await browser.newContext();
-    const blockedPage = await blockedContext.newPage();
-    await blockedPage.goto("http://127.0.0.1:5173/tecnico");
-    await blockedPage.getByLabel("Login").fill(accessLogin);
-    await blockedPage.getByLabel("Código de acesso").fill(accessCode);
-    await blockedPage.getByRole("button", { name: "Entrar" }).click();
-    await expect(blockedPage.getByText("Login ou código inválidos para este portal.")).toBeVisible();
-    await blockedContext.close();
+    expect((await activePage.request.get("/api/technical/me")).status()).toBe(401);
+    await activePage.reload();
+    await expect(activePage.getByRole("heading", { name: "Acesso técnico" })).toBeVisible();
+    await activePage.getByLabel("Login").fill(accessLogin);
+    await activePage.getByLabel("Código de acesso").fill(accessCode);
+    await activePage.getByRole("button", { name: "Entrar" }).click();
+    await expect(activePage.getByText("Login ou código inválidos para este portal.")).toBeVisible();
+    await activeContext.close();
 
     await page.getByRole("row", { name: new RegExp(`Editar acesso de ${escapeRegExp(accessName)}`) }).click();
     await page.getByRole("button", { name: "02 Produtores" }).click();

@@ -246,26 +246,22 @@ export class PafRepository {
     if (login.length < 3) throw new Error("Informe um login válido.");
     if (accessCode.length < 8) throw new Error("O código de acesso deve ter pelo menos 8 caracteres.");
     if (accountType === "PRODUTOR" && producerIds.length !== 1) throw new Error("O acesso de produtor deve estar vinculado a um produtor.");
-    const { data, error } = await this.db.from("paf_access_accounts").insert({
-      name,
-      login,
-      access_code_hash: await hashSecret(accessCode),
-      code_hint: accessCode.slice(-4),
-      account_type: accountType,
-      technician_id: toIntegerOrNull(payload.technicianId),
-      organization: nullableText(payload.organization, 180),
-      active: payload.active !== false,
-      can_submit_reports: accountType === "PRODUTOR" && payload.canSubmitReports !== false,
-      can_manage_visits: accountType !== "PRODUTOR" && payload.canManageVisits !== false,
-      notes: nullableText(payload.notes, 1000)
-    }).select("*").single();
+    const { data, error } = await this.db.rpc("paf_create_access_account", {
+      p_name: name,
+      p_login: login,
+      p_access_code_hash: await hashSecret(accessCode),
+      p_code_hint: accessCode.slice(-4),
+      p_account_type: accountType,
+      p_technician_id: toIntegerOrNull(payload.technicianId),
+      p_organization: nullableText(payload.organization, 180),
+      p_active: payload.active !== false,
+      p_can_submit_reports: accountType === "PRODUTOR" && payload.canSubmitReports !== false,
+      p_can_manage_visits: accountType !== "PRODUTOR" && payload.canManageVisits !== false,
+      p_notes: nullableText(payload.notes, 1000),
+      p_producer_ids: producerIds
+    }).maybeSingle();
     assertNoError(error, duplicateMessage(error, "Esse login já está cadastrado."));
-    try {
-      await this.replaceAccessScope(data.id, producerIds);
-    } catch (scopeError) {
-      await this.db.from("paf_access_accounts").delete().eq("id", data.id);
-      throw scopeError;
-    }
+    if (!data) throw new Error("Não foi possível criar o acesso.");
     return { account: await this.hydrateAccessAccount(data), temporaryCode: accessCode };
   }
 

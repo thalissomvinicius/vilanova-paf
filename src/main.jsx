@@ -213,9 +213,9 @@ const PRODUCER_SESSION_CACHE_KEY = "paf:producer-session-cache";
 const PILOT_READINESS = [
   { label: "Núcleo e cadastros", value: 98, status: "Pronto", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
   { label: "Dashboard e gestão", value: 95, status: "Pronto", detail: "Indicadores, filtros e acompanhamento" },
-  { label: "Operação de campo", value: 96, status: "Pronto", detail: "GPS, fotos, fila múltipla offline e sincronização automática" },
+  { label: "Operação de campo", value: 98, status: "Pronto", detail: "GPS, fotos, filas múltiplas offline e sincronização automática" },
   { label: "Integração remota", value: 45, status: "Pendente", detail: "Criar Supabase PAF e corrigir o endpoint publicado" },
-  { label: "Qualidade do piloto", value: 94, status: "Em validação", detail: "Jornadas online e offline aprovadas; falta aparelho real" }
+  { label: "Qualidade do piloto", value: 97, status: "Em validação", detail: "Perfis, sessões e jornadas offline aprovados; falta aparelho real" }
 ];
 const PILOT_READINESS_PERCENT = Math.round(PILOT_READINESS.reduce((sum, stage) => sum + stage.value, 0) / PILOT_READINESS.length);
 
@@ -442,10 +442,16 @@ function InstallAppButton({ compact = false }) {
   );
 }
 
-function SyncStatusBanner({ status }) {
+function SyncStatusBanner({ status, pendingCount = 0 }) {
   if (!status || status === "saved") return null;
   const content = {
-    pending: { icon: <CloudOff size={17} />, title: "Pendente de sincronização", text: "Os dados estão salvos neste aparelho e serão enviados quando a internet voltar." },
+    pending: {
+      icon: <CloudOff size={17} />,
+      title: "Pendente de sincronização",
+      text: pendingCount > 1
+        ? `${pendingCount} registros estão salvos neste aparelho e serão enviados quando a internet voltar.`
+        : "Os dados estão salvos neste aparelho e serão enviados quando a internet voltar."
+    },
     syncing: { icon: <Loader2 className="spin" size={17} />, title: "Sincronizando", text: "Mantenha o aplicativo aberto por alguns segundos." },
     synced: { icon: <Check size={17} />, title: "Sincronizado", text: "Os dados chegaram ao sistema com segurança." },
     error: { icon: <X size={17} />, title: "Erro de sincronização", text: "O rascunho foi preservado. Revise a mensagem e tente novamente." }
@@ -3313,7 +3319,7 @@ function StepWizard({ cancelLabel = "Cancelar", className = "", error, onCancel,
       {(stepError || error) && <p className="form-error">{stepError || error}</p>}
 
       <div className="step-actions">
-        <button className="ghost-button" type="button" onClick={isLast ? onCancel : () => setStepIndex(Math.max(stepIndex - 1, 0))}>
+        <button className="ghost-button" type="button" onClick={stepIndex === 0 ? onCancel : () => setStepIndex(Math.max(stepIndex - 1, 0))}>
           {stepIndex === 0 ? cancelLabel : "Voltar"}
         </button>
         {isLast ? (
@@ -7900,25 +7906,13 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
   const queueKey = `paf:producer-report-queue:${producer.id}`;
   const syncingRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(() => window.localStorage.getItem(queueKey) ? "pending" : "saved");
+  const [pendingCount, setPendingCount] = useState(() => readLocalQueue(queueKey).length);
+  const [syncStatus, setSyncStatus] = useState(() => readLocalQueue(queueKey).length ? "pending" : "saved");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const latestReport = reports[0] || null;
   const nextVisit = getNextVisit(visits);
-  const [form, setForm] = useState(() => readLocalDraft(draftKey, {
-    clientSubmissionId: makeSubmissionId(),
-    reportDate: new Date().toISOString().slice(0, 10),
-    contactPhone: "",
-    areaStatus: "Sem alteração",
-    address: producer.address || "",
-    areaHa: producer.areaHa || "",
-    plantingYear: producer.plantingYear || "",
-    crop: "",
-    plantingDate: "",
-    productionNote: "",
-    needsVisit: false,
-    notes: ""
-  }));
+  const [form, setForm] = useState(() => readLocalDraft(draftKey, newReportForm()));
 
   useEffect(() => {
     writeLocalDraft(draftKey, form);
@@ -7929,10 +7923,13 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
   }, []);
 
   useEffect(() => {
-    const synchronize = () => {
+    const synchronize = async () => {
       if (!navigator.onLine || syncingRef.current) return;
-      const queued = readLocalDraft(queueKey, null);
-      if (queued) sendReportPayload(queued, true);
+      const queued = readLocalQueue(queueKey);
+      for (const payload of queued) {
+        const synchronized = await sendReportPayload(payload, true);
+        if (!synchronized) break;
+      }
     };
     window.addEventListener("online", synchronize);
     const timer = window.setTimeout(synchronize, 600);
@@ -7948,24 +7945,29 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
 
   function clearReportForm() {
     removeLocalDraft(draftKey);
-    removeLocalDraft(queueKey);
-    setForm({
+    setForm(newReportForm());
+    const queued = readLocalQueue(queueKey);
+    setPendingCount(queued.length);
+    setError(queued.length ? "Os relatórios pendentes continuam salvos para sincronização." : "");
+    setSent(false);
+    setSyncStatus(queued.length ? "pending" : "saved");
+  }
+
+  function newReportForm(previous = {}) {
+    return {
       clientSubmissionId: makeSubmissionId(),
       reportDate: new Date().toISOString().slice(0, 10),
-      contactPhone: "",
+      contactPhone: previous.contactPhone || "",
       areaStatus: "Sem alteração",
-      address: producer.address || "",
-      areaHa: producer.areaHa || "",
-      plantingYear: producer.plantingYear || "",
+      address: producer.address || previous.address || "",
+      areaHa: producer.areaHa || previous.areaHa || "",
+      plantingYear: producer.plantingYear || previous.plantingYear || "",
       crop: "",
       plantingDate: "",
       productionNote: "",
       needsVisit: false,
       notes: ""
-    });
-    setError("");
-    setSent(false);
-    setSyncStatus("saved");
+    };
   }
 
   async function sendReportPayload(payload, automatic = false) {
@@ -7983,33 +7985,32 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
       onProducerChange(data.producer);
       onReportsChange(data.reports || []);
       onVisitsChange(data.visits || visits);
-      removeLocalDraft(draftKey);
-      removeLocalDraft(queueKey);
-      setForm((current) => ({
-        clientSubmissionId: makeSubmissionId(),
-        reportDate: new Date().toISOString().slice(0, 10),
-        contactPhone: current.contactPhone,
-        areaStatus: "Sem alteração",
-        address: data.producer.address || current.address,
-        areaHa: data.producer.areaHa || current.areaHa,
-        plantingYear: data.producer.plantingYear || current.plantingYear,
-        crop: "",
-        plantingDate: "",
-        productionNote: "",
-        needsVisit: false,
-        notes: ""
-      }));
+      const remaining = removeLocalQueueItem(queueKey, payload.clientSubmissionId);
+      setPendingCount(remaining.length);
+      if (!automatic) {
+        removeLocalDraft(draftKey);
+        setForm((current) => newReportForm({
+          ...current,
+          address: data.producer.address || current.address,
+          areaHa: data.producer.areaHa || current.areaHa,
+          plantingYear: data.producer.plantingYear || current.plantingYear
+        }));
+      }
       setSent(true);
-      setSyncStatus("synced");
+      setSyncStatus(remaining.length ? "pending" : "synced");
       setError("");
+      return data;
     } catch (requestError) {
       const retryable = !requestError.status || requestError.status >= 500 || [408, 429].includes(requestError.status);
-      if (retryable) writeLocalDraft(queueKey, payload);
-      else removeLocalDraft(queueKey);
-      setSyncStatus(retryable && !navigator.onLine ? "pending" : "error");
+      if (automatic || retryable) {
+        const queued = enqueueLocalQueue(queueKey, payload);
+        setPendingCount(queued.length);
+      }
+      setSyncStatus(retryable ? "pending" : "error");
       setError(retryable
         ? (navigator.onLine ? "Falha na sincronização. O envio continuará salvo para nova tentativa." : "Sem internet. O relatório está pendente e será sincronizado quando a conexão voltar.")
         : requestError.message || "Revise os dados informados.");
+      return null;
     } finally {
       syncingRef.current = false;
       setSubmitting(false);
@@ -8020,7 +8021,10 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
     event.preventDefault();
     setError("");
     if (!navigator.onLine) {
-      writeLocalDraft(queueKey, form);
+      const queued = enqueueLocalQueue(queueKey, form);
+      setPendingCount(queued.length);
+      removeLocalDraft(draftKey);
+      setForm((current) => newReportForm(current));
       setSyncStatus("pending");
       setError("Sem internet. O relatório está pendente e será sincronizado quando a conexão voltar.");
       return;
@@ -8056,7 +8060,7 @@ function ProducerFormPage({ producer, reports, visits, onProducerChange, onRepor
       </header>
 
       <main className="producer-main">
-        <SyncStatusBanner status={syncStatus} />
+        <SyncStatusBanner status={syncStatus} pendingCount={pendingCount} />
         <ProducerUpcomingVisitCard visit={nextVisit} />
 
         <section className="producer-summary">

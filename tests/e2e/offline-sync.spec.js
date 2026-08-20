@@ -145,7 +145,7 @@ test.describe.serial("fila offline de relatórios do produtor", () => {
     }
   });
 
-  test("mantém o relatório após fechar e sincroniza uma única vez", async ({ context, page }) => {
+  test("mantém múltiplos relatórios após limpar e sincroniza sem duplicar", async ({ context, page }) => {
     await page.goto("/produtor");
     await page.getByLabel("Login").fill(login);
     await page.getByLabel("Código de acesso").fill(accessCode);
@@ -165,7 +165,21 @@ test.describe.serial("fila offline de relatórios do produtor", () => {
     await expect(page.getByText("Pendente de sincronização")).toBeVisible();
 
     const queueKey = `paf:producer-report-queue:${producer.id}`;
-    await expect.poll(() => page.evaluate((key) => Boolean(localStorage.getItem(key)), queueKey)).toBe(true);
+    await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]").length, queueKey)).toBe(1);
+
+    await page.getByLabel("Produção ou andamento").fill("Segundo relatório preservado sem internet");
+    await page.getByRole("button", { name: "Voltar" }).click();
+    await expect(page.getByLabel("Área em hectares")).toBeVisible();
+    await page.getByRole("button", { name: "03 Finalização" }).click();
+    await expect(page.getByLabel("Produção ou andamento")).toHaveValue("Segundo relatório preservado sem internet");
+    await send.dispatchEvent("click");
+    await expect(page.getByText("2 registros estão salvos neste aparelho")).toBeVisible();
+    await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]").length, queueKey)).toBe(2);
+
+    await page.getByRole("button", { name: "01 Identificação" }).click();
+    await page.getByRole("button", { name: "Limpar" }).click();
+    await expect(page.getByText("Os relatórios pendentes continuam salvos para sincronização.")).toBeVisible();
+    await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key) || "[]").length, queueKey)).toBe(2);
     await page.close();
 
     await context.setOffline(false);
@@ -174,7 +188,7 @@ test.describe.serial("fila offline de relatórios do produtor", () => {
     await expect(reopened.getByRole("heading", { name: producer.name })).toBeVisible();
     await expect.poll(() => getDb().prepare("SELECT count(*) AS total FROM reports WHERE producer_id = ?").get(producer.id).total, {
       timeout: 15000
-    }).toBe(1);
+    }).toBe(2);
     await expect.poll(() => reopened.evaluate((key) => localStorage.getItem(key), queueKey), { timeout: 15000 }).toBeNull();
     await expect(reopened.getByText("Sincronizado")).toBeVisible();
 
@@ -184,6 +198,6 @@ test.describe.serial("fila offline de relatórios do produtor", () => {
     });
     await reopened.waitForTimeout(800);
     const total = getDb().prepare("SELECT count(*) AS total FROM reports WHERE producer_id = ?").get(producer.id).total;
-    expect(total).toBe(1);
+    expect(total).toBe(2);
   });
 });

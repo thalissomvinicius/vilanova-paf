@@ -6,15 +6,15 @@ Validar o fluxo completo com um grupo pequeno: a gestão cria os acessos e vínc
 
 ## Prontidão atual
 
-**86% para o primeiro piloto em campo.**
+**87% para o primeiro piloto em campo.**
 
 | Etapa | Progresso | Situação |
 | --- | ---: | --- |
 | Núcleo e cadastros | 98% | Pronto |
 | Dashboard e gestão | 95% | Pronto |
-| Operação de campo | 96% | Pronto |
+| Operação de campo | 98% | Pronto |
 | Integração remota | 45% | Pendente de projeto Supabase PAF |
-| Qualidade do piloto | 94% | Jornadas online e offline aprovadas; falta teste em aparelho real |
+| Qualidade do piloto | 97% | Perfis, sessões e jornadas offline aprovados; falta teste em aparelho real |
 
 ## O que já está disponível
 
@@ -26,8 +26,10 @@ Validar o fluxo completo com um grupo pequeno: a gestão cria os acessos e vínc
 - Visitas cadastradas pelo técnico com propriedade, comunidade, GPS, fotos, histórico e status.
 - Pendências, documentos e controle de abastecimento.
 - Dashboard administrativo com indicadores e filtros.
-- Rascunho local e fila com múltiplas visitas pendentes quando a internet falhar.
+- Rascunho local e filas com múltiplas visitas ou relatórios pendentes quando a internet falhar.
 - Reenvio idempotente, sem duplicar registros depois da reconexão.
+- Isolamento testado entre administrador, técnico e produtor, inclusive por URL e API.
+- Bloqueio de acesso revoga também a sessão que já estava aberta.
 - Teste automatizado de perda de conexão, uso totalmente offline, fechamento da tela, reconexão e retry repetido.
 - Instalação como PWA e APK Android de piloto assinado para depuração.
 - Testes automatizados do banco, Edge Function, rotas e responsividade.

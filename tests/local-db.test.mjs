@@ -67,3 +67,40 @@ test("evidência repetida não duplica documento", () => {
   const total = database.getDb().prepare("select count(*) as total from documents where visit_id = ?").get(visit.id).total;
   assert.equal(total, 1);
 });
+
+test("acesso individual exige exatamente um produtor", () => {
+  const first = database.createProducer({ name: "Produtor Acesso 1", cpf: "00000000004" });
+  const second = database.createProducer({ name: "Produtor Acesso 2", cpf: "00000000005" });
+
+  assert.throws(
+    () => database.createAccessAccount({
+      name: "Acesso sem produtor",
+      login: "ACESSO-SEM-PRODUTOR",
+      accessCode: "Codigo-123",
+      accountType: "PRODUTOR",
+      producerIds: []
+    }),
+    /vinculado a um produtor/
+  );
+  assert.throws(
+    () => database.createAccessAccount({
+      name: "Acesso com dois produtores",
+      login: "ACESSO-DOIS-PRODUTORES",
+      accessCode: "Codigo-123",
+      accountType: "PRODUTOR",
+      producerIds: [first.id, second.id]
+    }),
+    /vinculado a um produtor/
+  );
+
+  const valid = database.createAccessAccount({
+    name: "Acesso individual válido",
+    login: "ACESSO-INDIVIDUAL",
+    accessCode: "Codigo-123",
+    accountType: "PRODUTOR",
+    producerIds: [first.id]
+  }).account;
+
+  assert.deepEqual(valid.producerIds, [first.id]);
+  assert.equal(database.getDb().prepare("select count(*) as total from access_accounts where login like 'ACESSO-%'").get().total, 1);
+});

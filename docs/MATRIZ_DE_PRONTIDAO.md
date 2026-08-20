@@ -4,7 +4,7 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 
 ## Situação executiva
 
-- Prontidão geral calculada no produto: **86%**.
+- Prontidão geral calculada no produto: **87%**.
 - Aplicação e operação local: prontas para homologação controlada.
 - Produção: bloqueada até existir um projeto Supabase exclusivo do PAF.
 - Android: APK de piloto gerado; instalação e uso em aparelho físico ainda precisam de aceite.
@@ -23,6 +23,7 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 | Visita do técnico com GPS e foto | Validado de ponta a ponta | `tests/e2e/pilot-journey.spec.js` |
 | Múltiplas visitas sem internet | Validado com fechamento e reabertura | `tests/e2e/offline-sync.spec.js` |
 | Relatório sem internet | Validado com fechamento e reabertura | `tests/e2e/offline-sync.spec.js` |
+| Múltiplos relatórios sem internet | Validado inclusive após limpar o formulário | `tests/e2e/offline-sync.spec.js` |
 | Sincronização sem duplicidade | Validado com tentativas repetidas | `tests/e2e/offline-sync.spec.js` |
 | Reabertura do PWA totalmente offline | Validado para técnico e produtor | `tests/pwa/offline-shell.spec.js` |
 | Sessão offline com expiração | Validado em 72 horas | `tests/pwa/offline-shell.spec.js` |
@@ -30,7 +31,10 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 | Motorista, veículo e abastecimento | Validado pela interface e banco | `tests/e2e/fuel-workflow.spec.js` |
 | Build, tipos e testes de unidade | Validado | `npm run check` |
 | Dependências vulneráveis de alta severidade | Nenhuma encontrada | `npm run audit` |
-| RLS, escopo e migrations Supabase | Preparado para CI | `.github/workflows/ci.yml` e `supabase/tests/paf_access_scope_test.sql` |
+| Isolamento de perfis e rotas proibidas | Validado no navegador e API | `tests/e2e/profile-boundaries.spec.js` |
+| Revogação imediata de sessão bloqueada | Validada pela interface | `tests/e2e/admin-crud.spec.js` |
+| Criação atômica de acesso e vínculo | Validada localmente e no PostgreSQL | `20260820101500_paf_atomic_access_creation.sql` |
+| RLS, escopo e migrations Supabase | Validado em CI | `.github/workflows/ci.yml` e `supabase/tests/paf_access_scope_test.sql` |
 | Atividade preventiva do Supabase Free | Implementada | Cron diário da Vercel em `/api/health` e `tests/deployment-config.test.mjs` |
 | APK Android | Gerado e assinado para depuração | `releases/VilaNova-PAF-piloto-debug.apk` |
 | Supabase de produção | Bloqueado | Projeto exclusivo ainda não criado/vinculado |

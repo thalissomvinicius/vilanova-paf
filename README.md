@@ -78,7 +78,7 @@ As permissões são verificadas na API. Alterar a URL não concede acesso a outr
 2. O administrador cria acessos e define os vínculos de produtores.
 3. O técnico entra em `/tecnico`, confirma produtor e propriedade e registra a visita.
 4. GPS e até três fotos comprimidas podem ser anexados.
-5. Sem internet, relatório e múltiplas visitas permanecem no aparelho com estado visível; o último perfil autenticado pode ser reaberto offline por até 72 horas.
+5. Sem internet, múltiplos relatórios e visitas permanecem no aparelho com estado visível; o último perfil autenticado pode ser reaberto offline por até 72 horas.
 6. Quando a conexão volta, a fila reenvia cada item automaticamente com identificador idempotente.
 7. O administrador acompanha visita, relatório, pendências e evidências no painel.
 
@@ -101,7 +101,7 @@ npm run test:e2e
 Remove-Item Env:PAF_E2E_ADMIN_PASSWORD
 ```
 
-O comando `npm run check` executa testes do núcleo, da configuração de deploy, typecheck da Edge Function e build web. A suíte E2E também simula perda total de conexão, fechamento da tela, retorno da internet e retries para comprovar que relatórios e múltiplas visitas não somem nem duplicam. `npm run test:pwa` valida o build de produção e confirma que o aplicativo de campo reabre sem internet depois do primeiro uso.
+O comando `npm run check` executa testes do núcleo, da configuração de deploy, typecheck da Edge Function e build web. A suíte E2E também simula perda total de conexão, fechamento da tela, retorno da internet e retries para comprovar que múltiplos relatórios e visitas não somem nem duplicam. Ela valida ainda isolamento de perfis, revogação de sessão e ausência de erros de console ou API `5xx` nas áreas principais. `npm run test:pwa` valida o build de produção e confirma que o aplicativo de campo reabre sem internet depois do primeiro uso.
 
 O deploy agenda uma consulta diária em `/api/health` para registrar atividade real no Supabase Free. O teste `test:deployment` protege essa configuração contra remoções acidentais. A rotina reduz o risco de pausa, mas somente um plano pago oferece garantia oficial contra suspensão por inatividade.
 
