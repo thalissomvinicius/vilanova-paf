@@ -101,7 +101,9 @@ npm run test:e2e
 Remove-Item Env:PAF_E2E_ADMIN_PASSWORD
 ```
 
-O comando `npm run check` executa testes do núcleo, typecheck da Edge Function e build web. A suíte E2E também simula perda total de conexão, fechamento da tela, retorno da internet e retries para comprovar que relatórios e múltiplas visitas não somem nem duplicam. `npm run test:pwa` valida o build de produção e confirma que o aplicativo de campo reabre sem internet depois do primeiro uso.
+O comando `npm run check` executa testes do núcleo, da configuração de deploy, typecheck da Edge Function e build web. A suíte E2E também simula perda total de conexão, fechamento da tela, retorno da internet e retries para comprovar que relatórios e múltiplas visitas não somem nem duplicam. `npm run test:pwa` valida o build de produção e confirma que o aplicativo de campo reabre sem internet depois do primeiro uso.
+
+O deploy agenda uma consulta diária em `/api/health` para registrar atividade real no Supabase Free. O teste `test:deployment` protege essa configuração contra remoções acidentais. A rotina reduz o risco de pausa, mas somente um plano pago oferece garantia oficial contra suspensão por inatividade.
 
 ## Banco Supabase
 

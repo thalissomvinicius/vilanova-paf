@@ -108,6 +108,14 @@ npm run test:pwa
 
 O GitHub Actions valida a aplicação, as jornadas administrativas e de campo, a abertura offline do PWA, recria um Supabase limpo, reaplica todas as migrations e executa os testes transacionais do banco.
 
+## Continuidade no plano gratuito
+
+- A Vercel chama `/api/health` diariamente às `09:17 UTC` (`06:17` em Brasília).
+- A rota executa uma consulta real e somente leitura em `paf_producers`, suficiente para registrar atividade sem criar dados artificiais.
+- O agendamento começa a funcionar somente depois que o novo Supabase PAF estiver vinculado e o deploy estiver saudável.
+- A equipe deve conferir semanalmente o retorno de `/api/health` e os avisos enviados pelo Supabase ao proprietário do projeto.
+- Essa rotina reduz o risco de suspensão por baixa atividade, mas o plano Free continua sem garantia de disponibilidade. Somente o plano Pro elimina oficialmente a pausa automática por inatividade.
+
 ## Checklist de entrada em produção
 
 - [ ] Senha administrativa temporária alterada.

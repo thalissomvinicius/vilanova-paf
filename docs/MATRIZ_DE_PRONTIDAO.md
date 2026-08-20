@@ -31,6 +31,7 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 | Build, tipos e testes de unidade | Validado | `npm run check` |
 | Dependências vulneráveis de alta severidade | Nenhuma encontrada | `npm run audit` |
 | RLS, escopo e migrations Supabase | Preparado para CI | `.github/workflows/ci.yml` e `supabase/tests/paf_access_scope_test.sql` |
+| Atividade preventiva do Supabase Free | Implementada | Cron diário da Vercel em `/api/health` e `tests/deployment-config.test.mjs` |
 | APK Android | Gerado e assinado para depuração | `releases/VilaNova-PAF-piloto-debug.apk` |
 | Supabase de produção | Bloqueado | Projeto exclusivo ainda não criado/vinculado |
 | Teste em Android físico | Pendente | Requer aparelho conectado e roteiro de aceite |
@@ -49,3 +50,4 @@ Atualizada em 20 de agosto de 2026. Esta matriz separa o que está validado no c
 - Um produtor usa uma propriedade principal; múltiplas propriedades ficam para a etapa posterior ao piloto.
 - Exportações executivas em PDF/Excel e notificações automáticas ficam para a evolução após o aceite.
 - A sessão offline contém apenas o último perfil autenticado e dados operacionais necessários; nenhum código de acesso é armazenado pelo cache da aplicação.
+- A rotina diária reduz a chance de pausa por baixa atividade no Free, mas não constitui SLA nem substitui o plano Pro para operação crítica.
