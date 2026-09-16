@@ -1,8 +1,12 @@
 import React from "react";
 
+export function DeveloperSignature() {
+  return <span>Desenvolvido por <strong>Vinicius Dev</strong></span>;
+}
+
 export function DeveloperFooter() {
   return <footer className="developer-footer" role="contentinfo" aria-label="Créditos de desenvolvimento">
-    <span>Desenvolvido por <strong>Vinicius Dev</strong></span>
+    <DeveloperSignature />
   </footer>;
 }
 

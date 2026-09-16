@@ -12,16 +12,18 @@
 .land-ui textarea { resize: vertical; min-height: 120px; }
 .land-ui .primary-button { background: #c93d00; border-color: #c93d00; color: #fff; }
 .land-ui .primary-button:hover:not(:disabled) { background: #a93200; }
-.land-public { min-height: 100dvh; background: #f5f7f3; }
-.land-public-header { min-height: 106px; padding: 12px max(24px, calc((100% - 1020px) / 2)); display: flex; align-items: center; gap: 18px; background: #fff; border-bottom: 1px solid #e3e9e2; }
-.land-public-header img { width: 82px; height: 82px; object-fit: contain; }
-.land-public-header strong { display: block; font-size: 23px; }
-.land-public-header span { font-size: 12px; color: #526050; }
+.land-public { min-height: 100dvh; display: flex; flex-direction: column; background: #fff; color: var(--app-ink); }
+.land-public-header { min-height: 90px; padding: 16px max(24px, calc((100% - 960px) / 2)); display: flex; align-items: center; gap: 14px; background: #fff; border-bottom: 1px solid var(--app-line); }
+.land-public-header img { width: 52px; height: 52px; object-fit: contain; flex-shrink: 0; }
+.land-public-header strong { display: block; font-size: 21px; font-weight: 600; color: var(--brand-deep); }
+.land-public-header span { font-size: 11px; color: var(--app-muted); }
 .land-public-header .land-header-note { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.land-public-main { max-width: 860px; margin: 0 auto; padding: 42px 24px 32px; }
-.land-intro { max-width: 670px; margin-bottom: 28px; }
-.land-intro h1 { font-size: 34px; line-height: 1.15; margin-bottom: 16px; color: #24471b; }
-.land-intro > p:last-child { color: #526050; font-size: 16px; }
+.land-public-main { width: 100%; max-width: 768px; flex: 1; margin: 0 auto; padding: 40px 24px; }
+.land-intro { max-width: 650px; margin-bottom: 28px; }
+.land-intro .eyebrow { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--app-muted); margin-bottom: 12px; }
+.land-intro .eyebrow::before { content: ''; width: 22px; height: 3px; background: var(--brand-orange); }
+.land-intro h1 { font-size: 30px; font-weight: 600; line-height: 1.3; margin-bottom: 12px; color: var(--brand-deep); }
+.land-intro > p:last-child { color: var(--app-muted); font-size: 14px; line-height: 1.7; }
 .land-tabs { display: flex; gap: 0; border-bottom: 1px solid #bbc9b8; margin-bottom: 28px; }
 .land-tabs button { display: flex; align-items: center; justify-content: center; gap: 9px; padding: 14px 18px; color: #526050; border: 0; border-bottom: 3px solid transparent; background: transparent; font: inherit; font-size: 14px; font-weight: 650; }
 .land-tabs button[aria-selected=true] { color: #9b3000; border-color: #c93d00; }
@@ -40,7 +42,14 @@
 .land-notice { display: flex; gap: 12px; padding: 20px 0; border-top: 1px solid #dfe6da; margin-top: 36px; color: #526050; }
 .land-notice svg { flex-shrink: 0; color: #2f6f18; }
 .land-notice p { margin: 0; font-size: 12px; }
-.land-public-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 24px max(24px, calc((100% - 1020px) / 2)); background: #172318; color: #fff; font-size: 12px; }
+.land-public-footer { padding: 24px max(24px, calc((100% - 960px) / 2)) max(20px, env(safe-area-inset-bottom)); background: var(--brand-deep); color: #fff; font-size: 12px; }
+.land-footer-identity { display: flex; align-items: center; gap: 28px; }
+.land-footer-identity img { width: 170px; height: 72px; object-fit: contain; filter: brightness(0) invert(1); }
+.land-footer-identity strong, .land-footer-identity span { display: block; }
+.land-footer-identity strong { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.land-footer-identity span { color: #cfddd4; font-size: 11px; line-height: 1.8; }
+.land-footer-credit { border-top: 1px solid #40584f; margin-top: 18px; padding-top: 16px; color: #cfddd4; font-size: 11px; text-align: right; }
+.land-footer-credit strong { color: #fff; font-weight: 500; }
 .land-data { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 0 0 24px; padding-bottom: 24px; border-bottom: 1px solid #e3e9e2; }
 .land-data dt { font-size: 12px; color: #526050; }
 .land-data dd { margin: 3px 0 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
@@ -115,3 +124,66 @@
   .land-dialog-header, .land-dialog-body { padding: 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .land-ui *, .land-ui *::before, .land-ui *::after { animation: none !important; transition: none !important; } }
+
+/* Public intake uses spacious touch controls without changing the staff tables. */
+.land-public .land-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--app-line); border-radius: 8px; background: var(--app-surface-soft); margin-bottom: 28px; }
+.land-public .land-tabs button { min-width: 0; min-height: 48px; padding: 10px 12px; border: 0; border-radius: 5px; font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--app-muted); }
+.land-public .land-tabs button svg { flex-shrink: 0; }
+.land-public .land-tabs button[aria-selected=true] { background: var(--brand-deep); color: #fff; }
+.land-public .land-steps { gap: 16px; margin-bottom: 24px; }
+.land-public .land-steps li { padding: 0 0 14px; border-bottom: 2px solid var(--app-line); font-size: 12px; color: var(--app-muted); }
+.land-public .land-steps li.is-current { border-color: var(--brand-orange); color: var(--brand-deep); }
+.land-public .land-steps li.is-complete { border-color: var(--brand-green); color: var(--brand-deep); }
+.land-public .land-steps .is-current > span, .land-public .land-steps .is-complete > span { background: var(--brand-deep); border-color: var(--brand-deep); color: #fff; }
+.land-public h2 { color: var(--brand-deep); font-size: 21px; font-weight: 600; line-height: 1.4; scroll-margin-top: 20px; }
+.land-public .land-fields { gap: 20px; }
+.land-public label { font-size: 13px; font-weight: 500; gap: 9px; }
+.land-public input:not([type=checkbox]) { min-height: 52px; font-size: 16px; border-color: var(--app-line-strong); color: var(--app-ink); background: #fff; }
+.land-public input::placeholder { font-size: 14px; color: var(--app-muted); opacity: 1; }
+.land-public input:focus-visible { outline: 2px solid var(--brand-green); outline-offset: 2px; }
+.land-public .land-actions button { min-height: 48px; font-size: 14px; }
+.land-public .primary-button, .land-public .primary-button:disabled { background: var(--brand-deep); border-color: var(--brand-deep); color: #fff; }
+.land-public .primary-button:hover:not(:disabled) { background: #2e5741; border-color: #2e5741; }
+.land-public .land-form-footer { padding-top: 20px; margin-top: 24px; }
+.land-public .land-data { gap: 20px; border-color: var(--app-line); }
+.land-public .land-data > div:first-child { grid-column: 1 / -1; }
+.land-public .land-data dt { color: var(--app-muted); font-size: 12px; }
+.land-public .land-data dd { color: var(--brand-deep); font-size: 15px; font-weight: 500; }
+.land-public .land-consent { padding: 16px 0; border-block: 1px solid var(--app-line); line-height: 1.7; gap: 12px; }
+.land-public .land-consent input { accent-color: var(--brand-deep); }
+.land-public .land-muted { line-height: 1.7; color: var(--app-muted); }
+.land-public .land-notice { margin-top: 32px; padding: 24px 0 0; color: var(--app-muted); border-color: var(--app-line); }
+.land-public .land-notice p { line-height: 1.8; }
+.land-public .land-protocol { color: var(--brand-deep); background: var(--app-surface-soft); border: 1px dashed var(--app-line-strong); font-size: 18px; line-height: 1.7; text-align: center; user-select: all; }
+.land-public .land-tracking-result { border-color: var(--app-line); }
+.land-public .land-status { white-space: normal; }
+.land-public .land-text-button { color: var(--brand-deep); font-size: 13px; }
+@media (max-width: 700px) {
+  .land-public-header { min-height: 80px; padding: 14px 20px; gap: 12px; }
+  .land-public-header img { width: 44px; height: 44px; }
+  .land-public-header strong { font-size: 19px; }
+  .land-public-header span { font-size: 10px; }
+  .land-public-main { padding: 28px 20px 32px; }
+  .land-intro h1 { font-size: 25px; }
+  .land-intro > p:last-child { font-size: 13px; }
+  .land-public .land-tabs button { font-size: 12px; min-height: 54px; gap: 7px; padding: 10px 8px; }
+  .land-public .land-steps { gap: 12px; }
+  .land-public .land-steps li { font-size: 11px; gap: 8px; }
+  .land-public h2 { font-size: 20px; }
+  .land-public .land-form-footer { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; }
+  .land-public .land-form-footer .land-muted { text-align: right; }
+  .land-public .land-actions { display: flex; width: 100%; gap: 10px; }
+  .land-public .land-actions button { flex: 1 1 130px; width: auto; }
+  .land-public .land-data { grid-template-columns: minmax(0,1fr); gap: 14px; }
+  .land-public .land-data > div { padding-bottom: 12px; border-bottom: 1px solid #edf0e9; }
+  .land-public .land-protocol { padding: 16px 12px; font-size: 16px; }
+  .land-public-footer { padding: 22px 20px max(20px, env(safe-area-inset-bottom)); }
+  .land-footer-identity { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .land-footer-identity img { width: 160px; height: 68px; margin-left: -20px; }
+  .land-footer-credit { text-align: center; margin-top: 24px; }
+}
+@media (max-width: 360px) {
+  .land-public-main { padding-inline: 16px; }
+  .land-public .land-tabs button { flex-direction: column; gap: 6px; }
+  .land-intro h1 { font-size: 23px; }
+}

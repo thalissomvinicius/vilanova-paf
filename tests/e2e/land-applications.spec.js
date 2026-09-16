@@ -27,11 +27,32 @@ async function mock(page) {
   return bodies;
 }
 
-for (const width of [1440, 390]) {
+test('public tabs support keyboard navigation and retain unsent fields', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await mock(page);
+  await page.goto('/analise-de-area');
+  await page.getByLabel('Nome completo', { exact: true }).fill('Pessoa de Teste');
+  const create = page.getByRole('tab', { name: 'Nova solicitação' });
+  const track = page.getByRole('tab', { name: 'Consultar andamento' });
+  await create.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(track).toBeFocused();
+  await expect(track).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByLabel('Protocolo', { exact: true })).toBeVisible();
+  await page.keyboard.press('Home');
+  await expect(create).toBeFocused();
+  await expect(page.getByLabel('Nome completo', { exact: true })).toHaveValue('Pessoa de Teste');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+for (const width of [1440, 390, 320]) {
   test(`public registration, receipt and consultation at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 }); const bodies = await mock(page);
     await page.goto('/analise-de-area');
     await expect(page.getByRole('heading', { name: 'Análise de áreas para plantio de dendê' })).toBeVisible();
+    await expect(page.locator('.land-footer-credit')).toHaveText('Desenvolvido por Vinicius Dev');
+    expect(await page.getByLabel('Nome completo', { exact: true }).evaluate(el => getComputedStyle(el).fontSize)).toBe('16px');
+    await page.screenshot({ path: `verification/land-intake-${width}.png`, fullPage: true });
     await page.getByLabel('Nome completo', { exact: true }).fill('Pessoa de Teste');
     await page.getByLabel('CPF', { exact: true }).fill('52998224725');
     await page.getByLabel('Data de nascimento').fill('1980-01-10');
@@ -39,12 +60,18 @@ for (const width of [1440, 390]) {
     await page.getByRole('button', { name: 'Continuar' }).click();
     await page.getByLabel('Município da área').fill('Tomé-Açu');
     await page.getByLabel('Comunidade da área').fill('Comunidade de teste');
+    await page.getByRole('button', { name: 'Voltar', exact: true }).click();
+    await expect(page.getByLabel('Nome completo', { exact: true })).toHaveValue('Pessoa de Teste');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByLabel('Comunidade da área')).toHaveValue('Comunidade de teste');
     await page.getByRole('button', { name: 'Continuar' }).click();
     await page.getByRole('checkbox').check();
     await page.screenshot({ path: `verification/land-form-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Enviar solicitação' }).click();
     await expect(page.getByRole('heading', { name: 'Solicitação recebida' })).toBeVisible();
     expect(bodies).toHaveLength(1); expect(bodies[0].consent).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await page.screenshot({ path: `verification/land-receipt-${width}.png`, fullPage: true });
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Salvar protocolo' }).click(); expect((await download).suggestedFilename()).toContain('PAF-');
     await page.getByRole('tab', { name: 'Consultar andamento' }).click();
     await page.getByLabel('Protocolo', { exact: true }).fill(record().protocol);

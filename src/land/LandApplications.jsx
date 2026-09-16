@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, FileSearch, Loader2, RefreshCw, Search, ShieldCheck, Sprout, X } from 'lucide-react';
 import { LAND_STATUSES, validCpf } from '../../supabase/functions/paf-api/land-domain.mjs';
+import { DeveloperSignature } from '../ui/Workspace';
 import './land.css';
 
 const date = value => new Date(value).toLocaleString('pt-BR');
@@ -28,19 +29,29 @@ function History({ request, history = [], staff = false }) {
 
 export function LandPublic() {
   const [tab, setTab] = useState('new');
+  function switchTab(event) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 'new' : event.key === 'End' ? 'track' : tab === 'new' ? 'track' : 'new';
+    setTab(next);
+    document.getElementById(`land-${next}-tab`)?.focus();
+  }
   return <div className="land-public land-ui">
-    <header className="land-public-header"><img src="/brand/paf-logo-official.png" alt="PAF Agricultura Familiar" /><div><strong>PAF VNA</strong><span>Vila Nova Agroindustrial</span></div><span className="land-header-note"><ShieldCheck size={17} /> Canal de solicitações</span></header>
+    <header className="land-public-header"><img src="/brand/paf-symbol-official.png" alt="PAF Agricultura Familiar" /><div><strong>PAF VNA</strong><span>Programa de Agricultura Familiar</span></div><span className="land-header-note"><ShieldCheck size={17} /> Canal de solicitações</span></header>
     <main className="land-public-main">
       <div className="land-intro"><p className="eyebrow">AGRICULTURA FAMILIAR</p><h1>Análise de áreas para plantio de dendê</h1><p>Cadastre seu interesse e acompanhe o parecer da equipe PAF sobre a possibilidade de encaminhamento para financiamento.</p></div>
-      <div className="land-tabs" role="tablist" aria-label="Solicitações de análise">
-        <button role="tab" aria-selected={tab === 'new'} aria-controls="land-new" id="land-new-tab" onClick={() => setTab('new')}><Sprout size={18} /> Nova solicitação</button>
-        <button role="tab" aria-selected={tab === 'track'} aria-controls="land-track" id="land-track-tab" onClick={() => setTab('track')}><FileSearch size={18} /> Consultar andamento</button>
+      <div className="land-tabs" role="tablist" aria-label="Solicitações de análise" onKeyDown={switchTab}>
+        <button role="tab" tabIndex={tab === 'new' ? 0 : -1} aria-selected={tab === 'new'} aria-controls="land-new" id="land-new-tab" onClick={() => setTab('new')}><Sprout size={18} /> Nova solicitação</button>
+        <button role="tab" tabIndex={tab === 'track' ? 0 : -1} aria-selected={tab === 'track'} aria-controls="land-track" id="land-track-tab" onClick={() => setTab('track')}><FileSearch size={18} /> Consultar andamento</button>
       </div>
       <section id="land-new" role="tabpanel" aria-labelledby="land-new-tab" hidden={tab !== 'new'}><ApplicationForm /></section>
       <section id="land-track" role="tabpanel" aria-labelledby="land-track-tab" hidden={tab !== 'track'}><Tracking active={tab === 'track'} /></section>
       <aside className="land-notice"><ShieldCheck size={21} /><p>Esta solicitação é uma análise preliminar da área. Não representa aprovação ou garantia de financiamento. A decisão de crédito cabe à instituição financeira.</p></aside>
     </main>
-    <footer className="land-public-footer"><strong>Vila Nova Agroindustrial</strong><span>Programa de Agricultura Familiar</span></footer>
+    <footer className="land-public-footer">
+      <div className="land-footer-identity"><img src="/brand/logo-vilanova.png" alt="Vila Nova Agroindustrial" /><div><strong>Vila Nova Agroindustrial</strong><span>Programa de Agricultura Familiar</span><span>Tomé-Açu / PA</span></div></div>
+      <div className="land-footer-credit"><DeveloperSignature /></div>
+    </footer>
   </div>;
 }
 
@@ -55,7 +66,8 @@ function ApplicationForm() {
   const heading = useRef(null);
   const form = useRef(null);
   const locked = useRef(false);
-  useEffect(() => { if (step) heading.current?.focus(); }, [step]);
+  const previousStep = useRef(step);
+  useEffect(() => { if (step !== previousStep.current) heading.current?.focus(); previousStep.current = step; }, [step]);
   function field(name, label, props = {}) {
     return <label>{label}<input name={name} value={values[name]} onChange={event => setValues(old => ({ ...old, [name]: event.target.value }))} required {...props} /></label>;
   }
@@ -72,7 +84,7 @@ function ApplicationForm() {
   }
   if (receipt) return <div className="land-receipt" role="status"><CheckCircle2 size={38} /><h2>Solicitação recebida</h2><p>Guarde seu protocolo. Ele será necessário, junto com o CPF, para consultar o andamento.</p><strong className="land-protocol">{receipt.protocol}</strong><Status value={receipt.status} /><div className="land-actions"><button className="primary-button" onClick={() => saveFile(`PAF VNA - Protocolo de solicitação\n${receipt.protocol}\nRecebida em: ${date(receipt.created_at)}\nConsulte com seu CPF em: ${location.origin}/analise-de-area\nGuarde este comprovante em local seguro.`, `protocolo-${receipt.protocol}.txt`)}><Download size={18} /> Salvar protocolo</button><button className="icon-text-button" onClick={async () => { try { await navigator.clipboard.writeText(receipt.protocol); setCopied(true); } catch { setError('Não foi possível copiar. Use Salvar protocolo.'); } }}>{copied ? <Check size={18} /> : <Copy size={18} />}{copied ? 'Copiado' : 'Copiar'}</button></div><Message>{error}</Message><button className="land-text-button" onClick={() => { setReceipt(null); setStep(0); setError(''); setCopied(false); }}>Cadastrar outra pessoa</button></div>;
   return <form ref={form} onSubmit={submit} className="land-form">
-    <ol className="land-steps" aria-label="Etapas do cadastro">{['Dados pessoais', 'Localização', 'Conferência'].map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined} className={index <= step ? 'is-current' : ''}><span>{index < step ? <Check size={15} /> : index + 1}</span>{label}</li>)}</ol>
+    <ol className="land-steps" aria-label="Etapas do cadastro">{['Dados pessoais', 'Localização', 'Conferência'].map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined} className={index === step ? 'is-current' : index < step ? 'is-complete' : ''}><span>{index < step ? <Check size={15} /> : index + 1}</span>{label}</li>)}</ol>
     <h2 ref={heading} tabIndex={-1}>{['Quem solicita a análise?', 'Onde fica a área?', 'Confira antes de enviar'][step]}</h2>
     <div className="land-fields" key={step}>
       {step === 0 && <>{field('fullName', 'Nome completo', { autoComplete: 'name', minLength: 5, maxLength: 160 })}{field('cpf', 'CPF', { inputMode: 'numeric', placeholder: '000.000.000-00', maxLength: 14 })}{field('birthDate', 'Data de nascimento', { type: 'date', min: '1900-01-01', max: new Date().toISOString().slice(0, 10), autoComplete: 'bday' })}{field('phone', 'Telefone de contato com DDD (opcional)', { type: 'tel', autoComplete: 'tel', required: false, maxLength: 16, placeholder: '(91) 99999-9999' })}</>}
