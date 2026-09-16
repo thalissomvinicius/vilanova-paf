@@ -52,6 +52,7 @@ import {
 import "./styles.css";
 import "./redesign.css";
 import "./experience.css";
+import "./access.css";
 import { AnimatedValue } from "./components/AnimatedValue";
 
 const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.FieldWorkspace })));
@@ -793,6 +794,7 @@ function AdminLogin({ onLogin }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (loading) return;
     if (username.trim().toUpperCase().startsWith("PAF-")) {
       setError("Esse login é de produtor. Use o Portal PAF para preencher relatórios.");
       return;
@@ -829,96 +831,25 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <main className="login-screen premium-login-screen">
-      <section className="login-shell" aria-label="Acesso ao PAF System">
-        <aside className="login-story">
-          <div className="login-story-topline">
-            <img className="login-company-logo" src={BRAND_ASSETS.vilaLogoOnDark} alt="Vila Nova Agroindustrial" />
-            <span>PAF System</span>
-          </div>
-
-          <div className="login-story-copy">
-            <p className="eyebrow">Agricultura familiar conectada</p>
-            <h1>PAF VNA</h1>
-            <p>
-              Do campo à decisão, uma comunidade conectada.
-            </p>
-          </div>
-
-          <div className="login-story-card">
-            <img className="login-paf-logo" src={BRAND_ASSETS.pafIcon} alt="PAF Agricultura Familiar" />
-            <div>
-              <strong>Programa de Agricultura Familiar</strong>
-              <span>Cadeia produtiva organizada com tecnologia, proximidade e rastreabilidade.</span>
-            </div>
-          </div>
-
-          <div className="login-benefit-grid">
-            <span>
-              <ShieldCheck size={16} />
-              Acesso seguro
-            </span>
-            <span>
-              <ScanLine size={16} />
-              Rastreabilidade
-            </span>
-            <span>
-              <Leaf size={16} />
-              Sustentabilidade
-            </span>
-          </div>
-        </aside>
-
-        <section className="login-panel premium-login-panel">
-          <div className="login-brand">
-            <div className="brand-mark login-brand-mark">
-              <img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" />
-            </div>
-            <div>
-              <p className="eyebrow">Equipe Vila Nova</p>
-              <h2>Painel administrativo</h2>
-              <p className="login-panel-text">Gerencie o PAF com clareza, segurança e controle operacional.</p>
-            </div>
-          </div>
-
-          <form className="login-form" onSubmit={submit}>
-            <Field label="Login">
-              <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
-            </Field>
-
-            <Field label="Senha">
-              <div className="input-with-button">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
-                <button type="button" title={showPassword ? "Ocultar senha" : "Mostrar senha"} onClick={() => setShowPassword((value) => !value)}>
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </Field>
-
-            {error && <p className="form-error">{error}</p>}
-
-            <button className="primary-button wide" type="submit" disabled={loading}>
-              {loading ? <Loader2 className="spin" size={18} /> : <LogIn size={18} />}
-              Entrar
-            </button>
-            <a className="login-switch" href="/produtor">
-              Sou produtor e quero preencher relatório
-            </a>
-            <a className="login-switch" href="/tecnico">
-              Acesso da equipe técnica
-            </a>
-            <a className="login-switch" href="/campo">
-              PAF VNA · Coletas do aplicativo <ArrowRight size={15} />
-            </a>
+    <main className="paf-access">
+      <img className="paf-access-scene" src="/brand/login-field-team.webp" alt="" fetchPriority="high" />
+      <header className="paf-access-header">
+        <div className="paf-access-identity"><img src={BRAND_ASSETS.pafIcon} alt="PAF Agricultura Familiar" /><div><h1>PAF VNA</h1><span>Programa de Agricultura Familiar</span></div></div>
+        <img className="paf-access-company" src={BRAND_ASSETS.vilaLogo} alt="Vila Nova Agroindustrial" />
+      </header>
+      <div className="paf-access-center">
+        <section className="paf-access-form premium-login-panel" aria-labelledby="paf-access-title">
+          <div className="paf-access-heading"><span className="paf-access-kicker"><span /> PORTAL DE GESTÃO</span><h2 id="paf-access-title">Painel administrativo</h2><p>O campo conectado. As decisões, mais próximas.</p></div>
+          <form onSubmit={submit} aria-busy={loading}>
+            <div className="paf-access-field"><label htmlFor="paf-access-user">Login</label><div className="paf-access-input"><UserRound size={19} /><input id="paf-access-user" value={username} onChange={event => setUsername(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Seu usuário ou e-mail" required disabled={loading} /></div></div>
+            <div className="paf-access-field"><label htmlFor="paf-access-password">Senha</label><div className="paf-access-input"><KeyRound size={19} /><input id="paf-access-password" type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" placeholder="Digite sua senha" required disabled={loading} aria-describedby={error ? 'paf-access-error' : undefined} /><button className="paf-access-reveal" type="button" title={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></div>
+            {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
+            <button className="paf-access-submit primary-button" type="submit" disabled={loading}><span>{loading ? 'Conectando...' : 'Entrar'}</span>{loading ? <Loader2 className="spin" size={20} /> : <ArrowRight size={20} />}</button>
           </form>
+          <nav className="paf-access-portals" aria-label="Outros acessos"><a href="/produtor"><Sprout size={20} /><span>Produtor<small>Meus relatórios</small></span><ArrowRight size={15} /></a><a href="/tecnico"><UserCheck size={20} /><span>Equipe técnica<small>Visitas e acompanhamento</small></span><ArrowRight size={15} /></a><a href="/campo"><ScanLine size={20} /><span>Aplicativo PAF<small>Coletas de campo</small></span><ArrowRight size={15} /></a></nav>
         </section>
-      </section>
+      </div>
+      <footer className="paf-access-footer"><span><ShieldCheck size={15} /> Acesso restrito à equipe autorizada</span><span>Vila Nova Agroindustrial <span aria-hidden="true">·</span> Tomé-Açu / PA</span></footer>
     </main>
   );
 }
