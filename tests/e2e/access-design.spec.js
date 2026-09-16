@@ -20,10 +20,14 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
   await expect(page.getByRole('alert')).toHaveText('Login ou senha inválidos.');
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeEnabled();
   expect(await page.locator('.paf-access-scene').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
-  for (const [width, height] of [[320, 568], [390, 844], [1366, 660], [1920, 1080]]) {
+  for (const [width, height] of [[320, 568], [390, 844], [1366, 660], [1536, 720], [1920, 720], [1920, 1080]]) {
     await page.setViewportSize({ width, height });
     const panel = await page.locator('.paf-access-form').boundingBox();
     const scene = await page.locator('.paf-access-scene').boundingBox();
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(height + 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+    expect(scene.height).toBeGreaterThan(0);
+    expect(await page.locator('.paf-access-scene').evaluate(el => getComputedStyle(el).objectFit)).toBe('contain');
     if (width > 800) expect(scene.x + scene.width).toBeLessThanOrEqual(panel.x);
     else expect(scene.y + scene.height).toBeLessThanOrEqual(panel.y);
     expect(panel.x).toBeGreaterThanOrEqual(0); expect(panel.x + panel.width).toBeLessThanOrEqual(width);
