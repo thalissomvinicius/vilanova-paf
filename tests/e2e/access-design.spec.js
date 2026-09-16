@@ -9,7 +9,7 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
     await route.fulfill({ status: 401, json: { error: 'Login ou senha inválidos.' } });
   });
   await page.goto('/admin/analises-areas');
-  await expect(page.locator('.paf-access-scene')).toHaveAttribute('src', '/brand/login-equipe-vilanova.png');
+  await expect(page.locator('.paf-access-scene')).toHaveAttribute('src', '/brand/login-equipe-expandida.png');
   await page.getByLabel('Senha', { exact: true }).fill('incorrect-test-password');
   await page.getByRole('button', { name: 'Mostrar senha', exact: true }).click();
   await expect(page.getByLabel('Senha', { exact: true })).toHaveAttribute('type', 'text');
@@ -27,7 +27,7 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeLessThanOrEqual(height + 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
     expect(scene.height).toBeGreaterThan(0);
-    expect(await page.locator('.paf-access-scene').evaluate(el => getComputedStyle(el).objectFit)).toBe('contain');
+    expect(await page.locator('.paf-access-scene').evaluate(el => getComputedStyle(el).objectFit)).toBe('cover');
     if (width > 800) expect(scene.x + scene.width).toBeLessThanOrEqual(panel.x);
     else expect(scene.y + scene.height).toBeLessThanOrEqual(panel.y);
     expect(panel.x).toBeGreaterThanOrEqual(0); expect(panel.x + panel.width).toBeLessThanOrEqual(width);
