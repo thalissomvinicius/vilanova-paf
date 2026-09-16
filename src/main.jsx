@@ -832,7 +832,7 @@ function AdminLogin({ onLogin }) {
 
   return (
     <main className="paf-access">
-      <img className="paf-access-scene" src="/brand/login-field-team.webp" alt="" fetchPriority="high" />
+      <div className="paf-access-visual"><img className="paf-access-scene" src="/brand/login-equipe-vilanova.png" alt="Equipe Vila Nova em uma plantação de palma" fetchPriority="high" /><div className="paf-access-caption"><span>VILA NOVA AGROINDUSTRIAL</span><p>Do campo à decisão,<br />uma comunidade conectada.</p></div></div>
       <header className="paf-access-header">
         <div className="paf-access-identity"><img src={BRAND_ASSETS.pafIcon} alt="PAF Agricultura Familiar" /><div><h1>PAF VNA</h1><span>Programa de Agricultura Familiar</span></div></div>
         <img className="paf-access-company" src={BRAND_ASSETS.vilaLogo} alt="Vila Nova Agroindustrial" />

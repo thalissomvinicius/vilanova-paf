@@ -9,6 +9,7 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
     await route.fulfill({ status: 401, json: { error: 'Login ou senha inválidos.' } });
   });
   await page.goto('/admin/analises-areas');
+  await expect(page.locator('.paf-access-scene')).toHaveAttribute('src', '/brand/login-equipe-vilanova.png');
   await page.getByLabel('Senha', { exact: true }).fill('incorrect-test-password');
   await page.getByRole('button', { name: 'Mostrar senha', exact: true }).click();
   await expect(page.getByLabel('Senha', { exact: true })).toHaveAttribute('type', 'text');
@@ -22,6 +23,9 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
   for (const [width, height] of [[320, 568], [390, 844], [1366, 660], [1920, 1080]]) {
     await page.setViewportSize({ width, height });
     const panel = await page.locator('.paf-access-form').boundingBox();
+    const scene = await page.locator('.paf-access-scene').boundingBox();
+    if (width > 800) expect(scene.x + scene.width).toBeLessThanOrEqual(panel.x);
+    else expect(scene.y + scene.height).toBeLessThanOrEqual(panel.y);
     expect(panel.x).toBeGreaterThanOrEqual(0); expect(panel.x + panel.width).toBeLessThanOrEqual(width);
     await page.getByRole('button', { name: 'Entrar', exact: true }).scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeInViewport();
