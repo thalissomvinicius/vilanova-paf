@@ -53,6 +53,8 @@ import "./styles.css";
 import "./redesign.css";
 import "./experience.css";
 import "./access.css";
+import "./ui/system.css";
+import { WorkspaceNavigation, SectionHeading, DashboardSkeleton } from "./ui/Workspace";
 import { AnimatedValue } from "./components/AnimatedValue";
 
 const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.FieldWorkspace })));
@@ -786,7 +788,7 @@ function AdminGate() {
 }
 
 function AdminLogin({ onLogin }) {
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1832,9 +1834,9 @@ function AdminDashboard({ user, onLogout }) {
 
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <img className="sidebar-paf-logo" src={BRAND_ASSETS.pafLogo} alt="PAF Agricultura Familiar" />
+          <img className="sidebar-paf-logo" src="/brand/logo-vilanova.png" alt="Vila Nova Agroindustrial" />
           <div>
-            <p className="eyebrow">Vila Nova</p>
+            <p className="eyebrow">Agricultura familiar</p>
             <strong>PAF VNA</strong>
           </div>
           <button className="sidebar-close" type="button" title="Fechar menu" onClick={() => setSidebarOpen(false)}>
@@ -1842,27 +1844,9 @@ function AdminDashboard({ user, onLogout }) {
           </button>
         </div>
 
-        <p className="sidebar-section-label">Operação</p>
-        <nav className="side-nav" aria-label="Navegação">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                className={`side-nav-item ${activeView === item.id ? "active" : ""}`}
-                key={item.id}
-                aria-current={activeView === item.id ? "page" : undefined}
-                type="button"
-                onClick={() => navigateAdmin(item)}
-              >
-                <Icon size={18} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
+        <WorkspaceNavigation items={NAV_ITEMS} activeId={activeView} onNavigate={navigateAdmin} />
 
         <div className="sidebar-footer">
-          <img src={BRAND_ASSETS.vilaLogoOnDark} alt="Vila Nova Agroindustrial" />
           <div className="sidebar-user">
             <span>Usuário conectado</span>
             <strong>{user.name}</strong>
@@ -1899,7 +1883,7 @@ function AdminDashboard({ user, onLogout }) {
               <Menu size={21} />
             </button>
             <div>
-              <p className="eyebrow">PAF / Gestão rural</p>
+              <p className="eyebrow">Vila Nova / Gestão rural</p>
               <h1>{viewTitle}</h1>
             </div>
           </div>
@@ -1975,6 +1959,7 @@ function AdminDashboard({ user, onLogout }) {
         </header>
 
         {activeView === "dashboard" && (
+          loading && !summary ? <DashboardSkeleton /> :
           <ExecutiveDashboard
             documentSummary={documentSummary}
             documents={documents}
@@ -2344,20 +2329,6 @@ function ExecutiveDashboard({
           </div>
         </div>
 
-        <div className="executive-ring-card">
-          <div className="executive-ring" style={{ "--ring-angle": `${responseRate * 3.6}deg` }}>
-            <strong>{responseRate}%</strong>
-            <span>retorno</span>
-          </div>
-          <div>
-            <strong>{reported}</strong>
-            <span>produtores com relatório</span>
-          </div>
-          <div>
-            <strong>{pending}</strong>
-            <span>produtores pendentes</span>
-          </div>
-        </div>
       </div>
 
       <section className="executive-kpi-grid">
@@ -2369,13 +2340,7 @@ function ExecutiveDashboard({
 
       <section className="executive-chart-grid">
         <article className="dashboard-card status-chart-card">
-          <div className="dashboard-card-heading">
-            <div>
-              <p className="eyebrow">Pipeline PAF</p>
-              <h3>Status dos produtores</h3>
-            </div>
-            <span>{total} cadastros</span>
-          </div>
+          <SectionHeading eyebrow="Pipeline PAF" title="Status dos produtores"><span>{total} cadastros</span></SectionHeading>
           <div className="status-bars">
             {statusEntries.map((entry, index) => (
               <div className="chart-bar-row" key={entry.label} style={{ "--bar": `${clampPercent(entry.value, maxStatus)}%`, "--delay": `${index * 80}ms` }}>
@@ -2391,14 +2356,9 @@ function ExecutiveDashboard({
         </article>
 
         <article className="dashboard-card agency-chart-card">
-          <div className="dashboard-card-heading">
-            <div>
-              <p className="eyebrow">Território</p>
-              <h3>Agências com maior base</h3>
-            </div>
-            <MapPin size={20} />
-          </div>
+          <SectionHeading eyebrow="Território" title="Agências com maior base"><MapPin size={20} /></SectionHeading>
           <div className="agency-bars">
+            {!agencyEntries.length && <p className="chart-empty">Nenhuma agência registrada.</p>}
             {agencyEntries.map((entry, index) => (
               <div className="agency-row" key={entry.label} style={{ "--bar": `${clampPercent(entry.value, maxAgency)}%`, "--delay": `${index * 90}ms` }}>
                 <strong>{entry.label}</strong>
@@ -2410,13 +2370,7 @@ function ExecutiveDashboard({
         </article>
 
         <article className="dashboard-card activity-chart-card">
-          <div className="dashboard-card-heading">
-            <div>
-              <p className="eyebrow">Movimento</p>
-              <h3>Relatórios dos últimos 7 dias</h3>
-            </div>
-            <span>{reportsToday} hoje</span>
-          </div>
+          <SectionHeading eyebrow="Movimento" title="Relatórios dos últimos 7 dias"><span>{reportsToday} hoje</span></SectionHeading>
           <div className="spark-bars" aria-label="Relatórios recebidos nos últimos 7 dias">
             {dailyReports.map((entry, index) => (
               <span key={entry.label} style={{ "--bar": `${clampPercent(entry.value, maxDaily)}%`, "--delay": `${index * 70}ms` }}>
@@ -2427,14 +2381,19 @@ function ExecutiveDashboard({
           </div>
         </article>
 
-        <article className="dashboard-card flow-card">
-          <div className="dashboard-card-heading">
-            <div>
-              <p className="eyebrow">Operação integrada</p>
-              <h3>Fluxo do campo à conclusão</h3>
+        <article className="dashboard-card response-chart-card">
+          <SectionHeading eyebrow="Participação" title="Retorno dos produtores"><span>{responseRate}% da base</span></SectionHeading>
+          <div className="executive-ring-card">
+            <div className="executive-ring" style={{ "--ring-angle": `${responseRate * 3.6}deg` }}>
+              <strong>{responseRate}%</strong><span>retorno</span>
             </div>
-            <Truck size={20} />
+            <div><strong>{reported}</strong><span>produtores com relatório</span></div>
+            <div><strong>{pending}</strong><span>produtores pendentes</span></div>
           </div>
+        </article>
+
+        <article className="dashboard-card flow-card">
+          <SectionHeading eyebrow="Operação integrada" title="Fluxo do campo à conclusão"><Truck size={20} /></SectionHeading>
           <div className="flow-steps">
             {flow.map((step, index) => (
               <div className="flow-step" key={step.label} style={{ "--flow": `${step.pct}%`, "--delay": `${index * 90}ms` }}>
