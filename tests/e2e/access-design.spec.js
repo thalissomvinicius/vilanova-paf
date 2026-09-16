@@ -9,7 +9,7 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
     await route.fulfill({ status: 401, json: { error: 'Login ou senha inválidos.' } });
   });
   await page.goto('/admin/analises-areas');
-  await expect(page.locator('.paf-access-scene')).toHaveAttribute('src', '/brand/login-equipe-expandida.png');
+  await expect(page.locator('.paf-access-scene')).toHaveAttribute('src', '/brand/login-equipe-dende-realista.png');
   await page.getByLabel('Senha', { exact: true }).fill('incorrect-test-password');
   await page.getByRole('button', { name: 'Mostrar senha', exact: true }).click();
   await expect(page.getByLabel('Senha', { exact: true })).toHaveAttribute('type', 'text');
