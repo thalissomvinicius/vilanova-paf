@@ -18,6 +18,7 @@ import {
 } from "./core.ts";
 import { PafRepository } from "./repository.ts";
 import { importFuelWorkbook } from "./fuel-import.ts";
+import { landRoute, SupabaseLandStore } from "./land-routes.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -99,6 +100,13 @@ type RouteContext = {
 async function route(context: RouteContext): Promise<Response | null> {
   const { request, method, path, url, ipAddress, repository, db } = context;
   const filters = Object.fromEntries(url.searchParams.entries());
+
+  if (path.startsWith('/api/land/')) {
+    const auth = path.startsWith('/api/land/admin') ? await authenticate(repository, request) : null;
+    return landRoute({ request, path, store: new SupabaseLandStore(db), admin: isAdmin(auth),
+      actor: auth ? `${auth.account.name} (${auth.account.field_profile_id || auth.account.id})` : '',
+      ip: ipAddress, salt: SERVICE_ROLE_KEY });
+  }
 
   if (method === "GET" && path === "/api/health") {
     const { error } = await db.from("paf_producers").select("id", { head: true, count: "exact" }).limit(1);

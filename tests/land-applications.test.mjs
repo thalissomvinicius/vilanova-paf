@@ -1,0 +1,59 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { LocalLandStore } from '../server/land-store.mjs';
+import { landRoute } from '../supabase/functions/paf-api/land-routes.mjs';
+import { validateSubmission, validCpf, newProtocol } from '../supabase/functions/paf-api/land-domain.mjs';
+
+const payload = () => ({ clientId: crypto.randomUUID(), fullName: 'Pessoa de Teste', cpf: '529.982.247-25', birthDate: '1980-01-10', municipality: 'Tomé-Açu', community: 'Comunidade de teste', phone: '91999999999', consent: true });
+const call = (store, path, method, body, admin = false) => landRoute({ store, path, request: new Request(`https://test.local${path}`, { method, ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) }), admin, actor: 'Analista de teste', ip: 'test', salt: 'test-only' });
+
+test('validates CPF, dates, lengths and consent at the boundary', () => {
+  assert.equal(validCpf('52998224725'), true);
+  assert.equal(validCpf('11111111111'), false);
+  assert.equal(validCpf('52998224724'), false);
+  for (const invalid of [{ cpf: '123' }, { birthDate: '2025-02-30' }, { birthDate: '2999-01-01' }, { consent: false }, { fullName: 'Ab' }, { municipality: '' }, { phone: '123' }, { website: 'bot' }]) assert.throws(() => validateSubmission({ ...payload(), ...invalid }));
+  assert.match(newProtocol(), /^PAF-(?:[0-9A-F]{6}-){3}[0-9A-F]{6}$/);
+});
+
+test('public submission is idempotent and consultation does not reveal personal data', async () => {
+  const store = new LocalLandStore(':memory:'); const body = payload();
+  try {
+    const first = await call(store, '/api/land/requests', 'POST', body); assert.equal(first.status, 201);
+    const result = (await first.json()).request;
+    const second = await call(store, '/api/land/requests', 'POST', body);
+    assert.equal((await second.json()).request.protocol, result.protocol);
+    const collision = await call(store, '/api/land/requests', 'POST', { ...body, fullName: 'Outra Pessoa' }); assert.equal(collision.status, 409);
+    const wrong = await call(store, '/api/land/lookup', 'POST', { protocol: result.protocol, cpf: '00000000000' }); assert.equal(wrong.status, 404);
+    const found = await call(store, '/api/land/lookup', 'POST', { protocol: result.protocol, cpf: body.cpf });
+    const output = (await found.json()).request;
+    for (const key of ['cpf', 'full_name', 'phone', 'birth_date', 'client_id', 'fingerprint']) assert.equal(key in output, false);
+    assert.equal(store.list({ status: '', search: '', page: 1 }).total, 1);
+    assert.equal(store.list({ status: '', search: '529.982.247-25', page: 1 }).total, 1);
+  } finally { store.db.close(); }
+});
+
+test('only administrators review, history is atomic, stale versions cannot overwrite', async () => {
+  const store = new LocalLandStore(':memory:');
+  try {
+    await call(store, '/api/land/requests', 'POST', payload());
+    const row = store.list({ status: '', search: '', page: 1 }).requests[0];
+    const path = `/api/land/admin/requests/${row.id}`;
+    const review = { status: 'POSSIVEL_FINANCIAMENTO', comment: 'Área com possibilidade de encaminhamento para avaliação bancária.', version: 1 };
+    for (const [url, method, body] of [[path, 'GET'], [path, 'PATCH', review], ['/api/land/admin/requests', 'GET']]) assert.equal((await call(store, url, method, body)).status, 401);
+    assert.equal((await call(store, path, 'PATCH', { ...review, comment: '' }, true)).status, 400);
+    assert.equal((await call(store, path, 'PATCH', review, true)).status, 200);
+    assert.equal((await call(store, path, 'PATCH', review, true)).status, 409);
+    assert.equal(store.history(row.id).length, 1);
+    assert.equal(store.get(row.id).version, 2);
+    const lookup = await call(store, '/api/land/lookup', 'POST', { protocol: row.protocol, cpf: row.cpf });
+    const found = (await lookup.json()).request;
+    assert.equal(found.status, review.status); assert.equal(found.history[0].comment, review.comment); assert.equal('actor' in found.history[0], false);
+    assert.equal(store.list({ status: 'EM_ANALISE', search: '', page: 1 }).total, 0);
+  } finally { store.db.close(); }
+});
+
+test('rate limits persist in the store and fail closed', async () => {
+  const store = new LocalLandStore(':memory:');
+  try { for (let i = 0; i < 12; i++) await call(store, '/api/land/requests', 'POST', {}); assert.equal((await call(store, '/api/land/requests', 'POST', payload())).status, 429); }
+  finally { store.db.close(); }
+});

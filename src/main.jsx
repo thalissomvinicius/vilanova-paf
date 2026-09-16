@@ -56,6 +56,8 @@ import { AnimatedValue } from "./components/AnimatedValue";
 
 const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.FieldWorkspace })));
 const AccessHub = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.AccessHub })));
+const LandPublic = lazy(() => import('./land/LandApplications').then(module => ({ default: module.LandPublic })));
+const LandAdmin = lazy(() => import('./land/LandApplications').then(module => ({ default: module.LandAdmin })));
 
 const AREA_STATUSES = [
   "Sem alteração",
@@ -178,6 +180,7 @@ const ACCESS_TYPES = [
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Painel", path: "/admin/dashboard", icon: BarChart3 },
+  { id: "land", label: "Análise de áreas", path: "/admin/analises-areas", icon: Sprout },
   { id: "producers", label: "Produtores", path: "/admin/produtores", icon: Users },
   { id: "registrations", label: "Cadastros", path: "/admin/cadastros", icon: Plus },
   { id: "logins", label: "Acessos", path: "/admin/acessos", icon: KeyRound },
@@ -192,6 +195,7 @@ const NAV_ITEMS = [
 const ADMIN_ROUTE_BY_PATH = {
   "/admin": "dashboard",
   "/admin/dashboard": "dashboard",
+  "/admin/analises-areas": "land",
   "/admin/produtores": "producers",
   "/admin/cadastros": "registrations",
   "/admin/acessos": "logins",
@@ -344,6 +348,8 @@ if (manifestLink) {
 
 function App() {
   const path = window.location.pathname;
+
+  if (path === '/analise-de-area' || path === '/analise-de-area/') return <LandPublic />;
 
   if (path.startsWith("/campo")) {
     return <><ConnectionStatus /><FieldWorkspace embedded={false} mode={path === '/campo/acessos' ? 'accesses' : 'collections'} /></>;
@@ -1872,6 +1878,7 @@ function AdminDashboard({ user, onLogout }) {
 
   const viewTitle = {
     dashboard: "Visão geral",
+    land: "Análise de áreas",
     producers: "Produtores e áreas",
     registrations: "Cadastros",
     logins: "Gestão de acessos",
@@ -1999,7 +2006,7 @@ function AdminDashboard({ user, onLogout }) {
                 <Download size={18} />
                 Documentos
               </button>
-            ) : activeView === "registrations" || activeView === "logins" || activeView === "field" ? null : (
+            ) : activeView === "registrations" || activeView === "logins" || activeView === "field" || activeView === "land" ? null : (
               <>
                 <button className="icon-text-button" type="button" onClick={() => exportProducers()}>
                   <Download size={18} />
@@ -2011,7 +2018,7 @@ function AdminDashboard({ user, onLogout }) {
                 </button>
               </>
             )}
-            {activeView !== "field" && <button className="icon-text-button" type="button" onClick={() => {
+            {activeView !== "field" && activeView !== "land" && <button className="icon-text-button" type="button" onClick={() => {
               if (activeView === "reports") refreshReports();
               else if (activeView === "fuel") refreshFuel();
               else if (activeView === "visits") refreshVisits();
@@ -2060,6 +2067,7 @@ function AdminDashboard({ user, onLogout }) {
         )}
 
         {activeView === "field" && <Suspense fallback={<div className="field-loading" role="status">Abrindo coletas de campo...</div>}><FieldWorkspace /></Suspense>}
+        {activeView === 'land' && <Suspense fallback={<div role="status">Abrindo solicitações...</div>}><LandAdmin api={fetchJson} /></Suspense>}
 
         {activeView === "producers" && (
           <>

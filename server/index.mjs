@@ -63,6 +63,8 @@ import {
   verifyProducerCredentials
 } from "./db.mjs";
 import { importFuelWorkbook } from "./importFuelExcel.mjs";
+import { LocalLandStore } from './land-store.mjs';
+import { landRoute } from '../supabase/functions/paf-api/land-routes.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -78,6 +80,19 @@ const loginAttempts = new Map();
 
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
+
+const landStore = new LocalLandStore();
+app.use('/api/land', async (req, res, next) => {
+  try {
+    const auth = readAuth(req);
+    const response = await landRoute({
+      request: new Request(`http://localhost${req.originalUrl}`, { method: req.method, headers: { 'content-type': 'application/json' }, ...(['GET', 'HEAD'].includes(req.method) ? {} : { body: JSON.stringify(req.body || {}) }) }),
+      path: req.originalUrl.split('?')[0], store: landStore, admin: auth?.role === 'admin', actor: process.env.PAF_ADMIN_USER || 'Administrador local', ip: req.ip, salt: 'local-development'
+    });
+    if (!response) return next();
+    res.status(response.status).set(Object.fromEntries(response.headers)).send(await response.text());
+  } catch { res.status(500).json({ error: 'Não foi possível acessar as solicitações.' }); }
+});
 
 cleanupExpiredSessions();
 setInterval(cleanupExpiredSessions, 60 * 60 * 1000).unref();
