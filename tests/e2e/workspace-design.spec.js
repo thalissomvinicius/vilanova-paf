@@ -30,6 +30,9 @@ for (const width of [390, 768, 1024, 1440]) {
     for (const path of paths) {
       await page.goto(`/admin/${path}`);
       await expect(page.locator('.admin-main')).toBeVisible();
+      if (path === 'dashboard') await expect(page.locator('.executive-kpi')).toHaveCount(4);
+      if (path === 'analises-areas') await expect(page.locator('.land-admin')).toBeVisible();
+      if (path === 'coletas') await expect(page.getByRole('heading', { name: 'Acesso da equipe PAF' })).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
       expect(await page.locator('body').evaluate(el => getComputedStyle(el).fontFamily)).toContain('Poppins');
