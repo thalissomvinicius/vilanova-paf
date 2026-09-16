@@ -6,9 +6,13 @@ Plataforma da Vila Nova Agroindustrial para administrar o Programa de Agricultur
 
 - Ambiente local: funcional e coberto por testes automatizados.
 - PWA: disponível para administração, técnico e produtor, inclusive com reabertura offline.
-- Android: APK de piloto instalado e homologado no Android 15/API 35.
-- Produção: frontend na Vercel, API e PostgreSQL no projeto Supabase exclusivo `paf-vna`.
-- Prontidão técnica para iniciar o piloto de campo: **100%**.
+- Android/Capacitor: homologação histórica do piloto em agosto; o VNA Comunidade é outro aplicativo, em Expo/React Native.
+- Producao: frontend na Vercel; API, PostgreSQL e contas da equipe no Supabase PAF `eeivxgbbslnojbbpzweb`.
+- Integração VNA Comunidade: coletas, filtros, evidências e revisão em `/admin/coletas` ou `/campo`. Banco do app restaurado em 16/09/2026.
+- Acessos: administradores do app podem entrar no painel com e-mail e senha. Gestao de equipe em Acessos > Equipe e aplicativo, ou `/campo/acessos`.
+- Os 364 cadastros do painel antigo foram preservados no banco PAF. As tabelas operacionais e cadastrais do app mantem seus identificadores; nao houve fusao automatica de pessoas com CPF conflitante. Homologacao fisica do APK ainda pendente.
+
+Veja [consolidacao do banco](docs/CONSOLIDACAO-2026-09-16.md). A identidade da equipe usa o e-mail e a senha do aplicativo; o login administrativo anterior foi preservado como compatibilidade.
 
 ## Tecnologias
 

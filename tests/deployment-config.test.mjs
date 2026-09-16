@@ -19,3 +19,23 @@ test("mantém consulta diária de atividade do Supabase", () => {
     "A rota de saúde precisa executar uma consulta real ao banco."
   );
 });
+
+test('field integration CSP allows only the field API and its private signed images', () => {
+  const header = vercelConfig.headers.find(rule => rule.source === '/(.*)').headers.find(header => header.key === 'Content-Security-Policy').value;
+  const directives = Object.fromEntries(header.split(';').map(value => value.trim().split(/\s+/)).map(([name, ...values]) => [name, values]));
+  const origin = 'https://eeivxgbbslnojbbpzweb.supabase.co';
+  assert.ok(directives['connect-src'].includes(origin));
+  assert.ok(directives['img-src'].includes(origin));
+  assert.deepEqual(directives['script-src'], ["'self'"]);
+  assert.ok(!directives['connect-src'].includes('*'));
+  assert.ok(vercelConfig.rewrites.find(rule => rule.source === '/api/:path*').destination.startsWith(`${origin}/functions/v1/paf-api/`));
+  assert.ok(!JSON.stringify(vercelConfig).includes('auisvfbloziehspzpnvg'));
+});
+
+test('development watcher excludes locked release artifacts and generated data', async () => {
+  const source = await readFile(new URL('../server/index.mjs', import.meta.url), 'utf8');
+  assert.match(source, /hmr:\s*\{\s*server\s*\}/);
+  for (const path of ['**/releases/**', '**/*.apk', '**/data/**', '**/logs/**']) {
+    assert.ok(source.includes(JSON.stringify(path)), `Watcher must ignore ${path}`);
+  }
+});

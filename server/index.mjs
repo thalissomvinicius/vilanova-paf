@@ -754,7 +754,11 @@ if (isProduction) {
 } else {
   const vite = await createViteServer({
     root: rootDir,
-    server: { middlewareMode: true },
+    server: {
+      middlewareMode: true,
+      hmr: { server },
+      watch: { ignored: ["**/releases/**", "**/verification/**", "**/test-results/**", "**/logs/**", "**/data/**", "**/*.apk", "**/*.sqlite", "**/*.sqlite-*"] }
+    },
     appType: "spa"
   });
 

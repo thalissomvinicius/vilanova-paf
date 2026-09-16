@@ -134,12 +134,12 @@ test.describe.serial("isolamento de perfis e sessão", () => {
     await page.getByLabel("Login").fill("admin");
     await page.getByLabel("Senha").fill(password);
     await page.getByRole("button", { name: "Entrar" }).click();
-    await expect(page.getByRole("heading", { name: "Prontidão do sistema" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Prontidão do sistema" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
 
     for (const [path, title] of [
-      ["/admin/dashboard", "Painel PAF 2026/2027"],
+      ["/admin/dashboard", "Visão geral"],
       ["/admin/produtores", "Produtores e áreas"],
       ["/admin/cadastros", "Cadastros"],
       ["/admin/acessos", "Gestão de acessos"],
@@ -160,7 +160,7 @@ test.describe.serial("isolamento de perfis e sessão", () => {
     await page.goto("/tecnico");
     await expect(page.getByRole("heading", { name: "Acesso técnico" })).toBeVisible();
     await page.goto("/admin");
-    await expect(page.getByRole("heading", { name: "Prontidão do sistema" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
 
     await page.request.post("/api/auth/logout");
     await page.reload();

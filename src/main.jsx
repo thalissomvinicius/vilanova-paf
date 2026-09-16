@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { Capacitor } from "@capacitor/core";
@@ -51,6 +51,11 @@ import {
 } from "lucide-react";
 import "./styles.css";
 import "./redesign.css";
+import "./experience.css";
+import { AnimatedValue } from "./components/AnimatedValue";
+
+const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.FieldWorkspace })));
+const AccessHub = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.AccessHub })));
 
 const AREA_STATUSES = [
   "Sem alteração",
@@ -177,6 +182,7 @@ const NAV_ITEMS = [
   { id: "registrations", label: "Cadastros", path: "/admin/cadastros", icon: Plus },
   { id: "logins", label: "Acessos", path: "/admin/acessos", icon: KeyRound },
   { id: "reports", label: "Relatórios", path: "/admin/relatorios", icon: ClipboardList },
+  { id: "field", label: "Coletas de campo", path: "/admin/coletas", icon: ScanLine },
   { id: "fuel", label: "Abastecimento", path: "/admin/abastecimento", icon: Droplets },
   { id: "visits", label: "Visitas", path: "/admin/visitas", icon: UserCheck },
   { id: "tasks", label: "Pendências", path: "/admin/pendencias", icon: Check },
@@ -191,6 +197,7 @@ const ADMIN_ROUTE_BY_PATH = {
   "/admin/acessos": "logins",
   "/admin/logins": "logins",
   "/admin/relatorios": "reports",
+  "/admin/coletas": "field",
   "/admin/abastecimento": "fuel",
   "/admin/visitas": "visits",
   "/admin/pendencias": "tasks",
@@ -211,14 +218,6 @@ const MAX_DOCUMENT_UPLOAD_BYTES = 6 * 1024 * 1024;
 const TECHNICAL_SESSION_CACHE_KEY = "paf:technical-session-cache";
 const PRODUCER_SESSION_CACHE_KEY = "paf:producer-session-cache";
 const SYNC_RETRY_INTERVAL_MS = 15000;
-const PILOT_READINESS = [
-  { label: "Núcleo e cadastros", value: 100, status: "Validado", detail: "Produtores, propriedades, técnicos, acessos e vínculos" },
-  { label: "Dashboard e gestão", value: 100, status: "Validado", detail: "Indicadores, filtros e acompanhamento" },
-  { label: "Operação de campo", value: 100, status: "Validado", detail: "GPS, fotos, filas múltiplas offline e sincronização automática" },
-  { label: "Integração remota", value: 100, status: "Validado", detail: "Supabase PAF migrado, Edge Function publicada e produção homologada" },
-  { label: "Qualidade do piloto", value: 100, status: "Validado", detail: "APK instalado no Android, três perfis e jornadas de campo aprovados" }
-];
-const PILOT_READINESS_PERCENT = Math.round(PILOT_READINESS.reduce((sum, stage) => sum + stage.value, 0) / PILOT_READINESS.length);
 
 const BRAND_ASSETS = {
   vilaLogo: "/brand/logo-vilanova.png",
@@ -345,6 +344,10 @@ if (manifestLink) {
 
 function App() {
   const path = window.location.pathname;
+
+  if (path.startsWith("/campo")) {
+    return <><ConnectionStatus /><FieldWorkspace embedded={false} mode={path === '/campo/acessos' ? 'accesses' : 'collections'} /></>;
+  }
 
   if (path.startsWith("/tecnico")) {
     return <><ConnectionStatus /><TechnicalPortal /></>;
@@ -793,6 +796,19 @@ function AdminLogin({ onLogin }) {
     setError("");
 
     try {
+      if (username.includes('@')) {
+        const { fieldSignIn, fieldSignOut } = await import('./field/client');
+        const profile = await fieldSignIn(username, password);
+        if (profile?.deve_trocar_senha) { window.location.assign('/campo'); return; }
+        if (!['admin', 'super_admin'].includes(profile?.papel)) {
+          await fieldSignOut();
+          throw new Error('Este perfil acessa a equipe de campo, nao a administracao.');
+        }
+        const result = await fetchJson('/api/auth/me');
+        if (!result.user) throw new Error('Seu perfil nao esta autorizado neste painel.');
+        onLogin(result.user);
+        return;
+      }
       const data = await fetchJson("/api/auth/admin-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -817,9 +833,9 @@ function AdminLogin({ onLogin }) {
 
           <div className="login-story-copy">
             <p className="eyebrow">Agricultura familiar conectada</p>
-            <h1>Gestão técnica do campo à análise.</h1>
+            <h1>PAF Gestão Rural</h1>
             <p>
-              Um ambiente seguro para acompanhar produtores, relatórios, visitas, documentos e indicadores em tempo real.
+              Do campo à decisão, uma comunidade conectada.
             </p>
           </div>
 
@@ -890,6 +906,9 @@ function AdminLogin({ onLogin }) {
             </a>
             <a className="login-switch" href="/tecnico">
               Acesso da equipe técnica
+            </a>
+            <a className="login-switch" href="/campo">
+              VNA Comunidade · Coletas do aplicativo <ArrowRight size={15} />
             </a>
           </form>
         </section>
@@ -1343,6 +1362,8 @@ function AdminDashboard({ user, onLogout }) {
   }
 
   async function logout() {
+    await import("./field/client").then(({ fieldSignOut }) => fieldSignOut()).catch(() => null);
+    window.sessionStorage.removeItem("paf-field-dashboard");
     await fetchJson("/api/auth/logout", { method: "POST" }).catch(() => null);
     onLogout();
   }
@@ -1850,11 +1871,12 @@ function AdminDashboard({ user, onLogout }) {
   }
 
   const viewTitle = {
-    dashboard: "Painel PAF 2026/2027",
+    dashboard: "Visão geral",
     producers: "Produtores e áreas",
     registrations: "Cadastros",
     logins: "Gestão de acessos",
     reports: "Triagem de relatórios",
+    field: "Coletas do VNA Comunidade",
     fuel: "Controle de abastecimento",
     visits: "Visitas técnicas",
     tasks: "Pendências internas",
@@ -1979,7 +2001,7 @@ function AdminDashboard({ user, onLogout }) {
                 <Download size={18} />
                 Documentos
               </button>
-            ) : activeView === "registrations" || activeView === "logins" ? null : (
+            ) : activeView === "registrations" || activeView === "logins" || activeView === "field" ? null : (
               <>
                 <button className="icon-text-button" type="button" onClick={() => exportProducers()}>
                   <Download size={18} />
@@ -1991,7 +2013,7 @@ function AdminDashboard({ user, onLogout }) {
                 </button>
               </>
             )}
-            <button className="icon-text-button" type="button" onClick={() => {
+            {activeView !== "field" && <button className="icon-text-button" type="button" onClick={() => {
               if (activeView === "reports") refreshReports();
               else if (activeView === "fuel") refreshFuel();
               else if (activeView === "visits") refreshVisits();
@@ -2012,7 +2034,7 @@ function AdminDashboard({ user, onLogout }) {
             }}>
               <RefreshCcw size={18} />
               Atualizar
-            </button>
+            </button>}
           </div>
         </header>
 
@@ -2038,6 +2060,8 @@ function AdminDashboard({ user, onLogout }) {
             visits={visits}
           />
         )}
+
+        {activeView === "field" && <Suspense fallback={<div className="field-loading" role="status">Abrindo coletas de campo...</div>}><FieldWorkspace /></Suspense>}
 
         {activeView === "producers" && (
           <>
@@ -2072,6 +2096,7 @@ function AdminDashboard({ user, onLogout }) {
         )}
 
         {activeView === "logins" && (
+          <Suspense fallback={<div role="status">Abrindo acessos...</div>}><AccessHub>
           <LoginWorkspace
             accesses={accesses}
             createAccess={createAccessRegistration}
@@ -2082,6 +2107,7 @@ function AdminDashboard({ user, onLogout }) {
             saveAccess={saveAccessRegistration}
             technicians={technicians}
           />
+          </AccessHub></Suspense>
         )}
 
         {activeView === "reports" && (
@@ -2201,6 +2227,15 @@ function ChangePasswordModal({ open, onClose, onChanged }) {
 
     setSubmitting(true);
     try {
+      if (window.sessionStorage.getItem('paf-field-dashboard')) {
+        const { fieldClient, changeFieldPassword } = await import('./field/client');
+        const { data } = await fieldClient.auth.getUser();
+        const { error } = await fieldClient.auth.signInWithPassword({ email: data.user?.email ?? '', password: currentPassword });
+        if (error) throw new Error('A senha atual nao confere.');
+        await changeFieldPassword(newPassword);
+        onChanged();
+        return;
+      }
       await fetchJson("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2352,10 +2387,10 @@ function ExecutiveDashboard({
     <section className="executive-dashboard" aria-label="Painel executivo PAF">
       <div className="executive-hero">
         <div className="executive-hero-copy">
-          <p className="eyebrow">Visão executiva em tempo real</p>
-          <h2>Indicadores do PAF para decisão rápida.</h2>
+          <p className="eyebrow">Programa de Agricultura Familiar</p>
+          <h2>Panorama da operação</h2>
           <p>
-            Acompanhe retorno dos produtores, evolução do campo, risco operacional e gargalos da equipe técnica em uma tela só.
+            {total} produtores na base · {formatArea(totalArea)} hectares acompanhados
           </p>
           <div className="executive-hero-actions">
             <button className="primary-button" type="button" onClick={() => onNavigate("reports")}>
@@ -2365,6 +2400,9 @@ function ExecutiveDashboard({
             <button className="icon-text-button" type="button" onClick={() => onNavigate("visits")}>
               <CalendarDays size={17} />
               Agenda técnica
+            </button>
+            <button className="icon-text-button" type="button" onClick={() => onNavigate("field")}>
+              <ScanLine size={17} /> Coletas do aplicativo
             </button>
           </div>
         </div>
@@ -2386,13 +2424,11 @@ function ExecutiveDashboard({
       </div>
 
       <section className="executive-kpi-grid">
-        <ExecutiveKpi label="Produtores ativos" value={total} helper={`${summary?.propertyCount ?? total} propriedades · ${formatArea(totalArea)} ha`} icon={<Users size={20} />} tone="green" />
-        <ExecutiveKpi label="Recebidos hoje" value={reportsToday} helper={`${reportSummary?.total ?? reports.length} relatórios no total`} icon={<Activity size={20} />} tone="orange" />
-        <ExecutiveKpi label="Visita técnica" value={needsVisit} helper={`${visitSummary?.scheduled ?? 0} programadas`} icon={<MapPin size={20} />} tone="sand" />
-        <ExecutiveKpi label="Rendimento da base" value={`${productiveRate}%`} helper={`${planted + approved} entre plantados/aprovados`} icon={<TreePalm size={20} />} tone="earth" />
+        <ExecutiveKpi label="Produtores cadastrados" value={total} helper={`${Number.isFinite(summary?.propertyCount) ? `${summary.propertyCount} propriedades · ` : ""}${formatArea(totalArea)} ha`} icon={<Users size={20} />} tone="green" />
+        <ExecutiveKpi label="Relatórios hoje" value={reportsToday} helper={`${reportSummary?.total ?? reports.length} relatórios no portal`} icon={<Activity size={20} />} tone="orange" />
+        <ExecutiveKpi label="Produtores para visita" value={needsVisit} helper={`${visitSummary?.scheduled ?? 0} visitas programadas`} icon={<MapPin size={20} />} tone="sand" />
+        <ExecutiveKpi label="Aprovados / plantados" value={`${productiveRate}%`} helper={`${planted + approved} produtores na base`} icon={<TreePalm size={20} />} tone="earth" />
       </section>
-
-      <PilotReadinessPanel onNavigate={onNavigate} />
 
       <section className="executive-chart-grid">
         <article className="dashboard-card status-chart-card">
@@ -2446,7 +2482,7 @@ function ExecutiveDashboard({
           </div>
           <div className="spark-bars" aria-label="Relatórios recebidos nos últimos 7 dias">
             {dailyReports.map((entry, index) => (
-              <span key={entry.label} style={{ "--bar": `${Math.max(8, clampPercent(entry.value, maxDaily))}%`, "--delay": `${index * 70}ms` }}>
+              <span key={entry.label} style={{ "--bar": `${clampPercent(entry.value, maxDaily)}%`, "--delay": `${index * 70}ms` }}>
                 <i>{entry.value}</i>
                 <small>{entry.label}</small>
               </span>
@@ -2571,45 +2607,13 @@ function ExecutiveDashboard({
   );
 }
 
-function PilotReadinessPanel({ onNavigate }) {
-  return (
-    <section className="pilot-readiness" aria-label={`Prontidão do piloto: ${PILOT_READINESS_PERCENT}%`}>
-      <div className="pilot-readiness-score">
-        <div className="pilot-readiness-ring" style={{ "--readiness-angle": `${PILOT_READINESS_PERCENT * 3.6}deg` }}>
-          <strong>{PILOT_READINESS_PERCENT}%</strong>
-          <span>pronto</span>
-        </div>
-        <div>
-          <p className="eyebrow">Primeiro teste em campo</p>
-          <h3>Prontidão do sistema</h3>
-          <p>O fluxo principal está funcional. A prioridade agora é validar banco remoto, celulares reais e os três perfis.</p>
-        </div>
-      </div>
-      <div className="pilot-stage-list">
-        {PILOT_READINESS.map((stage) => (
-          <div className="pilot-stage" key={stage.label}>
-            <div><strong>{stage.label}</strong><span className={stage.value >= 85 ? "ready" : stage.value >= 70 ? "validation" : "pending"}>{stage.status}</span></div>
-            <p>{stage.detail}</p>
-            <div className="pilot-stage-track"><span style={{ width: `${stage.value}%` }} /></div>
-            <em>{stage.value}%</em>
-          </div>
-        ))}
-      </div>
-      <div className="pilot-readiness-actions">
-        <button className="primary-button" type="button" onClick={() => onNavigate("logins")}><KeyRound size={17} /> Preparar acessos</button>
-        <button className="icon-text-button" type="button" onClick={() => onNavigate("visits")}><UserCheck size={17} /> Validar visitas</button>
-      </div>
-    </section>
-  );
-}
-
 function ExecutiveKpi({ helper, icon, label, tone, value }) {
   return (
     <article className={`executive-kpi ${tone}`}>
       <span>{icon}</span>
       <div>
         <p>{label}</p>
-        <strong>{value}</strong>
+        <strong><AnimatedValue value={value} /></strong>
         <small>{helper}</small>
       </div>
     </article>
@@ -7236,7 +7240,7 @@ function TechnicalLogin({ onLogin }) {
           </div>
           <div className="login-story-copy">
             <p className="eyebrow">Acompanhamento de campo</p>
-            <h1>Visitas registradas por quem está próximo do produtor.</h1>
+            <h1>PAF Equipe técnica</h1>
             <p>Consulte os produtores vinculados, registre visitas e mantenha o histórico técnico atualizado.</p>
           </div>
           <div className="login-benefit-grid">
@@ -7837,7 +7841,7 @@ function ProducerLogin({ onLogin }) {
 
           <div className="login-story-copy">
             <p className="eyebrow">Relatório PAF</p>
-            <h1>Dados do campo com acompanhamento próximo.</h1>
+            <h1>PAF Portal do produtor</h1>
             <p>
               Envie seus relatórios, acompanhe registros já gerados e mantenha a equipe técnica conectada à sua produção.
             </p>
@@ -8666,9 +8670,16 @@ async function fetchJson(url, options = {}) {
   let timeout;
 
   try {
+    const headers = new Headers(requestOptions.headers);
+    if (window.sessionStorage.getItem('paf-field-dashboard')) {
+      const { fieldClient } = await import('./field/client');
+      const { data } = await fieldClient.auth.getSession();
+      if (data.session?.access_token) headers.set('Authorization', `Bearer ${data.session.access_token}`);
+    }
     const request = fetch(url, {
       credentials: "same-origin",
       ...requestOptions,
+      headers,
       signal: requestOptions.signal || controller?.signal
     });
     const response = controller
@@ -8915,7 +8926,7 @@ function csvCell(value) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<Suspense fallback={<LoadingScreen label="Abrindo PAF" />}><App /></Suspense>);
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => null));

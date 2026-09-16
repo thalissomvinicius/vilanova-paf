@@ -129,6 +129,7 @@ async function route(context: RouteContext): Promise<Response | null> {
   if (method === "GET" && path === "/api/auth/me") {
     const auth = await authenticate(repository, request);
     if (!auth) return json({ user: null });
+    if (auth.account.field_profile_id) return json({ user: { role: 'admin', name: auth.account.name, identity: 'supabase' } });
     const account = await repository.getAccessAccountById(auth.account.id);
     if (!account?.active) return json({ user: null }, 200, { "set-cookie": clearSessionCookie() });
     if (auth.role === "admin") return json({ user: { role: "admin", name: account.name } });
@@ -151,6 +152,7 @@ async function route(context: RouteContext): Promise<Response | null> {
   if (method === "POST" && path === "/api/auth/change-password") {
     if (!isAdmin(auth)) return apiError("Acesso administrativo necessário.", 401);
     const body = await readBody(request);
+    if (auth.account.field_profile_id) return apiError('Altere sua senha pelo acesso da equipe PAF.', 409);
     const currentPassword = String(body.currentPassword ?? "");
     const newPassword = String(body.newPassword ?? "");
 
@@ -547,6 +549,8 @@ async function login(repository: PafRepository, ipAddress: string, loginValue: u
 }
 
 async function authenticate(repository: PafRepository, request: Request) {
+  const bearer = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1];
+  if (bearer) return repository.getUnifiedSession(bearer);
   const token = getCookie(request, "paf_session");
   return repository.getSession(token);
 }

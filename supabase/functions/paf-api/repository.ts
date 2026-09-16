@@ -46,6 +46,15 @@ type Row = Record<string, any>;
 export class PafRepository {
   constructor(private readonly db: SupabaseClient) {}
 
+  async getUnifiedSession(token: string) {
+    const { data: auth, error } = await this.db.auth.getUser(token);
+    if (error || !auth.user) return null;
+    const { data: profile } = await this.db.from('paf_perfis').select('id,nome,papel,ativo,organizacao_id,deve_trocar_senha').eq('id', auth.user.id).single();
+    const { data: binding } = await this.db.from('paf_dashboard_binding').select('organizacao_id').eq('id', 1).single();
+    if (!profile?.ativo || profile.deve_trocar_senha || !['super_admin', 'admin'].includes(profile.papel) || profile.organizacao_id !== binding?.organizacao_id) return null;
+    return { id: 0, role: 'admin', expiresAt: null, account: { id: null, name: profile.nome, account_type: 'ADMIN', active: true, field_profile_id: profile.id, access_code_hash: '' } };
+  }
+
   async getOptions() {
     const [producers, technicians] = await Promise.all([this.listProducerRows(), this.listTechnicians()]);
     return {
@@ -452,7 +461,7 @@ export class PafRepository {
       entity_type: entityType,
       entity_id: entityId === null || entityId === undefined ? null : String(entityId),
       ip_address: ipAddress,
-      details
+      details: { ...details, ...(actor?.field_profile_id ? { field_profile_id: actor.field_profile_id } : {}) }
     });
   }
 

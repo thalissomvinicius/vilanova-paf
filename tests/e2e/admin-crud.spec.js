@@ -113,7 +113,7 @@ async function loginAdmin(page, password) {
   await page.getByLabel("Login").fill("admin");
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("heading", { name: "Prontidão do sistema" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
 }
 
 function escapeRegExp(value) {

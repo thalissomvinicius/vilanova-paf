@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("admin entra e visualiza a prontidão do piloto", async ({ page }) => {
+test("admin entra e visualiza os indicadores operacionais", async ({ page }) => {
   const password = process.env.PAF_E2E_ADMIN_PASSWORD;
   test.skip(!password, "Defina PAF_E2E_ADMIN_PASSWORD para validar o login administrativo.");
 
@@ -9,9 +9,9 @@ test("admin entra e visualiza a prontidão do piloto", async ({ page }) => {
   await page.getByLabel("Senha").fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
 
-  await expect(page.getByRole("heading", { name: "Prontidão do sistema" })).toBeVisible();
-  await expect(page.locator(".pilot-readiness-ring strong")).toHaveText("100%");
-  await expect(page.getByRole("button", { name: "Preparar acessos" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
+  await expect(page.locator(".executive-kpi")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "Coletas do aplicativo" })).toBeVisible();
   await page.request.post("/api/auth/logout");
 });
 
