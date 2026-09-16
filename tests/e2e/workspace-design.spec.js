@@ -20,6 +20,29 @@ async function mockWorkspace(page) {
   });
 }
 
+test('short desktop sidebar has a branded scrollbar and all links remain reachable', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 720 });
+  await mockWorkspace(page);
+  await page.goto('/admin/dashboard');
+  const nav = page.getByRole('navigation', { name: 'Navegação' });
+  await expect(page.locator('.executive-kpi')).toHaveCount(4);
+  const scrollbar = await nav.evaluate(element => ({
+    overflows: element.scrollHeight > element.clientHeight,
+    width: getComputedStyle(element, '::-webkit-scrollbar').width,
+    track: getComputedStyle(element, '::-webkit-scrollbar-track').backgroundColor
+  }));
+  expect(scrollbar.overflows).toBe(true);
+  expect(scrollbar.width).toBe('6px');
+  expect(scrollbar.track).toBe('rgb(28, 58, 49)');
+  await page.screenshot({ path: 'verification/sidebar-scrollbar.png', animations: 'disabled' });
+  const access = nav.getByRole('button', { name: 'Acessos', exact: true });
+  await access.scrollIntoViewIfNeeded();
+  await expect(access).toBeInViewport();
+  expect(await nav.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await access.click();
+  await expect(page).toHaveURL(/\/admin\/acessos$/);
+});
+
 for (const width of [390, 768, 1024, 1440]) {
   test(`all workspaces and registration dialogs fit ${width}px`, async ({ page }) => {
     test.setTimeout(90000);

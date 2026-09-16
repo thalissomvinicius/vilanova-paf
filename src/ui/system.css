@@ -77,6 +77,15 @@ button, a, input, select, textarea { transition: background-color 180ms, border-
 .sidebar-brand strong { color: #fff; font-size: 18px; font-weight: 600; }
 .sidebar-brand .sidebar-close { position: absolute; right: 0; top: 0; color: #fff; }
 .side-nav { gap: 18px; padding: 18px 0; }
+.sidebar, .side-nav { scrollbar-width: thin; scrollbar-color: #77998a var(--brand-deep); }
+.sidebar::-webkit-scrollbar, .side-nav::-webkit-scrollbar { width: 6px; height: 6px; }
+.sidebar::-webkit-scrollbar-track, .side-nav::-webkit-scrollbar-track { background: var(--brand-deep); }
+.sidebar::-webkit-scrollbar-thumb, .side-nav::-webkit-scrollbar-thumb { background: #77998a; border-radius: 6px; }
+.sidebar::-webkit-scrollbar-thumb:hover, .side-nav::-webkit-scrollbar-thumb:hover { background: #a5c4b5; }
+.sidebar::-webkit-scrollbar-button, .side-nav::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports selector(::-webkit-scrollbar) {
+  .sidebar, .side-nav { scrollbar-width: auto; scrollbar-color: auto; }
+}
 .nav-group { display: grid; gap: 3px; min-width: 0; }
 .sidebar-section-label { margin: 0 0 6px; padding: 0 13px; color: #b6cbbf; font-size: 10px; font-weight: 500; text-transform: uppercase; }
 .side-nav-item { position: relative; display: flex; width: 100%; min-height: 42px; gap: 11px; padding: 10px 13px; color: #dbe5df; font-size: 13px; font-weight: 400; border: 0; border-radius: 6px; background: transparent; text-align: left; }
