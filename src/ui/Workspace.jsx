@@ -1,5 +1,11 @@
 import React from "react";
 
+export function DeveloperFooter() {
+  return <footer className="developer-footer" role="contentinfo" aria-label="Créditos de desenvolvimento">
+    <span>Desenvolvido por <strong>Vinicius Dev</strong></span>
+  </footer>;
+}
+
 const groups = [
   { label: "Visão geral", ids: ["dashboard", "land"] },
   { label: "Operação em campo", ids: ["producers", "reports", "field", "visits", "tasks", "documents", "fuel"] },

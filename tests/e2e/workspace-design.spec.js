@@ -53,6 +53,10 @@ for (const width of [390, 768, 1024, 1440]) {
     for (const path of paths) {
       await page.goto(`/admin/${path}`);
       await expect(page.locator('.admin-main')).toBeVisible();
+      const credits = page.getByRole('contentinfo', { name: 'Créditos de desenvolvimento' });
+      await expect(credits).toHaveCount(1);
+      await expect(credits).toHaveText('Desenvolvido por Vinicius Dev');
+      expect(await credits.evaluate(element => getComputedStyle(element).position)).toBe('static');
       if (path === 'dashboard') await expect(page.locator('.executive-kpi')).toHaveCount(4);
       if (path === 'analises-areas') await expect(page.locator('.land-admin')).toBeVisible();
       if (path === 'coletas') await expect(page.getByRole('heading', { name: 'Acesso da equipe PAF' })).toBeVisible();

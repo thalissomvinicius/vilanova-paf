@@ -54,7 +54,7 @@ import "./redesign.css";
 import "./experience.css";
 import "./access.css";
 import "./ui/system.css";
-import { WorkspaceNavigation, SectionHeading, DashboardSkeleton } from "./ui/Workspace";
+import { WorkspaceNavigation, SectionHeading, DashboardSkeleton, DeveloperFooter } from "./ui/Workspace";
 import { AnimatedValue } from "./components/AnimatedValue";
 
 const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.FieldWorkspace })));
@@ -2111,6 +2111,7 @@ function AdminDashboard({ user, onLogout }) {
             summary={documentSummary}
           />
         )}
+        <DeveloperFooter />
       </main>
 
       <ChangePasswordModal
