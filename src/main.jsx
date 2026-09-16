@@ -222,8 +222,8 @@ const SYNC_RETRY_INTERVAL_MS = 15000;
 const BRAND_ASSETS = {
   vilaLogo: "/brand/logo-vilanova.png",
   vilaLogoOnDark: "/brand/logo-vilanova.png",
-  pafLogo: "/brand/logo-paf-card.png",
-  pafIcon: "/brand/paf-icon-card.png"
+  pafLogo: "/brand/paf-logo-official.png",
+  pafIcon: "/brand/paf-symbol-official.png"
 };
 
 const INSTITUTIONAL_METRICS = [
@@ -833,7 +833,7 @@ function AdminLogin({ onLogin }) {
 
           <div className="login-story-copy">
             <p className="eyebrow">Agricultura familiar conectada</p>
-            <h1>PAF Gestão Rural</h1>
+            <h1>PAF VNA</h1>
             <p>
               Do campo à decisão, uma comunidade conectada.
             </p>
@@ -908,7 +908,7 @@ function AdminLogin({ onLogin }) {
               Acesso da equipe técnica
             </a>
             <a className="login-switch" href="/campo">
-              VNA Comunidade · Coletas do aplicativo <ArrowRight size={15} />
+              PAF VNA · Coletas do aplicativo <ArrowRight size={15} />
             </a>
           </form>
         </section>
@@ -1876,7 +1876,7 @@ function AdminDashboard({ user, onLogout }) {
     registrations: "Cadastros",
     logins: "Gestão de acessos",
     reports: "Triagem de relatórios",
-    field: "Coletas do VNA Comunidade",
+    field: "Coletas do PAF VNA",
     fuel: "Controle de abastecimento",
     visits: "Visitas técnicas",
     tasks: "Pendências internas",
@@ -1894,12 +1894,10 @@ function AdminDashboard({ user, onLogout }) {
 
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-mark">
-            <img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" />
-          </div>
+          <img className="sidebar-paf-logo" src={BRAND_ASSETS.pafLogo} alt="PAF Agricultura Familiar" />
           <div>
             <p className="eyebrow">Vila Nova</p>
-            <strong>PAF Gestão Rural</strong>
+            <strong>PAF VNA</strong>
           </div>
           <button className="sidebar-close" type="button" title="Fechar menu" onClick={() => setSidebarOpen(false)}>
             <X size={19} />

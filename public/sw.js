@@ -1,4 +1,4 @@
-const CACHE_NAME = "paf-shell-v2";
+const CACHE_NAME = "paf-shell-v3";
 const APP_SHELL = [
   "/",
   "/admin",
@@ -16,6 +16,8 @@ const APP_SHELL = [
   "/brand/paf-icon.png",
   "/brand/paf-icon-card.png",
   "/brand/logo-paf-card.png",
+  "/brand/paf-logo-official.png",
+  "/brand/paf-symbol-official.png",
   "/brand/login-field-team.webp"
 ];
 

@@ -30,8 +30,8 @@ function FieldLogin({ onLogin, embedded, error: initialError }) {
   }
   return <section className={embedded ? 'field-connect' : 'field-login-page'}>
     <div className="field-connect-copy">
-      <img src="/brand/logo-paf-card.png" alt="Programa de Agricultura Familiar" />
-      <p className="eyebrow">VNA Comunidade / PAF</p>
+      <img src="/brand/paf-logo-official.png" alt="Programa de Agricultura Familiar" />
+      <p className="eyebrow">PAF VNA / PAF</p>
       <h1>O campo, mais perto.</h1>
       <p>Produtores, comunidades e acompanhamento tecnico.</p>
       <div className="field-trust"><Leaf size={18} /> Vila Nova Agroindustrial</div>
@@ -39,7 +39,7 @@ function FieldLogin({ onLogin, embedded, error: initialError }) {
     <form onSubmit={submit} className="field-auth-form">
       <span className="field-auth-icon"><Smartphone size={24} /></span>
       <h2>Acesso da equipe PAF</h2>
-      <p>Entre com seu e-mail de acesso ao VNA Comunidade.</p>
+      <p>Entre com seu e-mail de acesso ao PAF VNA.</p>
       <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
       <label>Senha<div className="input-with-button"><input type={show ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /><button type="button" title={show ? 'Ocultar senha' : 'Mostrar senha'} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShow(!show)}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
       {error && <p role="alert" className="form-error">{error}</p>}
@@ -119,7 +119,7 @@ function FieldCollections({ profile, onLogout, embedded }) {
   }
   return <section className={`field-workspace ${embedded ? '' : 'field-standalone'}`} aria-label="Coletas de campo">
     {manageableRoles(profile).length > 0 && <a className="icon-text-button" href="/campo/acessos"><ShieldCheck size={17} />Gerenciar acessos da equipe</a>}
-    <header className="field-heading"><div><p className="eyebrow">VNA Comunidade</p><h2>Coletas de campo</h2><p>{profile.nome} <span className="field-separator">/</span> {profile.papel}</p></div><div className="field-actions"><span className="field-update">{updated ? `Recebido as ${updated.toLocaleTimeString('pt-BR')}` : 'Aguardando conexao'}</span><button className="icon-text-button" onClick={() => { loadDirectories(); }} disabled={busy} title="Atualizar coletas"><RefreshCcw size={17} className={busy ? 'spin' : ''} />Atualizar</button><button className="icon-text-button" onClick={onLogout} title="Sair do acesso de campo"><LogOut size={17} />Sair</button></div></header>
+    <header className="field-heading"><div><p className="eyebrow">PAF VNA</p><h2>Coletas de campo</h2><p>{profile.nome} <span className="field-separator">/</span> {profile.papel}</p></div><div className="field-actions"><span className="field-update">{updated ? `Recebido as ${updated.toLocaleTimeString('pt-BR')}` : 'Aguardando conexao'}</span><button className="icon-text-button" onClick={() => { loadDirectories(); }} disabled={busy} title="Atualizar coletas"><RefreshCcw size={17} className={busy ? 'spin' : ''} />Atualizar</button><button className="icon-text-button" onClick={onLogout} title="Sair do acesso de campo"><LogOut size={17} />Sair</button></div></header>
     <div className="field-kpis">{[['pendente', 'Aguardando revisao', ClipboardList], ['aprovado', 'Coletas aprovadas', Check], ['rejeitado', 'Ajustes solicitados', FileText]].map(([status, label, Icon]) => <button key={status} className={`field-kpi ${status}`} onClick={() => change('status', status)}><span><Icon size={20} /></span><div><small>{label}</small><strong>{counts ? <AnimatedValue value={counts[status]} /> : '-'}</strong></div><ArrowRight size={17} /></button>)}</div>
     <div className="field-filterbar"><label className="field-search"><Search size={18} /><input aria-label="Buscar coletas" placeholder="Produtor, comunidade, tecnico..." value={search} onChange={e => setSearch(e.target.value)} /></label><label>Situacao<select value={filters.status} onChange={e => change('status', e.target.value)}><option value="">Todas</option>{['pendente', 'aprovado', 'rejeitado'].map(status => <option key={status} value={status}>{REVIEW_LABELS[status]}</option>)}</select></label><label>Formulario<select value={filters.form} onChange={e => change('form', e.target.value)}><option value="">Todos</option>{directories?.forms.map(form => <option value={form.id} key={form.id}>{form.titulo} / v{form.versao}</option>)}</select></label><label>Tecnico<select value={filters.technician} onChange={e => change('technician', e.target.value)}><option value="">Todos</option>{directories?.users.map(user => <option value={user.id} key={user.id}>{user.nome}</option>)}</select></label><label>De<input type="date" value={filters.from} max={filters.to || undefined} onChange={e => change('from', e.target.value)} /></label><label>Ate<input type="date" value={filters.to} min={filters.from || undefined} onChange={e => change('to', e.target.value)} /></label><button className="icon-text-button" title="Limpar filtros" onClick={() => { setSearch(''); setFilters(EMPTY_FILTERS); setPage(0); }}><X size={16} />Limpar</button></div>
     {error && <div className="field-error" role="alert"><span>{error}</span><button className="icon-text-button" onClick={() => directories ? refresh() : loadDirectories()}>Tentar novamente</button></div>}

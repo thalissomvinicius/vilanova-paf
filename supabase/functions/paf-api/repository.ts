@@ -1113,6 +1113,9 @@ export class PafRepository {
 
 function assertNoError(error: any, message: string): asserts error is null {
   if (error) {
+    if (error.code === '23505' && error.message?.includes('paf_producers_cpf_digits_unique')) {
+      throw new Error('Ja existe um produtor com este CPF. Busque o cadastro antes de cadastrar novamente.');
+    }
     console.error(message, error.code, error.message);
     throw new Error(message);
   }

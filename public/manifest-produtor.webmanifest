@@ -1,14 +1,18 @@
 {
-  "name": "PAF Vila Nova - Produtor",
-  "short_name": "PAF Produtor",
+  "name": "PAF VNA - Produtor",
+  "short_name": "PAF VNA - Produtor",
   "description": "Relatórios e acompanhamento do produtor no Programa de Agricultura Familiar.",
   "start_url": "/produtor",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#FFFDDE",
-  "theme_color": "#3F6B2A",
+  "background_color": "#F5F7F3",
+  "theme_color": "#172318",
   "icons": [
-    { "src": "/paf-app-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/paf-app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    {
+      "src": "/brand/paf-symbol-official.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }

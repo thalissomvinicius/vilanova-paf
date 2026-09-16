@@ -45,6 +45,11 @@ for (const size of sizes) {
     await expect(page.locator('.executive-kpi').first().locator('strong')).toContainText('204');
     await expect(page.locator('.executive-kpi').first()).toContainText('Produtores cadastrados');
     await expect(page.locator('.executive-kpi').first()).not.toContainText('204 propriedades');
+    if (size.width >= 1024) {
+      const logo = await page.locator('.sidebar-paf-logo').boundingBox();
+      const name = await page.locator('.sidebar-brand strong').boundingBox();
+      expect(logo.y + logo.height).toBeLessThanOrEqual(name.y);
+    }
     await assertFits(page);
     await page.screenshot({ path: `verification/new-dashboard-${size.name}.png`, fullPage: true, animations: 'disabled' });
     await page.goto('/admin/coletas');
