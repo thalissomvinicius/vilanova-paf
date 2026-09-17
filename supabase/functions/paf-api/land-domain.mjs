@@ -79,7 +79,8 @@ export function newProtocol() {
 }
 
 export function normalizeProtocol(value) {
-  const code = String(value ?? '').toUpperCase().replace(/[\s-]/g, '').replace(/^PAF/, '');
+  let code = String(value ?? '').toUpperCase().replace(/[\s-]/g, '');
+  if (code.length === 13 || code.length === 27) code = code.replace(/^PAF/, '');
   if (/^[2-9A-HJ-NP-Z]{10}$/.test(code)) return `PAF-${code.slice(0, 5)}-${code.slice(5)}`;
   if (/^[0-9A-F]{24}$/.test(code)) return `PAF-${code.match(/.{6}/g).join('-')}`;
   return null;

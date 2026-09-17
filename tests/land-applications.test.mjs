@@ -21,6 +21,7 @@ test('short protocols accept easy typing and preserve legacy lookup', async () =
   assert.equal(normalizeProtocol('7k3m9 x4r2t'), 'PAF-7K3M9-X4R2T');
   assert.equal(normalizeProtocol('paf-7k3m9-x4r2t'), 'PAF-7K3M9-X4R2T');
   assert.equal(normalizeProtocol('invalid'), null);
+  assert.equal(normalizeProtocol('PAF23ABCDE'), 'PAF-PAF23-ABCDE');
   const store = new LocalLandStore(':memory:');
   try {
     const body = payload();
