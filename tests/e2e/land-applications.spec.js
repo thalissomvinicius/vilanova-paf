@@ -54,11 +54,11 @@ test('phone stays aligned with CPF regardless of validation feedback', async ({ 
       await page.getByLabel('CPF', { exact: true }).fill(value);
       await expect.poll(async () => {
         const cpf = await page.getByLabel('CPF', { exact: true }).boundingBox();
-        const phone = await page.getByLabel('Telefone de contato com DDD (opcional)').boundingBox();
+        const phone = await page.getByLabel('Telefone de contato com DDD').boundingBox();
         return Math.abs(cpf.height - phone.height);
       }).toBeLessThan(1);
       const cpf = await page.getByLabel('CPF', { exact: true }).boundingBox();
-      const phone = await page.getByLabel('Telefone de contato com DDD (opcional)').boundingBox();
+      const phone = await page.getByLabel('Telefone de contato com DDD').boundingBox();
       if (phone.x > cpf.x + 5) expect(Math.abs(cpf.y - phone.y)).toBeLessThan(1);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     }
@@ -126,7 +126,11 @@ for (const width of [1440, 390, 320]) {
     await page.getByLabel('Dia', { exact: true }).selectOption('10');
     await page.getByLabel('Mês', { exact: true }).selectOption('01');
     await page.getByLabel('Ano', { exact: true }).selectOption('1980');
-    await page.getByLabel('Telefone de contato com DDD (opcional)').fill('91999999999');
+    const phone = page.getByLabel('Telefone de contato com DDD');
+    await expect(phone).toHaveAttribute('required', '');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('heading', { name: 'Quem solicita a análise?' })).toBeVisible();
+    await phone.fill('91999999999');
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.locator('select[name=state]')).toBeDisabled();
     await expect(page.locator('select[name=state]')).toHaveValue('PA');

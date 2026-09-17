@@ -41,8 +41,9 @@ export function validateSubmission(body, today = new Date().toISOString().slice(
   if (!validCpf(body.cpf)) throw new Error('Informe um CPF válido.');
   const birth = String(body.birthDate || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(birth) || !Number.isFinite(Date.parse(birth)) || new Date(birth).toISOString().slice(0, 10) !== birth || birth < '1900-01-01' || birth > today) throw new Error('Informe uma data de nascimento válida.');
-  const phone = digits(body.phone);
-  if (phone && !/^\d{10,11}$/.test(phone)) throw new Error('Informe o telefone com DDD ou deixe em branco.');
+  const rawPhone = digits(body.phone);
+  const phone = /^55\d{10,11}$/.test(rawPhone) ? rawPhone.slice(2) : rawPhone;
+  if (!/^\d{10,11}$/.test(phone)) throw new Error('Informe um telefone de contato com DDD (10 ou 11 números).');
   if (typeof body.isFederalSettlement !== 'boolean') throw new Error('Informe se a área é assentamento federal (INCRA).');
   const motherName = body.isFederalSettlement ? text(body.motherName, 'nome completo da mãe', 5, 160) : null;
   return {

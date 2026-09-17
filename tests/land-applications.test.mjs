@@ -18,6 +18,8 @@ test('validates CPF, dates, lengths and consent at the boundary', () => {
 });
 
 test('requires a mother name only for federal settlements', () => {
+  for (const phone of ['', '   ', undefined, '123']) assert.throws(() => validateSubmission({ ...payload(), phone }));
+  assert.equal(validateSubmission({ ...payload(), phone: '+55 (91) 99999-9999' }).phone, '91999999999');
   assert.equal(PARA_MUNICIPALITIES.length, 144);
   for (const invalid of [{ state: 'SP' }, { municipality: 'São Paulo' }, { consentVersion: '2026-09-v1' }, { consent: false }]) assert.throws(() => validateSubmission({ ...payload(), ...invalid }));
   for (const isFederalSettlement of [undefined, null, '', 'false', 1]) assert.throws(() => validateSubmission({ ...payload(), isFederalSettlement }));
