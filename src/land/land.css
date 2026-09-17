@@ -51,6 +51,12 @@
 .land-form-footer, .land-section-heading, .land-pagination { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .land-form-footer { padding-top: 22px; margin-top: 24px; border-top: 1px solid #e3e9e2; }
 .land-muted { color: #526050; font-size: 12px; }
+.land-privacy { padding: 0 0 8px; }
+.land-privacy h3 { margin-top: 0; }
+.land-privacy p { font-size: 14px; line-height: 1.65; color: #526050; }
+.land-privacy a { color: #285e24; text-decoration: underline; }
+.land-privacy .land-consent { margin-top: 20px; }
+.land-fields > div:has(#land-municipality) { display: grid; align-content: start; gap: 7px; }
 .land-notice { display: flex; gap: 12px; padding: 20px 0; border-top: 1px solid #dfe6da; margin-top: 36px; color: #526050; }
 .land-notice svg { flex-shrink: 0; color: #2f6f18; }
 .land-notice p { margin: 0; font-size: 12px; }
@@ -77,6 +83,13 @@
 .land-text-button { padding: 8px 0; margin-top: 18px; border: 0; background: none; color: #2f6f18; text-decoration: underline; }
 .land-status { display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 5px; font-size: 12px; font-weight: 650; line-height: 1.4; background: #fff4cf; color: #765307; }
 .land-status-AREA_REPROVADA { background: #fff0ee; color: #992d21; }
+.land-status-DADOS_INCONSISTENTES { background: #fff0df; color: #853b0d; border: 1px solid #e7bf94; }
+.land-cpf-field { display: grid; gap: 7px; align-content: start; }
+.land-cpf-status { min-height: 21px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.land-cpf-status svg { flex-shrink: 0; }
+.land-cpf-status.is-valid { color: #2f6f18; }
+.land-cpf-status.is-invalid { color: #992d21; }
+.land-ui .land-cpf-field input[aria-invalid=true] { border-color: #992d21; }
 .land-status-POSSIVEL_FINANCIAMENTO { background: #edf7e8; color: #2f6f18; }
 .land-tracking-result { padding-top: 28px; margin-top: 28px; border-top: 1px solid #bbc9b8; }
 .land-public-comment { white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px 0; font-size: 16px; }

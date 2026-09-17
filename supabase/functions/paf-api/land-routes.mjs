@@ -1,4 +1,5 @@
 import { digest, newProtocol, publicRequest, validateReview, validateSubmission, digits, cleanSearch, LAND_STATUSES } from './land-domain.mjs';
+import { LAND_CONSENT_VERSION } from './land-reference.mjs';
 
 const reply = (data, status = 200) => Response.json(data, { status, headers: { 'cache-control': 'private, no-store' } });
 async function bodyOf(request) {
@@ -33,7 +34,7 @@ export async function landRoute({ request, path, store, admin, actor, ip, salt }
       if (submit) {
         const values = validateSubmission(body);
         const fingerprint = await digest(JSON.stringify(values));
-        const result = await store.submit({ ...values, fingerprint, protocol: newProtocol(), consent_version: '2026-09-v1' });
+        const result = await store.submit({ ...values, fingerprint, protocol: newProtocol(), consent_version: LAND_CONSENT_VERSION });
         if (!result || result.fingerprint !== fingerprint) return reply({ error: 'Este envio já foi utilizado com outros dados. Inicie uma nova solicitação.' }, 409);
         return reply({ request: publicRequest(result) }, 201);
       }
@@ -88,7 +89,7 @@ export class SupabaseLandStore {
   async get(id) { return checked(await this.db.from(TABLE).select().eq('id', id).maybeSingle()); }
   async history(id) { return checked(await this.db.from('paf_land_reviews').select().eq('request_id', id).order('created_at', { ascending: false })); }
   async list({ status, search, page }) {
-    let query = this.db.from(TABLE).select('id,protocol,full_name,cpf,birth_date,phone,municipality,community,status,created_at,updated_at,version', { count: 'exact' });
+    let query = this.db.from(TABLE).select('id,protocol,full_name,cpf,birth_date,phone,municipality,community,is_federal_settlement,mother_name,status,created_at,updated_at,version', { count: 'exact' });
     if (status) query = query.eq('status', status);
     if (search) {
       const clean = cleanSearch(search);

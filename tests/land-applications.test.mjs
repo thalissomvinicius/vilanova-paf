@@ -3,19 +3,23 @@ import assert from 'node:assert/strict';
 import { LocalLandStore } from '../server/land-store.mjs';
 import { landRoute } from '../supabase/functions/paf-api/land-routes.mjs';
 import { validateSubmission, validCpf, newProtocol } from '../supabase/functions/paf-api/land-domain.mjs';
+import { LAND_CONSENT_VERSION, PARA_MUNICIPALITIES } from '../supabase/functions/paf-api/land-reference.mjs';
 
-const payload = () => ({ clientId: crypto.randomUUID(), fullName: 'Pessoa de Teste', cpf: '529.982.247-25', birthDate: '1980-01-10', municipality: 'Tomé-Açu', community: 'Comunidade de teste', phone: '91999999999', isFederalSettlement: false, consent: true });
+const payload = () => ({ clientId: crypto.randomUUID(), fullName: 'Pessoa de Teste', cpf: '529.982.247-25', birthDate: '1980-01-10', state: 'PA', consentVersion: LAND_CONSENT_VERSION, municipality: 'Tomé-Açu', community: 'Comunidade de teste', phone: '91999999999', isFederalSettlement: false, consent: true });
 const call = (store, path, method, body, admin = false) => landRoute({ store, path, request: new Request(`https://test.local${path}`, { method, ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) }), admin, actor: 'Analista de teste', ip: 'test', salt: 'test-only' });
 
 test('validates CPF, dates, lengths and consent at the boundary', () => {
   assert.equal(validCpf('52998224725'), true);
   assert.equal(validCpf('11111111111'), false);
   assert.equal(validCpf('52998224724'), false);
+  assert.equal(validCpf('52998224725a'), false);
   for (const invalid of [{ cpf: '123' }, { birthDate: '2025-02-30' }, { birthDate: '2999-01-01' }, { consent: false }, { fullName: 'Ab' }, { municipality: '' }, { phone: '123' }, { website: 'bot' }]) assert.throws(() => validateSubmission({ ...payload(), ...invalid }));
   assert.match(newProtocol(), /^PAF-(?:[0-9A-F]{6}-){3}[0-9A-F]{6}$/);
 });
 
 test('requires a mother name only for federal settlements', () => {
+  assert.equal(PARA_MUNICIPALITIES.length, 144);
+  for (const invalid of [{ state: 'SP' }, { municipality: 'São Paulo' }, { consentVersion: '2026-09-v1' }, { consent: false }]) assert.throws(() => validateSubmission({ ...payload(), ...invalid }));
   for (const isFederalSettlement of [undefined, null, '', 'false', 1]) assert.throws(() => validateSubmission({ ...payload(), isFederalSettlement }));
   for (const motherName of [undefined, '', '   ', 'Ana', 'a'.repeat(161)]) assert.throws(() => validateSubmission({ ...payload(), isFederalSettlement: true, motherName }));
   assert.equal(validateSubmission({ ...payload(), motherName: 'Discard this name' }).mother_name, null);
@@ -37,6 +41,7 @@ test('public submission is idempotent and consultation does not reveal personal 
     const saved = store.list({ status: '', search: '', page: 1 }).requests[0];
     assert.equal(saved.is_federal_settlement, true);
     assert.equal(saved.mother_name, 'Maria de Teste');
+    assert.equal(saved.consent_version, LAND_CONSENT_VERSION);
     const adminResult = await call(store, `/api/land/admin/requests/${saved.id}`, 'GET', null, true);
     assert.equal((await adminResult.json()).request.mother_name, 'Maria de Teste');
     assert.equal(store.list({ status: '', search: '', page: 1 }).total, 1);
@@ -50,7 +55,7 @@ test('only administrators review, history is atomic, stale versions cannot overw
     await call(store, '/api/land/requests', 'POST', payload());
     const row = store.list({ status: '', search: '', page: 1 }).requests[0];
     const path = `/api/land/admin/requests/${row.id}`;
-    const review = { status: 'POSSIVEL_FINANCIAMENTO', comment: 'Área com possibilidade de encaminhamento para avaliação bancária.', version: 1 };
+    const review = { status: 'DADOS_INCONSISTENTES', comment: 'Dados informados divergem da documentação. Verificar com a equipe.', version: 1 };
     for (const [url, method, body] of [[path, 'GET'], [path, 'PATCH', review], ['/api/land/admin/requests', 'GET']]) assert.equal((await call(store, url, method, body)).status, 401);
     assert.equal((await call(store, path, 'PATCH', { ...review, comment: '' }, true)).status, 400);
     assert.equal((await call(store, path, 'PATCH', review, true)).status, 200);

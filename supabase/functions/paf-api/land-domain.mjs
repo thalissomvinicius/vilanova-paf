@@ -1,5 +1,8 @@
+import { PARA_MUNICIPALITIES, LAND_CONSENT_VERSION } from './land-reference.mjs';
+
 export const LAND_STATUSES = {
   EM_ANALISE: 'Em análise',
+  DADOS_INCONSISTENTES: 'Dados inconsistentes',
   AREA_REPROVADA: 'Área reprovada',
   POSSIVEL_FINANCIAMENTO: 'Área possível de financiamento'
 };
@@ -10,6 +13,7 @@ export function cleanSearch(value) {
 }
 
 export function validCpf(value) {
+  if (!/^[\d.\s-]+$/.test(String(value ?? ''))) return false;
   const cpf = digits(value);
   if (!/^\d{11}$/.test(cpf) || /^(\d)\1+$/.test(cpf)) return false;
   for (let length = 9; length <= 10; length++) {
@@ -31,6 +35,8 @@ export function validateSubmission(body, today = new Date().toISOString().slice(
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Dados inválidos.');
   if (body.website) throw new Error('Não foi possível enviar o cadastro.');
   if (body.consent !== true) throw new Error('Confirme a ciência sobre o uso dos dados.');
+  if (body.consentVersion !== LAND_CONSENT_VERSION) throw new Error('Atualize a página e leia a autorização de uso dos dados antes de enviar.');
+  if (body.state !== 'PA' || !PARA_MUNICIPALITIES.includes(body.municipality)) throw new Error('Selecione um município do Pará.');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.clientId || '')) throw new Error('Identificador de envio inválido. Reabra o formulário.');
   if (!validCpf(body.cpf)) throw new Error('Informe um CPF válido.');
   const birth = String(body.birthDate || '');

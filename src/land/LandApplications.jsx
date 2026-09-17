@@ -3,6 +3,9 @@ import { ArrowLeft, ArrowRight, Check, CheckCircle2, ClipboardList, Copy, Downlo
 import { LAND_STATUSES, validCpf } from '../../supabase/functions/paf-api/land-domain.mjs';
 import { DeveloperSignature } from '../ui/Workspace';
 import { BirthDateField } from './BirthDateField';
+import { LandConsent } from './LandConsent';
+import { CpfField } from './CpfField';
+import { PARA_MUNICIPALITIES, LAND_CONSENT_VERSION } from '../../supabase/functions/paf-api/land-reference.mjs';
 import './land.css';
 
 const date = value => new Date(value).toLocaleString('pt-BR');
@@ -59,7 +62,7 @@ export function LandPublic() {
 }
 
 function ApplicationForm() {
-  const initial = () => ({ clientId: crypto.randomUUID(), fullName: '', cpf: '', birthDate: '', phone: '', municipality: '', community: '', isFederalSettlement: null, motherName: '', consent: false, website: '' });
+  const initial = () => ({ clientId: crypto.randomUUID(), fullName: '', cpf: '', birthDate: '', phone: '', state: 'PA', consentVersion: LAND_CONSENT_VERSION, municipality: '', community: '', isFederalSettlement: null, motherName: '', consent: false, website: '' });
   const [values, setValues] = useState(initial);
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -90,13 +93,13 @@ function ApplicationForm() {
     <ol className="land-steps" aria-label="Etapas do cadastro">{['Dados pessoais', 'Localização', 'Conferência'].map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined} className={index === step ? 'is-current' : index < step ? 'is-complete' : ''}><span>{index < step ? <Check size={15} /> : index + 1}</span>{label}</li>)}</ol>
     <h2 ref={heading} tabIndex={-1}>{['Quem solicita a análise?', 'Onde fica a área?', 'Confira antes de enviar'][step]}</h2>
     <div className="land-fields" key={step}>
-      {step === 0 && <>{field('fullName', 'Nome completo', { autoComplete: 'name', minLength: 5, maxLength: 160 })}{field('cpf', 'CPF', { inputMode: 'numeric', placeholder: '000.000.000-00', maxLength: 14 })}{field('phone', 'Telefone de contato com DDD (opcional)', { type: 'tel', autoComplete: 'tel', required: false, maxLength: 16, placeholder: '(91) 99999-9999' })}<BirthDateField value={values.birthDate} onChange={birthDate => setValues(old => ({ ...old, birthDate }))} /></>}
-      {step === 1 && <>{field('municipality', 'Município da área', { minLength: 2, maxLength: 100 })}{field('community', 'Comunidade da área', { minLength: 2, maxLength: 120 })}
+      {step === 0 && <>{field('fullName', 'Nome completo', { autoComplete: 'name', minLength: 5, maxLength: 160 })}<CpfField value={values.cpf} onChange={cpf => setValues(old => ({ ...old, cpf }))} />{field('phone', 'Telefone de contato com DDD (opcional)', { type: 'tel', autoComplete: 'tel', required: false, maxLength: 16, placeholder: '(91) 99999-9999' })}<BirthDateField value={values.birthDate} onChange={birthDate => setValues(old => ({ ...old, birthDate }))} /></>}
+      {step === 1 && <><label>Estado<select name="state" value="PA" disabled><option value="PA">Pará (PA)</option></select></label><div><label htmlFor="land-municipality">Município da área</label><select id="land-municipality" name="municipality" required value={values.municipality} onChange={event => setValues(old => ({ ...old, municipality: event.target.value }))}><option value="">Selecione o município</option>{PARA_MUNICIPALITIES.map(name => <option key={name} value={name}>{name}</option>)}</select></div>{field('community', 'Comunidade da área', { minLength: 2, maxLength: 120 })}
         <fieldset className="land-settlement"><legend>A área é assentamento federal (INCRA)?</legend><div className="land-settlement-options">{[[true, 'Sim'], [false, 'Não']].map(([value, label]) => <label key={label}><input type="radio" name="isFederalSettlement" required checked={values.isFederalSettlement === value} onChange={() => setValues(old => ({ ...old, isFederalSettlement: value, motherName: value ? old.motherName : '' }))} />{label}</label>)}</div></fieldset>
         {values.isFederalSettlement === true && field('motherName', 'Nome completo da mãe do solicitante', { minLength: 5, maxLength: 160, autoComplete: 'off' })}
       </>}
     </div>
-    {step === 2 && <><dl className="land-data">{[['Nome completo', values.fullName], ['CPF', values.cpf], ['Data de nascimento', birthday(values.birthDate)], ['Telefone de contato', values.phone || 'Não informado'], ['Município', values.municipality], ['Comunidade', values.community], ...settlementDetails(values.isFederalSettlement, values.motherName)].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><label className="land-consent"><input type="checkbox" required checked={values.consent} onChange={e => setValues(old => ({ ...old, consent: e.target.checked }))} /><span>Estou ciente de que a Vila Nova Agroindustrial utilizará estes dados para avaliar a solicitação e entrar em contato. O parecer ficará disponível mediante protocolo e CPF.</span></label><p className="land-muted">Os dados ficarão restritos à equipe autorizada. Para correção dos dados ou dúvidas sobre seu uso, procure a equipe PAF.</p></>}
+    {step === 2 && <><dl className="land-data">{[['Nome completo', values.fullName], ['CPF', values.cpf], ['Data de nascimento', birthday(values.birthDate)], ['Telefone de contato', values.phone || 'Não informado'], ['Estado', 'Pará (PA)'], ['Município', values.municipality], ['Comunidade', values.community], ...settlementDetails(values.isFederalSettlement, values.motherName)].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><LandConsent checked={values.consent} onChange={consent => setValues(old => ({ ...old, consent }))} /></>}
     <label className="land-honeypot" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" value={values.website} onChange={e => setValues(old => ({ ...old, website: e.target.value }))} /></label>
     <Message>{error}</Message>
     <div className="land-form-footer"><span className="land-muted">Etapa {step + 1} de 3</span><div className="land-actions">{step > 0 && <button className="icon-text-button" type="button" disabled={busy} onClick={() => { setStep(step - 1); setError(''); }}><ArrowLeft size={17} /> Voltar</button>}<button className="primary-button" disabled={busy}>{busy ? <Loader2 size={18} className="land-spin" /> : step === 2 ? <Check size={18} /> : <ArrowRight size={18} />}{busy ? 'Enviando...' : step === 2 ? 'Enviar solicitação' : 'Continuar'}</button></div></div>

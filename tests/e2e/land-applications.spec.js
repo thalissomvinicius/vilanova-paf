@@ -45,6 +45,24 @@ test('public tabs support keyboard navigation and retain unsent fields', async (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('CPF gives inline feedback and blocks invalid input', async ({ page }) => {
+  await mock(page);
+  await page.goto('/analise-de-area');
+  const cpf = page.getByLabel('CPF', { exact: true });
+  await cpf.fill('11111111111');
+  await expect(page.getByText('CPF inválido. Confira os números digitados.')).toBeVisible();
+  await expect(cpf).toHaveAttribute('aria-invalid', 'true');
+  expect(await cpf.evaluate(el => el.checkValidity())).toBe(false);
+  await cpf.fill('529.982.247-25');
+  await expect(page.getByText('CPF válido.', { exact: true })).toBeVisible();
+  expect(await cpf.evaluate(el => el.checkValidity())).toBe(true);
+  await cpf.fill('529');
+  await cpf.blur();
+  await expect(page.getByText('Informe os 11 números do CPF.')).toBeVisible();
+  await cpf.fill('52998224724');
+  expect(await cpf.evaluate(el => el.checkValidity())).toBe(false);
+});
+
 test('birth date requires all parts and handles leap years and future dates', async ({ page }) => {
   await page.clock.setFixedTime(new Date('2026-09-16T12:00:00'));
   const bodies = await mock(page);
@@ -89,7 +107,10 @@ for (const width of [1440, 390, 320]) {
     await page.getByLabel('Ano', { exact: true }).selectOption('1980');
     await page.getByLabel('Telefone de contato com DDD (opcional)').fill('91999999999');
     await page.getByRole('button', { name: 'Continuar' }).click();
-    await page.getByLabel('Município da área').fill('Tomé-Açu');
+    await expect(page.locator('select[name=state]')).toBeDisabled();
+    await expect(page.locator('select[name=state]')).toHaveValue('PA');
+    await expect(page.getByLabel('Município da área').locator('option')).toHaveCount(145);
+    await page.getByLabel('Município da área').selectOption('Tomé-Açu');
     await page.getByLabel('Comunidade da área').fill('Comunidade de teste');
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByRole('heading', { name: 'Onde fica a área?' })).toBeVisible();
@@ -113,12 +134,18 @@ for (const width of [1440, 390, 320]) {
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByLabel('Comunidade da área')).toHaveValue('Comunidade de teste');
     await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('checkbox')).not.toBeChecked();
+    await expect(page.getByRole('heading', { name: 'Proteção de dados e autorização' })).toBeVisible();
+    await page.getByRole('button', { name: 'Enviar solicitação' }).click();
+    expect(bodies).toHaveLength(0);
     await page.getByRole('checkbox').check();
     await page.screenshot({ path: `verification/land-form-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Enviar solicitação' }).click();
     await expect(page.getByRole('heading', { name: 'Solicitação recebida' })).toBeVisible();
     expect(bodies).toHaveLength(1); expect(bodies[0].consent).toBe(true);
     expect(bodies[0].birthDate).toBe('1980-01-10');
+    expect(bodies[0].state).toBe('PA');
+    expect(bodies[0].consentVersion).toBe('2026-09-v2');
     expect(bodies[0].isFederalSettlement).toBe(width !== 1440);
     expect(bodies[0].motherName).toBe(width !== 1440 ? 'Maria de Teste' : '');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -140,7 +167,7 @@ for (const width of [1440, 390, 320]) {
     await page.goto('/admin/analises-areas');
     await page.getByRole('button', { name: 'Analisar Pessoa de Teste' }).click();
     const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible();
-    await page.getByLabel('Resultado da análise').selectOption('POSSIVEL_FINANCIAMENTO');
+    await page.getByLabel('Resultado da análise').selectOption(width === 320 ? 'DADOS_INCONSISTENTES' : 'POSSIVEL_FINANCIAMENTO');
     await page.getByLabel('Parecer para o solicitante').fill('Área apta a seguir para avaliação documental pela instituição financeira.');
     await page.getByRole('button', { name: 'Salvar parecer' }).click();
     await expect(page.getByText('Parecer salvo e disponível para consulta.')).toBeVisible();
@@ -153,6 +180,6 @@ for (const width of [1440, 390, 320]) {
     await page.getByLabel('Protocolo', { exact: true }).fill(record().protocol);
     await page.getByLabel('CPF do solicitante').fill(record().cpf);
     await page.getByRole('button', { name: 'Consultar andamento', exact: true }).click();
-    await expect(page.locator('.land-tracking-result .land-status').first()).toHaveText('Área possível de financiamento');
+    await expect(page.locator('.land-tracking-result .land-status').first()).toHaveText(width === 320 ? 'Dados inconsistentes' : 'Área possível de financiamento');
   });
 }
