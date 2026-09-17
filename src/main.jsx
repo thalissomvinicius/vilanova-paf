@@ -848,7 +848,7 @@ function AdminLogin({ onLogin }) {
             {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
             <button className="paf-access-submit primary-button" type="submit" disabled={loading}><span>{loading ? 'Conectando...' : 'Entrar'}</span>{loading ? <Loader2 className="spin" size={20} /> : <ArrowRight size={20} />}</button>
           </form>
-          <nav className="paf-access-portals" aria-label="Outros acessos"><a href="/produtor"><Sprout size={20} /><span>Produtor<small>Meus relatórios</small></span><ArrowRight size={15} /></a><a href="/tecnico"><UserCheck size={20} /><span>Equipe técnica<small>Visitas e acompanhamento</small></span><ArrowRight size={15} /></a><a href="/campo"><ScanLine size={20} /><span>Aplicativo PAF<small>Coletas de campo</small></span><ArrowRight size={15} /></a></nav>
+          <nav className="paf-access-portals paf-access-single" aria-label="Outros acessos"><a href="/produtor"><Sprout size={22} /><span>Sou produtor<small>Acessar meus relatórios</small></span><ArrowRight size={20} /></a></nav>
         </section>
       </div>
       <footer className="paf-access-footer"><span><ShieldCheck size={15} /> Acesso restrito à equipe autorizada</span><span>Vila Nova Agroindustrial <span aria-hidden="true">·</span> Tomé-Açu / PA</span></footer>
@@ -7705,11 +7705,13 @@ function ProducerLogin({ onLogin }) {
   const params = new URLSearchParams(window.location.search);
   const [login, setLogin] = useState(params.get("login") || "");
   const [accessCode, setAccessCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function submit(event) {
     event.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError("");
 
@@ -7728,79 +7730,26 @@ function ProducerLogin({ onLogin }) {
   }
 
   return (
-    <main className="producer-login-screen premium-login-screen producer-premium-login">
-      <section className="login-shell" aria-label="Acesso do produtor PAF">
-        <aside className="login-story">
-          <div className="login-story-topline">
-            <img className="login-company-logo" src={BRAND_ASSETS.vilaLogoOnDark} alt="Vila Nova Agroindustrial" />
-            <span>Portal do produtor</span>
-          </div>
-
-          <div className="login-story-copy">
-            <p className="eyebrow">Relatório PAF</p>
-            <h1>PAF Portal do produtor</h1>
-            <p>
-              Envie seus relatórios, acompanhe registros já gerados e mantenha a equipe técnica conectada à sua produção.
-            </p>
-          </div>
-
-          <div className="login-story-card">
-            <img className="login-paf-logo" src={BRAND_ASSETS.pafIcon} alt="PAF Agricultura Familiar" />
-            <div>
-              <strong>Acesso individual do produtor</strong>
-              <span>Use as credenciais enviadas pela equipe para preencher informações com segurança.</span>
-            </div>
-          </div>
-
-          <div className="login-benefit-grid">
-            <span>
-              <ClipboardList size={16} />
-              Relatórios
-            </span>
-            <span>
-              <CalendarDays size={16} />
-              Acompanhamento
-            </span>
-            <span>
-              <UserCheck size={16} />
-              Suporte técnico
-            </span>
-          </div>
-        </aside>
-
-        <section className="producer-login-panel premium-login-panel">
-          <div className="login-brand">
-            <div className="brand-mark login-brand-mark">
-              <img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" />
-            </div>
-            <div>
-              <p className="eyebrow">Vila Nova Agroindustrial</p>
-              <h2>Acesso do produtor</h2>
-              <p className="login-panel-text">Entre com o login e o código enviados pela equipe PAF.</p>
-            </div>
-          </div>
-
-          <form className="login-form" onSubmit={submit}>
-            <Field label="Login">
-              <input value={login} onChange={(event) => setLogin(event.target.value)} autoComplete="username" required />
-            </Field>
-            <Field label="Código de acesso">
-              <input type="password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} autoComplete="current-password" required />
-            </Field>
-            {error && <p className="form-error">{error}</p>}
-            <button className="primary-button wide" type="submit" disabled={loading}>
-              {loading ? <Loader2 className="spin" size={18} /> : <LogIn size={18} />}
-              Entrar
-            </button>
-            <a className="login-switch" href="/admin">
-              Acesso administrativo da equipe técnica
-            </a>
-            <a className="login-switch" href="/tecnico">
-              Portal de visitas dos técnicos
-            </a>
+    <main className="paf-access paf-producer-access">
+      <div className="paf-access-visual"><img className="paf-access-scene" src="/brand/login-equipe-dende-realista.png" alt="Equipe Vila Nova em uma plantação de palma" fetchPriority="high" /></div>
+      <header className="paf-access-header">
+        <div className="paf-access-identity"><img src={BRAND_ASSETS.pafIcon} alt="PAF Agricultura Familiar" /><div><h1>PAF VNA</h1><span>Programa de Agricultura Familiar</span></div></div>
+        <img className="paf-access-company" src={BRAND_ASSETS.vilaLogo} alt="Vila Nova Agroindustrial" />
+      </header>
+      <div className="paf-access-center">
+        <section className="paf-access-form premium-login-panel" aria-labelledby="paf-access-title">
+          <div className="paf-access-heading"><span className="paf-access-kicker"><span /> PORTAL DO PRODUTOR</span><h2 id="paf-access-title">Bem-vindo, produtor</h2><p>Seu trabalho no campo, conectado ao PAF.</p></div>
+          <form onSubmit={submit} aria-busy={loading}>
+            <div className="paf-access-field"><label htmlFor="paf-access-user">Login</label><div className="paf-access-input"><UserRound size={19} /><input id="paf-access-user" value={login} onChange={event => setLogin(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Login enviado pela equipe PAF" required disabled={loading} /></div></div>
+            <div className="paf-access-field"><label htmlFor="paf-access-password">Código de acesso</label><div className="paf-access-input"><KeyRound size={19} /><input id="paf-access-password" type={showPassword ? 'text' : 'password'} value={accessCode} onChange={event => setAccessCode(event.target.value)} autoComplete="current-password" placeholder="Digite seu código de acesso" required disabled={loading} aria-describedby={error ? 'paf-access-error' : undefined} /><button className="paf-access-reveal" type="button" title={showPassword ? 'Ocultar código' : 'Mostrar código'} aria-label={showPassword ? 'Ocultar código' : 'Mostrar código'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></div>
+            {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
+            <button className="paf-access-submit primary-button" type="submit" disabled={loading}><span>{loading ? 'Conectando...' : 'Acessar meus relatórios'}</span>{loading ? <Loader2 className="spin" size={20} /> : <ArrowRight size={20} />}</button>
           </form>
+          <p className="paf-producer-help">Ainda não recebeu seu acesso? Solicite à equipe PAF que acompanha sua propriedade.</p>
+          <nav className="paf-access-portals paf-access-single" aria-label="Outros acessos"><a href="/admin"><ArrowRight size={18} /><span>Acesso administrativo</span><ArrowRight size={18} /></a></nav>
         </section>
-      </section>
+      </div>
+      <footer className="paf-access-footer"><span><ShieldCheck size={15} /> Acesso individual e seguro</span><span>Vila Nova Agroindustrial <span aria-hidden="true">·</span> Tomé-Açu / PA</span></footer>
     </main>
   );
 }
