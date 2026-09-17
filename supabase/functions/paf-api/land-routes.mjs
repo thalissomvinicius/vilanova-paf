@@ -89,7 +89,7 @@ export class SupabaseLandStore {
   async get(id) { return checked(await this.db.from(TABLE).select().eq('id', id).maybeSingle()); }
   async history(id) { return checked(await this.db.from('paf_land_reviews').select().eq('request_id', id).order('created_at', { ascending: false })); }
   async list({ status, search, page }) {
-    let query = this.db.from(TABLE).select('id,protocol,full_name,cpf,birth_date,phone,municipality,community,is_federal_settlement,mother_name,status,created_at,updated_at,version', { count: 'exact' });
+    let query = this.db.from(TABLE).select('id,protocol,full_name,cpf,birth_date,phone,municipality,community,is_federal_settlement,mother_name,settlement_name,status,created_at,updated_at,version', { count: 'exact' });
     if (status) query = query.eq('status', status);
     if (search) {
       const clean = cleanSearch(search);

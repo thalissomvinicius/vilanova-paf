@@ -24,6 +24,7 @@ export class LocalLandStore {
     const columns = this.db.prepare('PRAGMA table_info(land_requests)').all().map(column => column.name);
     if (!columns.includes('is_federal_settlement')) this.db.exec('ALTER TABLE land_requests ADD COLUMN is_federal_settlement INTEGER');
     if (!columns.includes('mother_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN mother_name TEXT');
+    if (!columns.includes('settlement_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN settlement_name TEXT');
   }
   rate(key, limit, seconds) {
     const now = Date.now(); this.db.prepare('DELETE FROM land_rates WHERE expires < ?').run(now);

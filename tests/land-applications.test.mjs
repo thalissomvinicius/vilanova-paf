@@ -18,6 +18,8 @@ test('validates CPF, dates, lengths and consent at the boundary', () => {
 });
 
 test('requires a mother name only for federal settlements', () => {
+  for (const settlementName of [undefined, '', ' ', 'A', 'a'.repeat(161)]) assert.throws(() => validateSubmission({ ...payload(), isFederalSettlement: true, motherName: 'Maria de Teste', settlementName }));
+  assert.equal(validateSubmission({ ...payload(), settlementName: 'Discard this name' }).settlement_name, null);
   for (const phone of ['', '   ', undefined, '123']) assert.throws(() => validateSubmission({ ...payload(), phone }));
   assert.equal(validateSubmission({ ...payload(), phone: '+55 (91) 99999-9999' }).phone, '91999999999');
   assert.equal(PARA_MUNICIPALITIES.length, 144);
@@ -25,11 +27,11 @@ test('requires a mother name only for federal settlements', () => {
   for (const isFederalSettlement of [undefined, null, '', 'false', 1]) assert.throws(() => validateSubmission({ ...payload(), isFederalSettlement }));
   for (const motherName of [undefined, '', '   ', 'Ana', 'a'.repeat(161)]) assert.throws(() => validateSubmission({ ...payload(), isFederalSettlement: true, motherName }));
   assert.equal(validateSubmission({ ...payload(), motherName: 'Discard this name' }).mother_name, null);
-  assert.equal(validateSubmission({ ...payload(), isFederalSettlement: true, motherName: '  Maria   de Teste  ' }).mother_name, 'Maria de Teste');
+  assert.equal(validateSubmission({ ...payload(), isFederalSettlement: true, settlementName: 'PA de Teste', motherName: '  Maria   de Teste  ' }).mother_name, 'Maria de Teste');
 });
 
 test('public submission is idempotent and consultation does not reveal personal data', async () => {
-  const store = new LocalLandStore(':memory:'); const body = { ...payload(), isFederalSettlement: true, motherName: 'Maria de Teste' };
+  const store = new LocalLandStore(':memory:'); const body = { ...payload(), isFederalSettlement: true, settlementName: 'PA de Teste', motherName: 'Maria de Teste' };
   try {
     const first = await call(store, '/api/land/requests', 'POST', body); assert.equal(first.status, 201);
     const result = (await first.json()).request;
@@ -39,10 +41,11 @@ test('public submission is idempotent and consultation does not reveal personal 
     const wrong = await call(store, '/api/land/lookup', 'POST', { protocol: result.protocol, cpf: '00000000000' }); assert.equal(wrong.status, 404);
     const found = await call(store, '/api/land/lookup', 'POST', { protocol: result.protocol, cpf: body.cpf });
     const output = (await found.json()).request;
-    for (const key of ['cpf', 'full_name', 'phone', 'birth_date', 'client_id', 'fingerprint', 'mother_name', 'is_federal_settlement']) assert.equal(key in output, false);
+    for (const key of ['cpf', 'full_name', 'phone', 'birth_date', 'client_id', 'fingerprint', 'mother_name', 'settlement_name', 'is_federal_settlement']) assert.equal(key in output, false);
     const saved = store.list({ status: '', search: '', page: 1 }).requests[0];
     assert.equal(saved.is_federal_settlement, true);
     assert.equal(saved.mother_name, 'Maria de Teste');
+    assert.equal(saved.settlement_name, 'PA de Teste');
     assert.equal(saved.consent_version, LAND_CONSENT_VERSION);
     const adminResult = await call(store, `/api/land/admin/requests/${saved.id}`, 'GET', null, true);
     assert.equal((await adminResult.json()).request.mother_name, 'Maria de Teste');

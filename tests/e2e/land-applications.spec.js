@@ -143,11 +143,18 @@ for (const width of [1440, 390, 320]) {
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByLabel('Nome completo da mãe do solicitante')).toBeVisible();
     await page.getByLabel('Nome completo da mãe do solicitante').fill('Maria de Teste');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('heading', { name: 'Onde fica a área?' })).toBeVisible();
+    await expect(page.getByLabel('Nome do assentamento', { exact: true })).toHaveAttribute('required', '');
+    await page.getByLabel('Nome do assentamento', { exact: true }).fill('PA de Teste');
     await page.getByRole('radio', { name: 'Não', exact: true }).check();
+    await expect(page.getByLabel('Nome do assentamento', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Nome completo da mãe do solicitante')).toHaveCount(0);
     if (width !== 1440) {
       await page.getByRole('radio', { name: 'Sim', exact: true }).check();
       await expect(page.getByLabel('Nome completo da mãe do solicitante')).toHaveValue('');
+      await expect(page.getByLabel('Nome do assentamento', { exact: true })).toHaveValue('');
+      await page.getByLabel('Nome do assentamento', { exact: true }).fill('PA de Teste');
       await page.getByLabel('Nome completo da mãe do solicitante').fill('Maria de Teste');
     }
     await page.screenshot({ path: `verification/land-settlement-${width}.png`, fullPage: true });
@@ -173,6 +180,7 @@ for (const width of [1440, 390, 320]) {
     expect(bodies[0].consentVersion).toBe('2026-09-v2');
     expect(bodies[0].isFederalSettlement).toBe(width !== 1440);
     expect(bodies[0].motherName).toBe(width !== 1440 ? 'Maria de Teste' : '');
+    expect(bodies[0].settlementName).toBe(width !== 1440 ? 'PA de Teste' : '');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: `verification/land-receipt-${width}.png`, fullPage: true });
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Salvar protocolo' }).click(); expect((await download).suggestedFilename()).toContain('PAF-');

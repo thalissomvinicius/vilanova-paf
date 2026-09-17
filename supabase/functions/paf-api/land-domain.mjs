@@ -46,11 +46,12 @@ export function validateSubmission(body, today = new Date().toISOString().slice(
   if (!/^\d{10,11}$/.test(phone)) throw new Error('Informe um telefone de contato com DDD (10 ou 11 números).');
   if (typeof body.isFederalSettlement !== 'boolean') throw new Error('Informe se a área é assentamento federal (INCRA).');
   const motherName = body.isFederalSettlement ? text(body.motherName, 'nome completo da mãe', 5, 160) : null;
+  const settlementName = body.isFederalSettlement ? text(body.settlementName, 'nome do assentamento', 2, 160) : null;
   return {
     client_id: body.clientId.toLowerCase(), full_name: text(body.fullName, 'nome completo', 5, 160),
     cpf: digits(body.cpf), birth_date: birth, municipality: text(body.municipality, 'município', 2, 100),
     community: text(body.community, 'comunidade', 2, 120), phone,
-    is_federal_settlement: body.isFederalSettlement, mother_name: motherName
+    is_federal_settlement: body.isFederalSettlement, mother_name: motherName, settlement_name: settlementName
   };
 }
 
