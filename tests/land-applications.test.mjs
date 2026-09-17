@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LocalLandStore } from '../server/land-store.mjs';
 import { landRoute } from '../supabase/functions/paf-api/land-routes.mjs';
-import { validateSubmission, validCpf, newProtocol } from '../supabase/functions/paf-api/land-domain.mjs';
+import { validateSubmission, validCpf, newProtocol, normalizeProtocol } from '../supabase/functions/paf-api/land-domain.mjs';
 import { LAND_CONSENT_VERSION, PARA_MUNICIPALITIES } from '../supabase/functions/paf-api/land-reference.mjs';
 
 const payload = () => ({ clientId: crypto.randomUUID(), fullName: 'Pessoa de Teste', cpf: '529.982.247-25', birthDate: '1980-01-10', state: 'PA', consentVersion: LAND_CONSENT_VERSION, municipality: 'Tomé-Açu', community: 'Comunidade de teste', phone: '91999999999', isFederalSettlement: false, consent: true });
@@ -14,7 +14,29 @@ test('validates CPF, dates, lengths and consent at the boundary', () => {
   assert.equal(validCpf('52998224724'), false);
   assert.equal(validCpf('52998224725a'), false);
   for (const invalid of [{ cpf: '123' }, { birthDate: '2025-02-30' }, { birthDate: '2999-01-01' }, { consent: false }, { fullName: 'Ab' }, { municipality: '' }, { phone: '123' }, { website: 'bot' }]) assert.throws(() => validateSubmission({ ...payload(), ...invalid }));
-  assert.match(newProtocol(), /^PAF-(?:[0-9A-F]{6}-){3}[0-9A-F]{6}$/);
+  assert.match(newProtocol(), /^PAF-[2-9A-HJ-NP-Z]{5}-[2-9A-HJ-NP-Z]{5}$/);
+});
+
+test('short protocols accept easy typing and preserve legacy lookup', async () => {
+  assert.equal(normalizeProtocol('7k3m9 x4r2t'), 'PAF-7K3M9-X4R2T');
+  assert.equal(normalizeProtocol('paf-7k3m9-x4r2t'), 'PAF-7K3M9-X4R2T');
+  assert.equal(normalizeProtocol('invalid'), null);
+  const store = new LocalLandStore(':memory:');
+  try {
+    const body = payload();
+    const legacy = 'PAF-123ABC-456DEF-789ABC-123DEF';
+    store.submit({ ...validateSubmission(body), protocol: legacy, fingerprint: 'legacy', consent_version: LAND_CONSENT_VERSION });
+    assert.equal((await call(store, '/api/land/lookup', 'POST', { protocol: legacy.toLowerCase(), cpf: body.cpf })).status, 200);
+    assert.equal(store.submit({ ...validateSubmission(payload()), protocol: legacy, fingerprint: 'collision', consent_version: LAND_CONSENT_VERSION }), null);
+    const submit = store.submit.bind(store); let attempts = 0;
+    store.submit = values => ++attempts === 1 ? null : submit(values);
+    const response = await call(store, '/api/land/requests', 'POST', payload());
+    assert.equal(response.status, 201);
+    assert.equal(attempts, 2);
+    const { request } = await response.json();
+    assert.equal(request.protocol.length, 15);
+    assert.equal((await call(store, '/api/land/lookup', 'POST', { protocol: request.protocol.slice(4).replaceAll('-', '').toLowerCase(), cpf: body.cpf })).status, 200);
+  } finally { store.db.close(); }
 });
 
 test('requires a mother name only for federal settlements', () => {

@@ -34,6 +34,7 @@ export class LocalLandStore {
   submit(values) {
     const existing = this.db.prepare('SELECT * FROM land_requests WHERE client_id = ?').get(values.client_id);
     if (existing) return decode(existing);
+    if (this.db.prepare('SELECT 1 FROM land_requests WHERE protocol = ?').get(values.protocol)) return null;
     const now = new Date().toISOString(), id = randomUUID();
     const row = { id, ...values, created_at: now, updated_at: now };
     const fields = Object.keys(row);

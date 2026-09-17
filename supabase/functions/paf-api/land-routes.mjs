@@ -1,4 +1,4 @@
-import { digest, newProtocol, publicRequest, validateReview, validateSubmission, digits, cleanSearch, LAND_STATUSES } from './land-domain.mjs';
+import { digest, newProtocol, normalizeProtocol, publicRequest, validateReview, validateSubmission, digits, cleanSearch, LAND_STATUSES } from './land-domain.mjs';
 import { LAND_CONSENT_VERSION } from './land-reference.mjs';
 
 const reply = (data, status = 200) => Response.json(data, { status, headers: { 'cache-control': 'private, no-store' } });
@@ -34,12 +34,16 @@ export async function landRoute({ request, path, store, admin, actor, ip, salt }
       if (submit) {
         const values = validateSubmission(body);
         const fingerprint = await digest(JSON.stringify(values));
-        const result = await store.submit({ ...values, fingerprint, protocol: newProtocol(), consent_version: LAND_CONSENT_VERSION });
+        let result;
+        for (let attempt = 0; attempt < 3 && !result; attempt++) {
+          result = await store.submit({ ...values, fingerprint, protocol: newProtocol(), consent_version: LAND_CONSENT_VERSION });
+        }
+        if (!result) return reply({ error: 'Não foi possível gerar o protocolo. Tente novamente.' }, 503);
         if (!result || result.fingerprint !== fingerprint) return reply({ error: 'Este envio já foi utilizado com outros dados. Inicie uma nova solicitação.' }, 409);
         return reply({ request: publicRequest(result) }, 201);
       }
-      const protocol = String(body.protocol || '').trim().toUpperCase();
-      if (!/^PAF-(?:[0-9A-F]{6}-){3}[0-9A-F]{6}$/.test(protocol) || !/^\d{11}$/.test(digits(body.cpf))) return reply({ error: 'Protocolo ou CPF não conferem.' }, 404);
+      const protocol = normalizeProtocol(body.protocol);
+      if (!protocol || !/^\d{11}$/.test(digits(body.cpf))) return reply({ error: 'Protocolo ou CPF não conferem.' }, 404);
       const row = await store.lookup(protocol, digits(body.cpf));
       if (!row) return reply({ error: 'Protocolo ou CPF não conferem.' }, 404);
       return reply({ request: publicRequest(row, await store.history(row.id)) });

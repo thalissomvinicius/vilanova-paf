@@ -67,9 +67,22 @@ export function publicRequest(row, history = []) {
 }
 
 export function newProtocol() {
-  const bytes = crypto.getRandomValues(new Uint8Array(12));
-  const code = [...bytes].map(n => n.toString(16).padStart(2, '0')).join('').toUpperCase();
-  return `PAF-${code.match(/.{6}/g).join('-')}`;
+  const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  // Rejection sampling avoids modulo bias and excludes ambiguous 0, 1, I and O.
+  let code = '';
+  while (code.length < 10) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(16))) {
+      if (byte < 248 && code.length < 10) code += alphabet[byte % alphabet.length];
+    }
+  }
+  return `PAF-${code.slice(0, 5)}-${code.slice(5)}`;
+}
+
+export function normalizeProtocol(value) {
+  const code = String(value ?? '').toUpperCase().replace(/[\s-]/g, '').replace(/^PAF/, '');
+  if (/^[2-9A-HJ-NP-Z]{10}$/.test(code)) return `PAF-${code.slice(0, 5)}-${code.slice(5)}`;
+  if (/^[0-9A-F]{24}$/.test(code)) return `PAF-${code.match(/.{6}/g).join('-')}`;
+  return null;
 }
 
 export async function digest(value) {
