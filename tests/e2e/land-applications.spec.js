@@ -45,6 +45,27 @@ test('public tabs support keyboard navigation and retain unsent fields', async (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('phone stays aligned with CPF regardless of validation feedback', async ({ page }) => {
+  await mock(page);
+  await page.goto('/analise-de-area');
+  for (const width of [1440, 1024, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const value of ['', '11111111111', '52998224725']) {
+      await page.getByLabel('CPF', { exact: true }).fill(value);
+      await expect.poll(async () => {
+        const cpf = await page.getByLabel('CPF', { exact: true }).boundingBox();
+        const phone = await page.getByLabel('Telefone de contato com DDD (opcional)').boundingBox();
+        return Math.abs(cpf.height - phone.height);
+      }).toBeLessThan(1);
+      const cpf = await page.getByLabel('CPF', { exact: true }).boundingBox();
+      const phone = await page.getByLabel('Telefone de contato com DDD (opcional)').boundingBox();
+      if (phone.x > cpf.x + 5) expect(Math.abs(cpf.y - phone.y)).toBeLessThan(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+    await page.screenshot({ path: `verification/land-phone-alignment-${width}.png`, fullPage: true });
+  }
+});
+
 test('CPF gives inline feedback and blocks invalid input', async ({ page }) => {
   await mock(page);
   await page.goto('/analise-de-area');
