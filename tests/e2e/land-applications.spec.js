@@ -45,23 +45,71 @@ test('public tabs support keyboard navigation and retain unsent fields', async (
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('birth date requires all parts and handles leap years and future dates', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-09-16T12:00:00'));
+  const bodies = await mock(page);
+  await page.goto('/analise-de-area');
+  await page.getByLabel('Nome completo', { exact: true }).fill('Pessoa de Teste');
+  await page.getByLabel('CPF', { exact: true }).fill('52998224725');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page.getByRole('heading', { name: 'Quem solicita a análise?' })).toBeVisible();
+  const day = page.getByLabel('Dia', { exact: true });
+  const month = page.getByLabel('Mês', { exact: true });
+  const year = page.getByLabel('Ano', { exact: true });
+  await day.selectOption('31');
+  await month.selectOption('02');
+  await expect(day).toHaveValue('');
+  await year.selectOption('2000');
+  await day.selectOption('29');
+  await year.selectOption('1900');
+  await expect(day).toHaveValue('');
+  await expect(day.locator('option[value="29"]')).toHaveCount(0);
+  await month.selectOption('09');
+  await day.selectOption('30');
+  await year.selectOption('2026');
+  await expect(day).toHaveValue('');
+  await expect(day.locator('option[value="17"]')).toHaveCount(0);
+  await expect(month.locator('option[value="10"]')).toHaveCount(0);
+  await expect(year.locator('option[value="2027"]')).toHaveCount(0);
+  expect(bodies).toHaveLength(0);
+});
+
 for (const width of [1440, 390, 320]) {
   test(`public registration, receipt and consultation at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 }); const bodies = await mock(page);
     await page.goto('/analise-de-area');
-    await expect(page.getByRole('heading', { name: 'Análise de áreas para plantio de dendê' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cadastro de Áreas para Análise - Plantio de Dendê' })).toBeVisible();
     await expect(page.locator('.land-footer-credit')).toHaveText('Desenvolvido por Vinicius Dev');
     expect(await page.getByLabel('Nome completo', { exact: true }).evaluate(el => getComputedStyle(el).fontSize)).toBe('16px');
     await page.screenshot({ path: `verification/land-intake-${width}.png`, fullPage: true });
     await page.getByLabel('Nome completo', { exact: true }).fill('Pessoa de Teste');
     await page.getByLabel('CPF', { exact: true }).fill('52998224725');
-    await page.getByLabel('Data de nascimento').fill('1980-01-10');
+    await page.getByLabel('Dia', { exact: true }).selectOption('10');
+    await page.getByLabel('Mês', { exact: true }).selectOption('01');
+    await page.getByLabel('Ano', { exact: true }).selectOption('1980');
     await page.getByLabel('Telefone de contato com DDD (opcional)').fill('91999999999');
     await page.getByRole('button', { name: 'Continuar' }).click();
     await page.getByLabel('Município da área').fill('Tomé-Açu');
     await page.getByLabel('Comunidade da área').fill('Comunidade de teste');
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('heading', { name: 'Onde fica a área?' })).toBeVisible();
+    await page.getByRole('radio', { name: 'Sim', exact: true }).check();
+    await page.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByLabel('Nome completo da mãe do solicitante')).toBeVisible();
+    await page.getByLabel('Nome completo da mãe do solicitante').fill('Maria de Teste');
+    await page.getByRole('radio', { name: 'Não', exact: true }).check();
+    await expect(page.getByLabel('Nome completo da mãe do solicitante')).toHaveCount(0);
+    if (width !== 1440) {
+      await page.getByRole('radio', { name: 'Sim', exact: true }).check();
+      await expect(page.getByLabel('Nome completo da mãe do solicitante')).toHaveValue('');
+      await page.getByLabel('Nome completo da mãe do solicitante').fill('Maria de Teste');
+    }
+    await page.screenshot({ path: `verification/land-settlement-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Voltar', exact: true }).click();
     await expect(page.getByLabel('Nome completo', { exact: true })).toHaveValue('Pessoa de Teste');
+    await expect(page.getByLabel('Dia', { exact: true })).toHaveValue('10');
+    await expect(page.getByLabel('Mês', { exact: true })).toHaveValue('01');
+    await expect(page.getByLabel('Ano', { exact: true })).toHaveValue('1980');
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page.getByLabel('Comunidade da área')).toHaveValue('Comunidade de teste');
     await page.getByRole('button', { name: 'Continuar' }).click();
@@ -70,6 +118,9 @@ for (const width of [1440, 390, 320]) {
     await page.getByRole('button', { name: 'Enviar solicitação' }).click();
     await expect(page.getByRole('heading', { name: 'Solicitação recebida' })).toBeVisible();
     expect(bodies).toHaveLength(1); expect(bodies[0].consent).toBe(true);
+    expect(bodies[0].birthDate).toBe('1980-01-10');
+    expect(bodies[0].isFederalSettlement).toBe(width !== 1440);
+    expect(bodies[0].motherName).toBe(width !== 1440 ? 'Maria de Teste' : '');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.screenshot({ path: `verification/land-receipt-${width}.png`, fullPage: true });
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Salvar protocolo' }).click(); expect((await download).suggestedFilename()).toContain('PAF-');

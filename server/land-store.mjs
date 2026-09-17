@@ -3,6 +3,8 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { cleanSearch } from '../supabase/functions/paf-api/land-domain.mjs';
 
+const decode = row => row ? { ...row, is_federal_settlement: row.is_federal_settlement == null ? null : Boolean(row.is_federal_settlement) } : row;
+
 // Local development follows the same route contract as the production API.
 export class LocalLandStore {
   constructor(filename = process.env.PAF_LAND_DB_PATH || path.resolve('data', 'land-requests.sqlite')) {
@@ -19,6 +21,9 @@ export class LocalLandStore {
         id TEXT PRIMARY KEY, request_id TEXT NOT NULL REFERENCES land_requests(id), status TEXT NOT NULL,
         comment TEXT NOT NULL, actor TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS land_rates (key TEXT PRIMARY KEY, hits INTEGER NOT NULL, expires INTEGER NOT NULL);`);
+    const columns = this.db.prepare('PRAGMA table_info(land_requests)').all().map(column => column.name);
+    if (!columns.includes('is_federal_settlement')) this.db.exec('ALTER TABLE land_requests ADD COLUMN is_federal_settlement INTEGER');
+    if (!columns.includes('mother_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN mother_name TEXT');
   }
   rate(key, limit, seconds) {
     const now = Date.now(); this.db.prepare('DELETE FROM land_rates WHERE expires < ?').run(now);
@@ -27,21 +32,21 @@ export class LocalLandStore {
   }
   submit(values) {
     const existing = this.db.prepare('SELECT * FROM land_requests WHERE client_id = ?').get(values.client_id);
-    if (existing) return existing;
+    if (existing) return decode(existing);
     const now = new Date().toISOString(), id = randomUUID();
     const row = { id, ...values, created_at: now, updated_at: now };
     const fields = Object.keys(row);
-    this.db.prepare(`INSERT INTO land_requests (${fields.join(',')}) VALUES (${fields.map(() => '?').join(',')})`).run(...Object.values(row));
+    this.db.prepare(`INSERT INTO land_requests (${fields.join(',')}) VALUES (${fields.map(() => '?').join(',')})`).run(...Object.values(row).map(value => typeof value === 'boolean' ? Number(value) : value));
     return this.get(id);
   }
-  lookup(protocol, cpf) { return this.db.prepare('SELECT * FROM land_requests WHERE protocol = ? AND cpf = ?').get(protocol, cpf); }
-  get(id) { return this.db.prepare('SELECT * FROM land_requests WHERE id = ?').get(id); }
+  lookup(protocol, cpf) { return decode(this.db.prepare('SELECT * FROM land_requests WHERE protocol = ? AND cpf = ?').get(protocol, cpf)); }
+  get(id) { return decode(this.db.prepare('SELECT * FROM land_requests WHERE id = ?').get(id)); }
   history(id) { return this.db.prepare('SELECT * FROM land_reviews WHERE request_id = ? ORDER BY created_at DESC, id').all(id); }
   list({ status, search, page }) {
     const clean = cleanSearch(search);
     const where = `WHERE (? = '' OR status = ?) AND (? = '' OR full_name LIKE ? OR cpf LIKE ? OR protocol LIKE ? OR municipality LIKE ? OR community LIKE ?)`;
     const args = [status, status, clean, ...Array(5).fill(`%${clean}%`)];
-    return { requests: this.db.prepare(`SELECT * FROM land_requests ${where} ORDER BY created_at DESC, id LIMIT 25 OFFSET ?`).all(...args, (page - 1) * 25), total: this.db.prepare(`SELECT count(*) total FROM land_requests ${where}`).get(...args).total, page, pageSize: 25 };
+    return { requests: this.db.prepare(`SELECT * FROM land_requests ${where} ORDER BY created_at DESC, id LIMIT 25 OFFSET ?`).all(...args, (page - 1) * 25).map(decode), total: this.db.prepare(`SELECT count(*) total FROM land_requests ${where}`).get(...args).total, page, pageSize: 25 };
   }
   review(id, review, actor) {
     this.db.exec('BEGIN IMMEDIATE');
