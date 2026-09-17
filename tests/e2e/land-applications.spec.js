@@ -198,7 +198,7 @@ for (const width of [1440, 390, 320]) {
   test(`administrative review dialog and public result at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 }); const bodies = await mock(page);
     await page.goto('/admin/analises-areas');
-    await page.getByRole('button', { name: 'Analisar Pessoa de Teste' }).click();
+    await page.getByRole('button', { name: 'Editar análise de Pessoa de Teste' }).click();
     const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible();
     await page.getByLabel('Resultado da análise').selectOption(width === 320 ? 'DADOS_INCONSISTENTES' : 'POSSIVEL_FINANCIAMENTO');
     await page.getByLabel('Nome de quem realizou a análise').fill('Ana de Teste');

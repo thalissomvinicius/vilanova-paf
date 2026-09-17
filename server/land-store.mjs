@@ -62,4 +62,15 @@ export class LocalLandStore {
       const result = this.get(id); this.db.exec('COMMIT'); return result;
     } catch (err) { this.db.exec('ROLLBACK'); throw err; }
   }
+  remove(id, version, protocol) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const row = this.get(id);
+      if (!row || row.version !== version || row.protocol !== protocol) { this.db.exec('ROLLBACK'); return false; }
+      this.db.prepare('DELETE FROM land_reviews WHERE request_id = ?').run(id);
+      this.db.prepare('DELETE FROM land_requests WHERE id = ?').run(id);
+      this.db.exec('COMMIT');
+      return true;
+    } catch (err) { this.db.exec('ROLLBACK'); throw err; }
+  }
 }

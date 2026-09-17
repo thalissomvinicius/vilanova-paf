@@ -57,6 +57,13 @@ export async function landRoute({ request, path, store, admin, actor, ip, salt }
       return reply(await store.list({ status, search, page }));
     }
     const match = path.match(/^\/api\/land\/admin\/requests\/([0-9a-f-]{36})$/i);
+    if (match && method === 'DELETE') {
+      const body = await bodyOf(request);
+      if (body.confirmation !== 'EXCLUIR' || !Number.isInteger(body.version) || body.version < 1 || typeof body.protocol !== 'string') return reply({ error: 'Confirme a exclusão digitando EXCLUIR.' }, 400);
+      const removed = await store.remove(match[1], body.version, body.protocol);
+      if (!removed) return reply({ error: 'A solicitação foi alterada ou já excluída. Feche e reabra a análise antes de tentar novamente.' }, 409);
+      return reply({ deleted: true });
+    }
     if (match && method === 'GET') {
       const row = await store.get(match[1]);
       if (!row) return reply({ error: 'Solicitação não encontrada.' }, 404);
@@ -83,6 +90,7 @@ function checked(result) {
 const TABLE = 'paf_land_requests';
 export class SupabaseLandStore {
   constructor(db) { this.db = db; }
+  async remove(id, version, protocol) { return checked(await this.db.rpc('paf_land_delete', { p_id: id, p_version: version, p_protocol: protocol })); }
   async rate(key, limit, seconds) { return checked(await this.db.rpc('paf_land_rate', { p_key: key, p_limit: limit, p_seconds: seconds })); }
   async submit(values) {
     const result = await this.db.from(TABLE).insert(values).select().single();

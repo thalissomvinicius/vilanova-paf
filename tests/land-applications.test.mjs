@@ -101,6 +101,28 @@ test('only administrators review, history is atomic, stale versions cannot overw
   } finally { store.db.close(); }
 });
 
+test('deletion requires admin, explicit confirmation and current version, and removes history', async () => {
+  const store = new LocalLandStore(':memory:');
+  try {
+    await call(store, '/api/land/requests', 'POST', payload());
+    const row = store.list({ status: '', search: '', page: 1 }).requests[0];
+    const path = `/api/land/admin/requests/${row.id}`;
+    const review = { reviewerName: 'Ana de Teste', status: 'EM_ANALISE', comment: 'Verificação em andamento.', version: 1 };
+    await call(store, path, 'PATCH', review, true);
+    const body = { version: 2, protocol: row.protocol, confirmation: 'EXCLUIR' };
+    assert.equal((await call(store, path, 'DELETE', body)).status, 401);
+    assert.equal((await call(store, path, 'DELETE', { ...body, confirmation: '' }, true)).status, 400);
+    assert.equal((await call(store, path, 'DELETE', { ...body, version: 1 }, true)).status, 409);
+    assert.equal((await call(store, path, 'DELETE', { ...body, protocol: 'wrong' }, true)).status, 409);
+    assert.equal(store.history(row.id).length, 1);
+    assert.equal((await call(store, path, 'DELETE', body, true)).status, 200);
+    assert.equal(store.history(row.id).length, 0);
+    assert.equal(store.list({ status: '', search: '', page: 1 }).total, 0);
+    assert.equal((await call(store, '/api/land/lookup', 'POST', { protocol: row.protocol, cpf: row.cpf })).status, 404);
+    assert.equal((await call(store, path, 'DELETE', body, true)).status, 409);
+  } finally { store.db.close(); }
+});
+
 test('rate limits persist in the store and fail closed', async () => {
   const store = new LocalLandStore(':memory:');
   try { for (let i = 0; i < 12; i++) await call(store, '/api/land/requests', 'POST', {}); assert.equal((await call(store, '/api/land/requests', 'POST', payload())).status, 429); }

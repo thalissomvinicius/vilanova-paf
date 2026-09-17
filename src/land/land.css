@@ -213,3 +213,8 @@
   .land-public .land-tabs button { flex-direction: column; gap: 6px; }
   .land-intro h1 { font-size: 23px; }
 }
+.land-delete-section { margin-top: 28px; padding-top: 20px; border-top: 1px solid #e4d6d1; }
+.land-delete-section p { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.land-ui .land-delete-button { color: #a1261c; border-color: #c88780; }
+.land-ui .primary-button.land-delete-button { background: #a1261c; border-color: #a1261c; color: #fff; }
+.land-ui .land-delete-button:disabled { opacity: .5; cursor: not-allowed; }
