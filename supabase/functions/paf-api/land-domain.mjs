@@ -58,12 +58,12 @@ export function validateSubmission(body, today = new Date().toISOString().slice(
 export function validateReview(body) {
   if (!body || !Object.hasOwn(LAND_STATUSES, body.status)) throw new Error('Selecione um resultado válido.');
   if (!Number.isInteger(body.version) || body.version < 1) throw new Error('Reabra a solicitação antes de salvar.');
-  return { status: body.status, comment: text(body.comment, 'o motivo da análise', 10, 2000), version: body.version };
+  return { reviewerName: text(body.reviewerName, 'nome de quem realizou a análise', 3, 160), status: body.status, comment: text(body.comment, 'o motivo da análise', 10, 2000), version: body.version };
 }
 
 export function publicRequest(row, history = []) {
-  return { protocol: row.protocol, status: row.status, comment: row.comment, created_at: row.created_at, updated_at: row.updated_at,
-    history: history.map(item => ({ status: item.status, comment: item.comment, created_at: item.created_at })) };
+  return { reviewer_name: row.reviewer_name || null, protocol: row.protocol, status: row.status, comment: row.comment, created_at: row.created_at, updated_at: row.updated_at,
+    history: history.map(item => ({ reviewer_name: item.reviewer_name || null, status: item.status, comment: item.comment, created_at: item.created_at })) };
 }
 
 export function newProtocol() {

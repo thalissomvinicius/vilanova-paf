@@ -17,7 +17,7 @@ async function mock(page) {
     }
     else if (path === '/api/land/admin/requests') data = { requests: !url.searchParams.get('search') || row.full_name.includes(url.searchParams.get('search')) ? [row] : [], total: 1, page: 1, pageSize: 25 };
     else if (path.startsWith('/api/land/admin/requests/')) {
-      if (request.method() === 'PATCH') { const body = request.postDataJSON(); bodies.push(body); row = { ...row, ...body, version: row.version + 1 }; history = [{ ...body, actor: 'Equipe PAF', created_at: row.created_at }]; }
+      if (request.method() === 'PATCH') { const body = request.postDataJSON(); bodies.push(body); row = { ...row, ...body, reviewer_name: body.reviewerName, version: row.version + 1 }; history = [{ ...body, reviewer_name: body.reviewerName, actor: 'Equipe PAF', created_at: row.created_at }]; }
       data = { request: row, history };
     }
     else if (path === '/api/admin/fuel') data = { records: [], vehicles: [], drivers: [], summary: null, options: {} };
@@ -201,6 +201,7 @@ for (const width of [1440, 390, 320]) {
     await page.getByRole('button', { name: 'Analisar Pessoa de Teste' }).click();
     const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible();
     await page.getByLabel('Resultado da análise').selectOption(width === 320 ? 'DADOS_INCONSISTENTES' : 'POSSIVEL_FINANCIAMENTO');
+    await page.getByLabel('Nome de quem realizou a análise').fill('Ana de Teste');
     await page.getByLabel('Parecer para o solicitante').fill('Área apta a seguir para avaliação documental pela instituição financeira.');
     await page.getByRole('button', { name: 'Salvar parecer' }).click();
     await expect(page.getByText('Parecer salvo e disponível para consulta.')).toBeVisible();

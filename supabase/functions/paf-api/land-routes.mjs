@@ -102,5 +102,5 @@ export class SupabaseLandStore {
     const result = await query.order('created_at', { ascending: false }).order('id').range((page - 1) * 25, page * 25 - 1);
     return { requests: checked(result), total: result.count, page, pageSize: 25 };
   }
-  async review(id, review, actor) { return checked(await this.db.rpc('paf_land_review', { p_id: id, p_version: review.version, p_status: review.status, p_comment: review.comment, p_actor: actor })); }
+  async review(id, review, actor) { return checked(await this.db.rpc('paf_land_review', { p_id: id, p_version: review.version, p_status: review.status, p_comment: review.comment, p_actor: actor, p_reviewer_name: review.reviewerName })); }
 }

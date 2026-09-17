@@ -25,6 +25,8 @@ export class LocalLandStore {
     if (!columns.includes('is_federal_settlement')) this.db.exec('ALTER TABLE land_requests ADD COLUMN is_federal_settlement INTEGER');
     if (!columns.includes('mother_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN mother_name TEXT');
     if (!columns.includes('settlement_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN settlement_name TEXT');
+    if (!columns.includes('reviewer_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN reviewer_name TEXT');
+    if (!this.db.prepare('PRAGMA table_info(land_reviews)').all().some(column => column.name === 'reviewer_name')) this.db.exec('ALTER TABLE land_reviews ADD COLUMN reviewer_name TEXT');
   }
   rate(key, limit, seconds) {
     const now = Date.now(); this.db.prepare('DELETE FROM land_rates WHERE expires < ?').run(now);
@@ -54,9 +56,9 @@ export class LocalLandStore {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const now = new Date().toISOString();
-      const updated = this.db.prepare('UPDATE land_requests SET status = ?, comment = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?').run(review.status, review.comment, now, id, review.version);
+      const updated = this.db.prepare('UPDATE land_requests SET status = ?, comment = ?, reviewer_name = ?, version = version + 1, updated_at = ? WHERE id = ? AND version = ?').run(review.status, review.comment, review.reviewerName, now, id, review.version);
       if (!updated.changes) { this.db.exec('ROLLBACK'); return null; }
-      this.db.prepare('INSERT INTO land_reviews VALUES (?, ?, ?, ?, ?, ?)').run(randomUUID(), id, review.status, review.comment, actor, now);
+      this.db.prepare('INSERT INTO land_reviews (id, request_id, status, comment, actor, created_at, reviewer_name) VALUES (?, ?, ?, ?, ?, ?, ?)').run(randomUUID(), id, review.status, review.comment, actor, now, review.reviewerName);
       const result = this.get(id); this.db.exec('COMMIT'); return result;
     } catch (err) { this.db.exec('ROLLBACK'); throw err; }
   }

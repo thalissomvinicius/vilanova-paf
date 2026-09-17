@@ -83,15 +83,19 @@ test('only administrators review, history is atomic, stale versions cannot overw
     await call(store, '/api/land/requests', 'POST', payload());
     const row = store.list({ status: '', search: '', page: 1 }).requests[0];
     const path = `/api/land/admin/requests/${row.id}`;
-    const review = { status: 'DADOS_INCONSISTENTES', comment: 'Dados informados divergem da documentação. Verificar com a equipe.', version: 1 };
+    const review = { reviewerName: 'Ana de Teste', status: 'DADOS_INCONSISTENTES', comment: 'Dados informados divergem da documentação. Verificar com a equipe.', version: 1 };
     for (const [url, method, body] of [[path, 'GET'], [path, 'PATCH', review], ['/api/land/admin/requests', 'GET']]) assert.equal((await call(store, url, method, body)).status, 401);
     assert.equal((await call(store, path, 'PATCH', { ...review, comment: '' }, true)).status, 400);
     assert.equal((await call(store, path, 'PATCH', review, true)).status, 200);
     assert.equal((await call(store, path, 'PATCH', review, true)).status, 409);
     assert.equal(store.history(row.id).length, 1);
     assert.equal(store.get(row.id).version, 2);
+    assert.equal(store.get(row.id).reviewer_name, 'Ana de Teste');
+    assert.equal((await call(store, path, 'PATCH', { ...review, reviewerName: '' }, true)).status, 400);
     const lookup = await call(store, '/api/land/lookup', 'POST', { protocol: row.protocol, cpf: row.cpf });
     const found = (await lookup.json()).request;
+    assert.equal(found.reviewer_name, 'Ana de Teste');
+    assert.equal(found.history[0].reviewer_name, 'Ana de Teste');
     assert.equal(found.status, review.status); assert.equal(found.history[0].comment, review.comment); assert.equal('actor' in found.history[0], false);
     assert.equal(store.list({ status: 'EM_ANALISE', search: '', page: 1 }).total, 0);
   } finally { store.db.close(); }
