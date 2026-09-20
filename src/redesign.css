@@ -6,7 +6,7 @@ body {
   overflow-x: hidden;
   background: var(--app-bg);
   color: var(--app-ink);
-  font-family: Inter, Manrope, "Segoe UI", system-ui, sans-serif;
+  font-family: inherit;
 }
 
 #root {
@@ -46,7 +46,7 @@ button:disabled {
 
 .eyebrow {
   margin: 0 0 5px;
-  color: var(--app-green-600);
+  color: var(--app-green-700);
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -54,9 +54,9 @@ button:disabled {
 
 code {
   min-height: 25px;
-  border-color: #cddbd0;
+  border-color: var(--app-line-strong);
   border-radius: 5px;
-  background: #f1f6f1;
+  background: var(--app-surface-soft);
   color: var(--app-green-800);
   font-size: 0.76rem;
 }

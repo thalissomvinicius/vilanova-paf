@@ -57,10 +57,10 @@ code {
   display: inline-flex;
   align-items: center;
   min-height: 26px;
-  border: 1px solid #c8d8ce;
+  border: 1px solid var(--app-line-strong);
   border-radius: 6px;
   padding: 0 7px;
-  background: #f2f7f3;
+  background: var(--app-surface-soft);
   color: var(--green-dark);
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   font-size: 0.82rem;
@@ -70,7 +70,7 @@ code {
 
 .eyebrow {
   margin: 0 0 2px;
-  color: var(--green);
+  color: var(--app-green-700);
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -83,9 +83,9 @@ code {
   height: 48px;
   flex: 0 0 48px;
   place-items: center;
-  border: 1px solid #b8d1c0;
+  border: 1px solid var(--app-line-strong);
   border-radius: 8px;
-  background: #e7f2ea;
+  background: var(--app-green-100);
   color: var(--green);
 }
 
