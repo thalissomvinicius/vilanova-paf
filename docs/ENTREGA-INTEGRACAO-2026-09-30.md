@@ -25,7 +25,9 @@ As migrations `20260929230000_unified_operations` e `20260929231000_operations_a
 
 Existe uma cópia privada de 16 tabelas em `data/backups/`, ignorada pelo Git. Ela não inclui todo o Auth e os arquivos do Storage e não substitui um backup completo com restauração comprovada.
 
-O acesso administrativo foi restabelecido. As migrations de atividade, confiabilidade, consistência de edição e permissões (`20260930003000`, `20260930004500`, `20260930010000`, `20260930011000`) foram ensaiadas com rollback e aplicadas no mesmo projeto. A API atualizada foi implantada em 30/09/2026. Frontends seguem para publicação via GitHub/Vercel; confirmar a publicação pelos arquivos efetivamente servidos, não somente pelo push.
+O acesso administrativo foi restabelecido. As migrations de atividade, confiabilidade, consistência de edição e permissões (`20260930003000`, `20260930004500`, `20260930010000`, `20260930011000`) foram ensaiadas com rollback e aplicadas no mesmo projeto. A API atualizada foi implantada em 30/09/2026. Os dois frontends foram publicados via GitHub/Vercel e conferidos pelos arquivos efetivamente servidos.
+
+Dashboard: commit `0819cdd0a6fca8439a49b31b577af468bb3fa630`, status Vercel aprovado. Em https://vilanova-paf.vercel.app, o bundle operacional `OperationsWorkspace-DQ88HX2A.js` respondeu 200 e contém as novas telas de produtores e acompanhamento. A API `/api/health` respondeu 200 com banco Supabase. A tela publicada de login foi conferida, sem credenciais preenchidas.
 
 O APK PAF VNA 1.10.4, código 18, foi compilado e sua assinatura verificada. Usa assinatura de testes e conserva o pacote `.piloto` para compatibilidade com as versões de homologação anteriores. Não substitui a instalação original assinada com outra chave. Não desinstalar versões com registros pendentes.
 
@@ -48,7 +50,7 @@ Os testes de navegador combinam APIs simuladas e servidor/banco locais. Eles nã
 
 ## Pendencias para a primeira versao oficial
 
-1. Concluir a publicação integrada e verificar as operações no banco real.
+1. Homologar os fluxos publicados com usuários reais no banco de produção; publicação integrada e verificações remotas básicas concluídas.
 2. Homologar permissões reais de administração, coordenação, técnicos e parceiros. Alcance do coordenador já definido: organização inteira.
 3. Testar restauração completa de banco, Auth e arquivos; criação de schema do zero já verificada.
 4. Resolver identidades conflitantes com conferência dos responsáveis; não vincular automaticamente pessoas com nomes diferentes.
