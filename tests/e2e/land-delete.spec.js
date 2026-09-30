@@ -23,6 +23,7 @@ for (const width of [1440, 390]) {
     });
     await page.goto('/admin/analises-areas');
     await page.getByRole('button', { name: 'Editar análise de Pessoa de Teste' }).click();
+    await page.getByRole('tab', { name: 'Cadastro', exact: true }).click();
     await page.getByRole('button', { name: 'Excluir solicitação', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Excluir definitivamente' })).toBeDisabled();
     await page.getByRole('button', { name: 'Cancelar exclusão' }).click();
@@ -32,9 +33,9 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: `verification/land-delete-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: 'Excluir definitivamente' }).click();
     await expect(page.getByRole('alert')).toHaveText('Tente novamente.');
-    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.locator('.ops-case-workspace')).toBeVisible();
     await page.getByRole('button', { name: 'Excluir definitivamente' }).click();
-    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.locator('.ops-case-workspace')).toHaveCount(0);
     await expect(page.getByText('Nenhuma solicitação encontrada')).toBeVisible();
     expect(deleted).toBe(true);
   });

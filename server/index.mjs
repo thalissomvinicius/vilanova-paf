@@ -65,6 +65,8 @@ import {
 import { importFuelWorkbook } from "./importFuelExcel.mjs";
 import { LocalLandStore } from './land-store.mjs';
 import { landRoute } from '../supabase/functions/paf-api/land-routes.mjs';
+import { operationsRoute } from '../supabase/functions/paf-api/operations-routes.mjs';
+import { LocalOperationsStore } from './operations-store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -82,6 +84,13 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
 
 const landStore = new LocalLandStore();
+const operationsStore = new LocalOperationsStore(landStore);
+app.use('/api/operations', async (req,res) => {
+  try {
+    const response=await operationsRoute({request:new Request(`http://localhost${req.originalUrl}`,{method:req.method,headers:{'content-type':'application/json'},...(['GET','HEAD'].includes(req.method)?{}:{body:JSON.stringify(req.body || {})})}),path:req.originalUrl.split('?')[0],store:operationsStore,admin:readAuth(req)?.role==='admin',actor:process.env.PAF_ADMIN_USER || 'Administrador local'});
+    res.status(response.status).set(Object.fromEntries(response.headers)).send(await response.text());
+  } catch {res.status(500).json({error:'Não foi possível acessar a operação.'});}
+});
 app.use('/api/land', async (req, res, next) => {
   try {
     const auth = readAuth(req);

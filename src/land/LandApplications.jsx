@@ -7,6 +7,7 @@ import { LandConsent } from './LandConsent';
 import { CpfField } from './CpfField';
 import { PARA_MUNICIPALITIES, LAND_CONSENT_VERSION } from '../../supabase/functions/paf-api/land-reference.mjs';
 import './land.css';
+import { CaseWorkspace } from '../operations/OperationsWorkspace';
 
 const date = value => new Date(value).toLocaleString('pt-BR');
 const birthday = value => value.split('-').reverse().join('/');
@@ -124,18 +125,20 @@ function Tracking({ active }) {
   return <div className="land-form"><h2>Consulte sua solicitação</h2><form onSubmit={e => { e.preventDefault(); generation.current++; setCredentials(null); lookup({ protocol: protocol.trim(), cpf }); }}><div className="land-fields"><label>Protocolo<input required maxLength={40} value={protocol} onChange={e => setProtocol(e.target.value)} autoCapitalize="characters" placeholder="PAF-7K3M9-X4R2T" /></label><label>CPF do solicitante<input required value={cpf} maxLength={14} inputMode="numeric" onChange={e => setCpf(e.target.value)} autoComplete="off" /></label></div><div className="land-actions"><button className="primary-button" disabled={busy}>{busy ? <Loader2 size={18} className="land-spin" /> : <Search size={18} />} Consultar andamento</button>{result && <button type="button" className="icon-text-button" onClick={() => { generation.current++; setResult(null); setCredentials(null); setCpf(''); setProtocol(''); setError(''); }}>Encerrar consulta</button>}</div></form><Message>{error}</Message>{result && <section className="land-tracking-result" aria-live="polite"><div className="land-section-heading"><h2>Andamento da solicitação</h2><Status value={result.status} /></div><span className="land-muted">Atualizado em {date(result.updated_at)}</span><p className="land-public-comment">{result.comment}</p>{result.reviewer_name && <p>Análise realizada por: <strong>{result.reviewer_name}</strong></p>}<History request={result} history={result.history} /></section>}</div>;
 }
 
-export function LandAdmin({ api }) {
+export function LandAdmin({ api, canManageRecords = true }) {
   const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [page, setPage] = useState(1);
+  const [archive, setArchive] = useState('active');
   const [data, setData] = useState({ requests: [], total: 0 }); const [busy, setBusy] = useState(true); const [error, setError] = useState('');
-  const [selected, setSelected] = useState(null); const [copied, setCopied] = useState(false); const sequence = useRef(0);
+  const [selected, setSelected] = useState(()=>new URLSearchParams(location.search).get('request')); const [copied, setCopied] = useState(false); const sequence = useRef(0);
   const publicUrl = `${location.origin}/analise-de-area`;
   const load = useCallback(async (quiet = false) => {
     const current = ++sequence.current; if (!quiet) setBusy(true);
-    try { const result = await api(`${apiRoot}/admin/requests?${new URLSearchParams({ search, status, page })}`); if (current !== sequence.current) return; setData(result); setError(''); if (page > Math.max(1, Math.ceil(result.total / 25))) setPage(Math.max(1, Math.ceil(result.total / 25))); }
+    try { const result = await api(`${apiRoot}/admin/requests?${new URLSearchParams({ search, status, page, archive })}`); if (current !== sequence.current) return; setData(result); setError(''); if (page > Math.max(1, Math.ceil(result.total / 25))) setPage(Math.max(1, Math.ceil(result.total / 25))); }
     catch (err) { if (current === sequence.current) setError(err.message); }
     finally { if (current === sequence.current) setBusy(false); }
-  }, [api, search, status, page]);
+  }, [api, search, status, page, archive]);
   useEffect(() => { const delay = setTimeout(() => load(), 250); const timer = setInterval(() => { if (document.visibilityState === 'visible') load(true); }, 30000); return () => { clearTimeout(delay); clearInterval(timer); sequence.current++; }; }, [load]);
+  if(selected) return <CaseWorkspace key={selected} id={selected} api={api} canManageRecords={canManageRecords} onBack={()=>{setSelected(null);history.replaceState(null,'',location.pathname);}} onSaved={()=>load(true)}/>;
   function exportPage() {
     const cell = value => `"${String(value ?? '').replace(/^[=+@-]/, "'$&").replace(/"/g, '""')}"`;
     const rows = [['Protocolo', 'Nome', 'CPF', 'Nascimento', 'Telefone', 'Município', 'Comunidade', 'Assentamento federal (INCRA)', 'Nome completo da mãe', 'Nome do assentamento', 'Resultado', 'Recebido em'], ...data.requests.map(row => [row.protocol, row.full_name, row.cpf, birthday(row.birth_date), row.phone, row.municipality, row.community, settlementLabel(row.is_federal_settlement), row.mother_name || '', row.settlement_name || '', LAND_STATUSES[row.status], date(row.created_at)])];
@@ -145,6 +148,7 @@ export function LandAdmin({ api }) {
     <div className="land-share"><div><strong>Formulário público</strong><a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}<ExternalLink size={14} /></a></div><button className="primary-button" onClick={async () => { try { await navigator.clipboard.writeText(publicUrl); setCopied(true); } catch { setError('Não foi possível copiar. Selecione o endereço do formulário.'); } }}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? 'Link copiado' : 'Copiar link'}</button></div>
     <div className="land-filters"><label>Buscar solicitações<input type="search" placeholder="Nome, CPF sem pontos, protocolo ou local" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label><label>Resultado<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">Todos os resultados</option>{Object.entries(LAND_STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
     <Message>{error}</Message>
+    <label>Situação do cadastro<select value={archive} onChange={e => {setArchive(e.target.value);setPage(1);}}><option value="active">Ativos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select></label>
     <div className="land-table-wrap" aria-busy={busy}><table className="land-table"><thead><tr><th>Solicitante</th><th>Localização</th><th>Recebimento</th><th>Resultado</th><th><span className="land-muted">Análise</span></th></tr></thead><tbody>{data.requests.map(row => <tr key={row.id}><td><strong>{row.full_name}</strong><span>{row.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}</span><small>{row.protocol}</small></td><td>{row.municipality}<span>{row.community}</span></td><td>{date(row.created_at)}</td><td><Status value={row.status} /></td><td><button className="icon-text-button" onClick={() => setSelected(row.id)} aria-label={`Editar análise de ${row.full_name}`}><Pencil size={17} /> Editar análise</button></td></tr>)}</tbody></table>{!data.requests.length && <div className="land-empty"><ClipboardList size={30} /><h3>{busy ? 'Buscando solicitações...' : error ? 'Não foi possível carregar' : 'Nenhuma solicitação encontrada'}</h3>{!busy && !error && <p>Os cadastros recebidos pelo formulário público aparecerão aqui.</p>}</div>}</div>
     <div className="land-pagination"><span>Página {page} de {Math.max(1, Math.ceil(data.total / 25))}</span><div className="land-actions"><button className="icon-text-button" disabled={page <= 1 || busy} onClick={() => setPage(page - 1)} aria-label="Página anterior"><ArrowLeft size={18} /></button><button className="icon-text-button" disabled={page * 25 >= data.total || busy} onClick={() => setPage(page + 1)} aria-label="Próxima página"><ArrowRight size={18} /></button></div></div>
     {selected && <ReviewDialog key={selected} id={selected} api={api} onClose={() => setSelected(null)} onSaved={() => load(true)} />}

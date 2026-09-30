@@ -1,4 +1,5 @@
 begin;
+select plan(1);
 do $$
 declare test_id uuid; result jsonb;
 begin
@@ -16,4 +17,6 @@ begin
   if (select count(*) from public.paf_land_reviews where request_id = test_id) <> 1 then raise exception 'History mismatch'; end if;
 end;
 $$;
+select pass('Public boundaries, review version and history verified');
+select * from finish();
 rollback;

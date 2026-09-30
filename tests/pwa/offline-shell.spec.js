@@ -15,7 +15,7 @@ const portals = [
   },
   {
     path: "/produtor",
-    loginHeading: "Acesso do produtor",
+    loginHeading: "Bem-vindo, produtor",
     cacheKey: "paf:producer-session-cache",
     workspaceHeading: "Produtor PWA Offline",
     snapshot: {

@@ -149,7 +149,7 @@ test.describe.serial("fila offline de relatórios do produtor", () => {
     await page.goto("/produtor");
     await page.getByLabel("Login").fill(login);
     await page.getByLabel("Código de acesso").fill(accessCode);
-    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.getByRole("button", { name: "Acessar meus relatórios" }).click();
     await expect(page.getByRole("heading", { name: producer.name })).toBeVisible();
 
     await page.getByLabel("Telefone para contato").fill("(91) 99999-0000");
@@ -215,7 +215,7 @@ test.describe.serial("fila offline de relatórios do produtor", () => {
     await page.goto("/produtor");
     await page.getByLabel("Login").fill(login);
     await page.getByLabel("Código de acesso").fill(accessCode);
-    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.getByRole("button", { name: "Acessar meus relatórios" }).click();
     await expect(page.getByRole("heading", { name: producer.name })).toBeVisible();
 
     const totalBefore = getDb().prepare("SELECT count(*) AS total FROM reports WHERE producer_id = ?").get(producer.id).total;

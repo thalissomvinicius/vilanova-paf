@@ -19,6 +19,7 @@ import {
 import { PafRepository } from "./repository.ts";
 import { importFuelWorkbook } from "./fuel-import.ts";
 import { landRoute, SupabaseLandStore } from "./land-routes.mjs";
+import { operationsRoute, SupabaseOperationsStore } from './operations-routes.mjs';
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -101,9 +102,14 @@ async function route(context: RouteContext): Promise<Response | null> {
   const { request, method, path, url, ipAddress, repository, db } = context;
   const filters = Object.fromEntries(url.searchParams.entries());
 
+  if (path.startsWith('/api/operations')) {
+    const auth = await authenticate(repository, request);
+    return operationsRoute({ request, path, store: new SupabaseOperationsStore(db), admin: isOperator(auth), manageRecords: isAdmin(auth), actor: auth ? `${auth.account.name} (${auth.account.field_profile_id || auth.account.id})` : '' });
+  }
+
   if (path.startsWith('/api/land/')) {
     const auth = path.startsWith('/api/land/admin') ? await authenticate(repository, request) : null;
-    return landRoute({ request, path, store: new SupabaseLandStore(db), admin: isAdmin(auth),
+    return landRoute({ request, path, store: new SupabaseLandStore(db), admin: isOperator(auth), canDelete: isAdmin(auth),
       actor: auth ? `${auth.account.name} (${auth.account.field_profile_id || auth.account.id})` : '',
       ip: ipAddress, salt: SERVICE_ROLE_KEY });
   }
@@ -137,7 +143,7 @@ async function route(context: RouteContext): Promise<Response | null> {
   if (method === "GET" && path === "/api/auth/me") {
     const auth = await authenticate(repository, request);
     if (!auth) return json({ user: null });
-    if (auth.account.field_profile_id) return json({ user: { role: 'admin', name: auth.account.name, identity: 'supabase' } });
+    if (auth.account.field_profile_id) return json({ user: { role: auth.role, name: auth.account.name, identity: 'supabase' } });
     const account = await repository.getAccessAccountById(auth.account.id);
     if (!account?.active) return json({ user: null }, 200, { "set-cookie": clearSessionCookie() });
     if (auth.role === "admin") return json({ user: { role: "admin", name: account.name } });
@@ -565,6 +571,12 @@ async function authenticate(repository: PafRepository, request: Request) {
 
 function isAdmin(auth: Awaited<ReturnType<typeof authenticate>>): auth is NonNullable<Awaited<ReturnType<typeof authenticate>>> {
   return Boolean(auth && auth.role === "admin" && auth.account?.account_type === "ADMIN" && auth.account.active);
+}
+function isOperator(auth: Awaited<ReturnType<typeof authenticate>>): auth is NonNullable<Awaited<ReturnType<typeof authenticate>>> {
+  return Boolean(auth && auth.account?.active && (
+    (auth.role === 'admin' && auth.account.account_type === 'ADMIN') ||
+    (auth.role === 'coordinator' && auth.account.field_profile_id)
+  ));
 }
 
 function isStrongPassword(value: string) {

@@ -26,6 +26,7 @@ export class LocalLandStore {
     if (!columns.includes('mother_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN mother_name TEXT');
     if (!columns.includes('settlement_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN settlement_name TEXT');
     if (!columns.includes('reviewer_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN reviewer_name TEXT');
+    if (!columns.includes('archived_at')) this.db.exec('ALTER TABLE land_requests ADD COLUMN archived_at TEXT');
     if (!this.db.prepare('PRAGMA table_info(land_reviews)').all().some(column => column.name === 'reviewer_name')) this.db.exec('ALTER TABLE land_reviews ADD COLUMN reviewer_name TEXT');
   }
   rate(key, limit, seconds) {
@@ -46,9 +47,10 @@ export class LocalLandStore {
   lookup(protocol, cpf) { return decode(this.db.prepare('SELECT * FROM land_requests WHERE protocol = ? AND cpf = ?').get(protocol, cpf)); }
   get(id) { return decode(this.db.prepare('SELECT * FROM land_requests WHERE id = ?').get(id)); }
   history(id) { return this.db.prepare('SELECT * FROM land_reviews WHERE request_id = ? ORDER BY created_at DESC, id').all(id); }
-  list({ status, search, page }) {
+  list({ status, search, page, archive = 'active' }) {
     const clean = cleanSearch(search);
-    const where = `WHERE (? = '' OR status = ?) AND (? = '' OR full_name LIKE ? OR cpf LIKE ? OR protocol LIKE ? OR municipality LIKE ? OR community LIKE ?)`;
+    const archived = archive === 'archived' ? 'archived_at IS NOT NULL' : archive === 'all' ? '1=1' : 'archived_at IS NULL';
+    const where = `WHERE ${archived} AND (? = '' OR status = ?) AND (? = '' OR full_name LIKE ? OR cpf LIKE ? OR protocol LIKE ? OR municipality LIKE ? OR community LIKE ?)`;
     const args = [status, status, clean, ...Array(5).fill(`%${clean}%`)];
     return { requests: this.db.prepare(`SELECT * FROM land_requests ${where} ORDER BY created_at DESC, id LIMIT 25 OFFSET ?`).all(...args, (page - 1) * 25).map(decode), total: this.db.prepare(`SELECT count(*) total FROM land_requests ${where}`).get(...args).total, page, pageSize: 25 };
   }

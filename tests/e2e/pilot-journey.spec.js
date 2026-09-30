@@ -80,7 +80,7 @@ test.describe.serial("jornada operacional do piloto", () => {
     await page.goto("/produtor");
     await page.getByLabel("Login").fill(producerLogin);
     await page.getByLabel("Código de acesso").fill(producerCode);
-    await page.getByRole("button", { name: "Entrar" }).click();
+    await page.getByRole("button", { name: "Acessar meus relatórios" }).click();
 
     await expect(page.getByRole("heading", { name: producer.name })).toBeVisible();
     await expect(page.getByText("Sítio Piloto PAF", { exact: false })).toBeVisible();
@@ -102,7 +102,7 @@ test.describe.serial("jornada operacional do piloto", () => {
   });
 
   test("técnico registra visita com GPS e foto somente para produtor vinculado", async ({ context, page }) => {
-    await context.grantPermissions(["geolocation"], { origin: "http://127.0.0.1:5173" });
+    await context.grantPermissions(["geolocation"], { origin: process.env.PAF_E2E_BASE_URL || "http://127.0.0.1:5173" });
     await context.setGeolocation({ latitude: -2.420674, longitude: -48.152221 });
     await page.goto("/tecnico");
     await page.getByLabel("Login").fill(technicalLogin);
@@ -140,9 +140,9 @@ test.describe.serial("jornada operacional do piloto", () => {
 
     await page.goto("/admin");
     await page.getByLabel("Login").fill("admin");
-    await page.getByLabel("Senha").fill(password);
+    await page.getByLabel("Senha", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Entrar" }).click();
-    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
 
     const reports = await page.request.get(`/api/admin/reports?search=${encodeURIComponent(producer.name)}`);
     expect(reports.ok()).toBeTruthy();

@@ -91,7 +91,7 @@ test.describe.serial("controle de abastecimento", () => {
 async function loginAdmin(page, password) {
   await page.goto("/admin");
   await page.getByLabel("Login").fill("admin");
-  await page.getByLabel("Senha").fill(password);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
-  await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
 }

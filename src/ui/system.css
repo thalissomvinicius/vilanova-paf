@@ -285,7 +285,7 @@ tbody tr:hover { background: #f8faf5; }
   .executive-chart-grid, .executive-bottom-grid { gap: 0 24px; }
   .executive-ring-card { flex-wrap: wrap; gap: 16px; }
 }
-@media (max-width: 1000px) {
+@media (max-width: 1100px) {
   .admin-layout { grid-template-columns: minmax(0,1fr); }
   .sidebar { width: 264px; }
   .sidebar-paf-logo { width: 192px; }

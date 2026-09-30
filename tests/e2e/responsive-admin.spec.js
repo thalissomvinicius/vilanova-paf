@@ -27,9 +27,9 @@ for (const viewport of viewports) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto("/admin");
     await page.getByLabel("Login").fill("admin");
-    await page.getByLabel("Senha").fill(password);
+    await page.getByLabel("Senha", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Entrar" }).click();
-    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
 
     for (const path of adminPaths) {
       await page.goto(path);
@@ -40,6 +40,8 @@ for (const viewport of viewports) {
         viewport: window.innerWidth
       }));
       expect(Math.max(dimensions.body, dimensions.document), `${path} excedeu a largura em ${viewport.name}`).toBeLessThanOrEqual(dimensions.viewport + 1);
+      const workArea = await page.locator('.admin-main').boundingBox();
+      expect(workArea.width, `${path} ficou espremido em ${viewport.name}`).toBeGreaterThan(viewport.width * 0.65);
     }
 
     await page.request.post("/api/auth/logout");
@@ -52,7 +54,7 @@ test("modal de produtor ocupa e rola corretamente no celular", async ({ page }) 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/admin");
   await page.getByLabel("Login").fill("admin");
-  await page.getByLabel("Senha").fill(password);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
   await page.goto("/admin/cadastros");
   await page.getByRole("button", { name: "Novo produtor" }).click();

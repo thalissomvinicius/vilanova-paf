@@ -100,11 +100,18 @@ select is(
     select count(*)
     from information_schema.role_table_grants
     where table_schema = 'public'
-      and table_name like 'paf\_%' escape '\'
-      and grantee in ('anon', 'authenticated')
+      and (table_name like 'paf\_%' escape '\' or table_name like 'mobile\_%' escape '\')
+      and (grantee = 'anon' or (grantee = 'authenticated' and table_name in (
+        'paf_producers','paf_technicians','paf_access_accounts','paf_access_account_producers',
+        'paf_auth_sessions','paf_login_attempts','paf_reports','paf_technical_visits',
+        'paf_operational_tasks','paf_documents','paf_fuel_drivers','paf_fuel_vehicles',
+        'paf_fuel_records','paf_import_batches','paf_audit_logs','paf_dashboard_binding',
+        'paf_land_requests','paf_land_reviews','paf_producer_links','paf_operation_audit',
+        'paf_operation_submissions'
+      )))
   ),
   0::bigint,
-  'browser roles have no direct grants on PAF tables'
+  'anonymous clients have no table grants and authenticated clients cannot bypass dashboard APIs'
 );
 
 select is(

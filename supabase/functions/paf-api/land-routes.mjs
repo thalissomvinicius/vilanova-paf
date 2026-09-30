@@ -21,7 +21,7 @@ async function bodyOf(request) {
 }
 
 // The store is server-only. No public database policy exposes these records.
-export async function landRoute({ request, path, store, admin, actor, ip, salt }) {
+export async function landRoute({ request, path, store, admin, actor, ip, salt, canDelete = admin }) {
   if (!path.startsWith('/api/land/')) return null;
   const method = request.method;
   try {
@@ -54,10 +54,13 @@ export async function landRoute({ request, path, store, admin, actor, ip, salt }
       if (status && !Object.hasOwn(LAND_STATUSES, status)) return reply({ error: 'Filtro inválido.' }, 400);
       const search = (params.get('search') || '').trim().slice(0, 100);
       const page = Math.max(1, Math.min(100000, Math.floor(Number(params.get('page')) || 1)));
-      return reply(await store.list({ status, search, page }));
+      const archive = params.get('archive') || 'active';
+      if (!['active', 'archived', 'all'].includes(archive)) return reply({ error: 'Filtro inválido.' }, 400);
+      return reply(await store.list({ status, search, page, archive }));
     }
     const match = path.match(/^\/api\/land\/admin\/requests\/([0-9a-f-]{36})$/i);
     if (match && method === 'DELETE') {
+      if (!canDelete) return reply({error:'Somente a administração pode excluir solicitações.'},403);
       const body = await bodyOf(request);
       if (body.confirmation !== 'EXCLUIR' || !Number.isInteger(body.version) || body.version < 1 || typeof body.protocol !== 'string') return reply({ error: 'Confirme a exclusão digitando EXCLUIR.' }, 400);
       const removed = await store.remove(match[1], body.version, body.protocol);
@@ -100,8 +103,10 @@ export class SupabaseLandStore {
   async lookup(protocol, cpf) { return checked(await this.db.from(TABLE).select().eq('protocol', protocol).eq('cpf', cpf).maybeSingle()); }
   async get(id) { return checked(await this.db.from(TABLE).select().eq('id', id).maybeSingle()); }
   async history(id) { return checked(await this.db.from('paf_land_reviews').select().eq('request_id', id).order('created_at', { ascending: false })); }
-  async list({ status, search, page }) {
-    let query = this.db.from(TABLE).select('id,protocol,full_name,cpf,birth_date,phone,municipality,community,is_federal_settlement,mother_name,settlement_name,status,created_at,updated_at,version', { count: 'exact' });
+  async list({ status, search, page, archive = 'active' }) {
+    let query = this.db.from(TABLE).select('id,protocol,full_name,cpf,birth_date,phone,municipality,community,is_federal_settlement,mother_name,settlement_name,status,created_at,updated_at,version,archived_at,assigned_to,due_date,next_action', { count: 'exact' });
+    if (archive === 'active') query = query.is('archived_at', null);
+    if (archive === 'archived') query = query.not('archived_at', 'is', null);
     if (status) query = query.eq('status', status);
     if (search) {
       const clean = cleanSearch(search);

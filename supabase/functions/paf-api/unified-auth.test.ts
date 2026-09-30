@@ -15,7 +15,9 @@ const admin = { id: 'auth-user', nome: 'Admin', papel: 'admin', ativo: true, org
 Deno.test('shared admin identity requires verified token, active profile and bound organization', async () => {
   const auth = await repository(admin).getUnifiedSession('verified');
   if (auth?.account.field_profile_id !== 'auth-user' || auth.role !== 'admin') throw new Error('Expected shared admin session');
-  for (const profile of [null, { ...admin, ativo: false }, { ...admin, deve_trocar_senha: true }, { ...admin, papel: 'tecnico' }, { ...admin, papel: 'coordenador' }, { ...admin, organizacao_id: 'other' }]) {
+  const coordinator = await repository({...admin,papel:'coordenador'}).getUnifiedSession('verified');
+  if (coordinator?.role !== 'coordinator' || coordinator.account.account_type !== 'COORDINATOR') throw new Error('Coordinator must not acquire administrative privileges');
+  for (const profile of [null, { ...admin, ativo: false }, { ...admin, deve_trocar_senha: true }, { ...admin, papel: 'tecnico' }, { ...admin, organizacao_id: 'other' }]) {
     if (await repository(profile).getUnifiedSession('verified')) throw new Error('Unauthorized profile accepted');
   }
   if (await repository(admin).getUnifiedSession('forged')) throw new Error('Forged token accepted');

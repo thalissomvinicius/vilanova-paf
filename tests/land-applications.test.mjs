@@ -8,6 +8,18 @@ import { LAND_CONSENT_VERSION, PARA_MUNICIPALITIES } from '../supabase/functions
 const payload = () => ({ clientId: crypto.randomUUID(), fullName: 'Pessoa de Teste', cpf: '529.982.247-25', birthDate: '1980-01-10', state: 'PA', consentVersion: LAND_CONSENT_VERSION, municipality: 'Tomé-Açu', community: 'Comunidade de teste', phone: '91999999999', isFederalSettlement: false, consent: true });
 const call = (store, path, method, body, admin = false) => landRoute({ store, path, request: new Request(`https://test.local${path}`, { method, ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) }), admin, actor: 'Analista de teste', ip: 'test', salt: 'test-only' });
 
+test('archived requests leave the active queue but retain public lookup', async () => {
+  const store = new LocalLandStore(':memory:');
+  try {
+    const values = validateSubmission(payload());
+    const row = store.submit({...values,protocol:newProtocol(),fingerprint:'archive-test',consent_version:LAND_CONSENT_VERSION});
+    store.db.prepare('UPDATE land_requests SET archived_at=? WHERE id=?').run(new Date().toISOString(),row.id);
+    assert.equal(store.list({status:'',search:'',page:1}).total,0);
+    assert.equal(store.list({status:'',search:'',page:1,archive:'archived'}).total,1);
+    assert.equal(store.lookup(row.protocol,values.cpf).id,row.id);
+  } finally { store.db.close(); }
+});
+
 test('validates CPF, dates, lengths and consent at the boundary', () => {
   assert.equal(validCpf('52998224725'), true);
   assert.equal(validCpf('11111111111'), false);

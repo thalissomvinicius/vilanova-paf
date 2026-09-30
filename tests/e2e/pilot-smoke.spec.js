@@ -6,18 +6,18 @@ test("admin entra e visualiza os indicadores operacionais", async ({ page }) => 
 
   await page.goto("/admin");
   await page.getByLabel("Login").fill("admin");
-  await page.getByLabel("Senha").fill(password);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar" }).click();
 
-  await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
-  await expect(page.locator(".executive-kpi")).toHaveCount(4);
-  await expect(page.getByRole("button", { name: "Coletas do aplicativo" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
+  await expect(page.locator(".ops-metrics > a")).toHaveCount(4);
+  await expect(page.getByRole("button", { name: "Coletas de campo", exact: true })).toBeVisible();
   await page.request.post("/api/auth/logout");
 });
 
 for (const portal of [
   { path: "/tecnico", heading: "Acesso técnico", manifest: "/manifest-tecnico.webmanifest" },
-  { path: "/produtor", heading: "Acesso do produtor", manifest: "/manifest-produtor.webmanifest" }
+  { path: "/produtor", heading: "Bem-vindo, produtor", manifest: "/manifest-produtor.webmanifest" }
 ]) {
   test(`${portal.path} abre corretamente em celular`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });

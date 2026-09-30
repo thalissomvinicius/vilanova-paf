@@ -199,15 +199,15 @@ for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 800 }); const bodies = await mock(page);
     await page.goto('/admin/analises-areas');
     await page.getByRole('button', { name: 'Editar análise de Pessoa de Teste' }).click();
-    const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible();
+    await expect(page.locator('.ops-case-workspace')).toBeVisible();
     await page.getByLabel('Resultado da análise').selectOption(width === 320 ? 'DADOS_INCONSISTENTES' : 'POSSIVEL_FINANCIAMENTO');
     await page.getByLabel('Nome de quem realizou a análise').fill('Ana de Teste');
     await page.getByLabel('Parecer para o solicitante').fill('Área apta a seguir para avaliação documental pela instituição financeira.');
     await page.getByRole('button', { name: 'Salvar parecer' }).click();
-    await expect(page.getByText('Parecer salvo e disponível para consulta.')).toBeVisible();
+    await expect(page.getByText('Alteração salva.')).toBeVisible();
     expect(bodies[0].version).toBe(1);
     await page.screenshot({ path: `verification/land-review-${width}.png`, fullPage: true });
-    await page.getByRole('button', { name: 'Fechar análise' }).click();
+    await page.getByRole('button', { name: 'Voltar às solicitações' }).click();
     await page.screenshot({ path: `verification/land-admin-${width}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await page.goto('/analise-de-area'); await page.getByRole('tab', { name: 'Consultar andamento' }).click();

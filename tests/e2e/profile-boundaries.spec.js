@@ -89,7 +89,7 @@ test.describe.serial("isolamento de perfis e sessão", () => {
 
     await page.request.post("/api/auth/logout");
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Acesso do produtor" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Bem-vindo, produtor" })).toBeVisible();
     expect(clientFailures).toEqual([]);
   });
 
@@ -115,7 +115,7 @@ test.describe.serial("isolamento de perfis e sessão", () => {
     await page.goto("/admin");
     await expect(page.getByRole("heading", { name: "Painel administrativo" })).toBeVisible();
     await page.goto("/produtor");
-    await expect(page.getByRole("heading", { name: "Acesso do produtor" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Bem-vindo, produtor" })).toBeVisible();
     await page.goto("/tecnico");
     await expect(page.getByRole("heading", { name: `Técnico Escopo ${suffix}` })).toBeVisible();
 
@@ -132,11 +132,11 @@ test.describe.serial("isolamento de perfis e sessão", () => {
 
     await page.goto("/admin");
     await page.getByLabel("Login").fill("admin");
-    await page.getByLabel("Senha").fill(password);
+    await page.getByLabel("Senha", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Entrar" }).click();
-    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
 
     for (const [path, title] of [
       ["/admin/dashboard", "Visão geral"],
@@ -156,11 +156,11 @@ test.describe.serial("isolamento de perfis e sessão", () => {
     expect((await page.request.get("/api/technical/me")).status()).toBe(401);
     expect((await page.request.get("/api/producer/me")).status()).toBe(401);
     await page.goto("/produtor");
-    await expect(page.getByRole("heading", { name: "Acesso do produtor" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Bem-vindo, produtor" })).toBeVisible();
     await page.goto("/tecnico");
     await expect(page.getByRole("heading", { name: "Acesso técnico" })).toBeVisible();
     await page.goto("/admin");
-    await expect(page.getByRole("heading", { name: "Panorama da operação" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
 
     await page.request.post("/api/auth/logout");
     await page.reload();
@@ -173,7 +173,7 @@ async function loginAccess(page, path, login, code) {
   await page.goto(path);
   await page.getByLabel("Login").fill(login);
   await page.getByLabel("Código de acesso").fill(code);
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByRole("button", { name: path === '/produtor' ? "Acessar meus relatórios" : "Entrar" }).click();
 }
 
 function watchClientHealth(page) {
@@ -184,7 +184,7 @@ function watchClientHealth(page) {
   });
   page.on("response", (response) => {
     const url = new URL(response.url());
-    if (url.origin === "http://127.0.0.1:5173" && url.pathname.startsWith("/api/") && response.status() >= 500) {
+    if (url.origin === (process.env.PAF_E2E_BASE_URL || "http://127.0.0.1:5173") && url.pathname.startsWith("/api/") && response.status() >= 500) {
       failures.push(`http ${response.status()}: ${url.pathname}`);
     }
   });

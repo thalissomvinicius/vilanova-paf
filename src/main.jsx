@@ -61,6 +61,9 @@ const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module =
 const AccessHub = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.AccessHub })));
 const LandPublic = lazy(() => import('./land/LandApplications').then(module => ({ default: module.LandPublic })));
 const LandAdmin = lazy(() => import('./land/LandApplications').then(module => ({ default: module.LandAdmin })));
+const OperationsDashboard = lazy(() => import('./operations/OperationsWorkspace').then(module => ({default:module.OperationsDashboard})));
+const ProducerOperations = lazy(() => import('./operations/OperationsWorkspace').then(module => ({default:module.ProducerOperations})));
+const ActivityOperations = lazy(() => import('./operations/OperationsWorkspace').then(module => ({default:module.ActivityOperations})));
 
 const AREA_STATUSES = [
   "Sem alteração",
@@ -771,7 +774,7 @@ function AdminGate() {
 
   useEffect(() => {
     fetchJson("/api/auth/me")
-      .then((data) => setUser(data.user?.role === "admin" ? data.user : null))
+      .then((data) => setUser(["admin", "coordinator"].includes(data.user?.role) ? data.user : null))
       .catch(() => setUser(null))
       .finally(() => setChecking(false));
   }, []);
@@ -810,7 +813,7 @@ function AdminLogin({ onLogin }) {
         const { fieldSignIn, fieldSignOut } = await import('./field/client');
         const profile = await fieldSignIn(username, password);
         if (profile?.deve_trocar_senha) { window.location.assign('/campo'); return; }
-        if (!['admin', 'super_admin'].includes(profile?.papel)) {
+        if (!['admin', 'super_admin', 'coordenador'].includes(profile?.papel)) {
           await fieldSignOut();
           throw new Error('Este perfil acessa a equipe de campo, nao a administracao.');
         }
@@ -857,7 +860,10 @@ function AdminLogin({ onLogin }) {
 }
 
 function AdminDashboard({ user, onLogout }) {
-  const [activeView, setActiveView] = useState(() => getAdminViewFromPath());
+  const canManageRecords = user.role === "admin";
+  const allowedViews = canManageRecords ? NAV_ITEMS : NAV_ITEMS.filter(item => ["dashboard", "land", "producers", "visits", "tasks"].includes(item.id));
+  const permittedView = () => allowedViews.some(item => item.id === getAdminViewFromPath()) ? getAdminViewFromPath() : "dashboard";
+  const [activeView, setActiveView] = useState(permittedView);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filters, setFilters] = useState({
     search: "",
@@ -963,12 +969,14 @@ function AdminDashboard({ user, onLogout }) {
   }, []);
 
   useEffect(() => {
-    if (window.location.pathname === "/admin") {
+    if (window.location.pathname === "/admin" || !allowedViews.some(item => item.id === getAdminViewFromPath())) {
       window.history.replaceState({ adminView: "dashboard" }, "", "/admin/dashboard");
     }
 
     function handlePopState() {
-      setActiveView(getAdminViewFromPath());
+      const nextView = permittedView();
+      if (nextView !== getAdminViewFromPath()) window.history.replaceState(null, "", "/admin/dashboard");
+      setActiveView(nextView);
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -976,10 +984,12 @@ function AdminDashboard({ user, onLogout }) {
   }, []);
 
   useEffect(() => {
+    if (!canManageRecords) return;
     refreshOptions();
   }, []);
 
   useEffect(() => {
+    if (!canManageRecords) return;
     refreshProducers();
   }, [query]);
 
@@ -990,13 +1000,13 @@ function AdminDashboard({ user, onLogout }) {
   }, [activeView, reportQuery]);
 
   useEffect(() => {
-    if (activeView === "visits") {
+    if (canManageRecords && activeView === "visits") {
       refreshVisits();
     }
   }, [activeView, visitQuery]);
 
   useEffect(() => {
-    if (activeView === "tasks") {
+    if (canManageRecords && activeView === "tasks") {
       refreshTasks();
     }
   }, [activeView, taskQuery]);
@@ -1027,7 +1037,7 @@ function AdminDashboard({ user, onLogout }) {
   }, [activeView]);
 
   useEffect(() => {
-    if (activeView !== "dashboard") return;
+    if (!canManageRecords || activeView !== "dashboard") return;
 
     refreshReports({ quiet: true });
     refreshVisits({ quiet: true });
@@ -1042,6 +1052,7 @@ function AdminDashboard({ user, onLogout }) {
     function refreshVisibleView() {
       if (stopped || document.visibilityState !== "visible") return;
       setLiveAt(new Date().toISOString());
+      if (!canManageRecords) return;
       if (activeView === "dashboard") {
         refreshProducers({ quiet: true });
         refreshReports({ quiet: true });
@@ -1292,6 +1303,7 @@ function AdminDashboard({ user, onLogout }) {
   }
 
   function navigateAdmin(item) {
+    if (!item || !allowedViews.some(view => view.id === item.id)) return;
     if (window.location.pathname !== item.path) {
       window.history.pushState({ adminView: item.id }, "", item.path);
     }
@@ -1844,7 +1856,7 @@ function AdminDashboard({ user, onLogout }) {
           </button>
         </div>
 
-        <WorkspaceNavigation items={NAV_ITEMS} activeId={activeView} onNavigate={navigateAdmin} />
+        <WorkspaceNavigation items={allowedViews} activeId={activeView} onNavigate={navigateAdmin} />
 
         <div className="sidebar-footer">
           <div className="sidebar-user">
@@ -1852,7 +1864,7 @@ function AdminDashboard({ user, onLogout }) {
             <strong>{user.name}</strong>
           </div>
           <div className="sidebar-footer-actions">
-            <button
+            {canManageRecords && <button
               className="icon-text-button dark"
               type="button"
               title="Alterar senha"
@@ -1861,7 +1873,7 @@ function AdminDashboard({ user, onLogout }) {
             >
               <KeyRound size={17} />
               Alterar senha
-            </button>
+            </button>}
             <button className="icon-text-button dark" type="button" title="Sair" aria-label="Sair" onClick={logout}>
               <LogOut size={17} />
               Sair
@@ -1906,22 +1918,13 @@ function AdminDashboard({ user, onLogout }) {
                 <Download size={18} />
                 Abastecimento
               </button>
-            ) : activeView === "visits" ? (
-              <button className="icon-text-button" type="button" onClick={exportVisits}>
-                <Download size={18} />
-                Visitas
-              </button>
-            ) : activeView === "tasks" ? (
-              <button className="icon-text-button" type="button" onClick={exportTasks}>
-                <Download size={18} />
-                Pendências
-              </button>
-            ) : activeView === "documents" ? (
+            ) : activeView === "visits" || activeView === "tasks" ? null
+              : activeView === "documents" ? (
               <button className="icon-text-button" type="button" onClick={exportDocuments}>
                 <Download size={18} />
                 Documentos
               </button>
-            ) : activeView === "registrations" || activeView === "logins" || activeView === "field" || activeView === "land" ? null : (
+            ) : activeView === "registrations" || activeView === "logins" || activeView === "field" || activeView === "land" || activeView === "producers" || activeView === "dashboard" ? null : (
               <>
                 <button className="icon-text-button" type="button" onClick={() => exportProducers()}>
                   <Download size={18} />
@@ -1933,7 +1936,7 @@ function AdminDashboard({ user, onLogout }) {
                 </button>
               </>
             )}
-            {activeView !== "field" && activeView !== "land" && <button className="icon-text-button" type="button" onClick={() => {
+            {!["field", "land", "producers", "dashboard", "visits", "tasks"].includes(activeView) && <button className="icon-text-button" type="button" onClick={() => {
               if (activeView === "reports") refreshReports();
               else if (activeView === "fuel") refreshFuel();
               else if (activeView === "visits") refreshVisits();
@@ -1959,49 +1962,14 @@ function AdminDashboard({ user, onLogout }) {
         </header>
 
         {activeView === "dashboard" && (
-          loading && !summary ? <DashboardSkeleton /> :
-          <ExecutiveDashboard
-            documentSummary={documentSummary}
-            documents={documents}
-            onNavigate={(view) => {
-              const item = NAV_ITEMS.find((navItem) => navItem.id === view);
-              if (item) navigateAdmin(item);
-            }}
-            producers={producers}
-            reports={reports}
-            reportSummary={reportSummary}
-            responseRate={responseRate}
-            statuses={options.statuses}
-            summary={summary}
-            taskSummary={taskSummary}
-            tasks={tasks}
-            topAgency={topAgency}
-            topDesigner={topDesigner}
-            visitSummary={visitSummary}
-            visits={visits}
-          />
+          <Suspense fallback={<DashboardSkeleton/>}><OperationsDashboard api={fetchJson} canManageRecords={canManageRecords}/></Suspense>
         )}
 
         {activeView === "field" && <Suspense fallback={<div className="field-loading" role="status">Abrindo coletas de campo...</div>}><FieldWorkspace /></Suspense>}
-        {activeView === 'land' && <Suspense fallback={<div role="status">Abrindo solicitações...</div>}><LandAdmin api={fetchJson} /></Suspense>}
+        {activeView === 'land' && <Suspense fallback={<div role="status">Abrindo solicitações...</div>}><LandAdmin api={fetchJson} canManageRecords={canManageRecords} /></Suspense>}
 
         {activeView === "producers" && (
-          <>
-            <ProducerFilters
-              filters={filters}
-              onChange={updateFilter}
-              onReset={resetFilters}
-              options={options}
-            />
-            <ProducerWorkspace
-              loading={loading}
-              producers={producers}
-              selected={selected}
-              selectedId={selectedId}
-              setSelectedId={setSelectedId}
-              saveProducer={saveProducer}
-            />
-          </>
+          <Suspense fallback={<DashboardSkeleton/>}><ProducerOperations api={fetchJson} canManageRecords={canManageRecords}/></Suspense>
         )}
 
         {activeView === "registrations" && (
@@ -2069,32 +2037,11 @@ function AdminDashboard({ user, onLogout }) {
         )}
 
         {activeView === "visits" && (
-          <VisitsWorkspace
-            createTask={createTask}
-            filters={visitFilters}
-            loading={visitsLoading}
-            onChange={updateVisitFilter}
-            onReset={resetVisitFilters}
-            onVisitSave={saveVisit}
-            options={options}
-            summary={visitSummary}
-            visits={visits}
-          />
+          <Suspense fallback={<DashboardSkeleton/>}><ActivityOperations key="visits" api={fetchJson} kind="visit"/></Suspense>
         )}
 
         {activeView === "tasks" && (
-          <TasksWorkspace
-            createTask={createTask}
-            filters={taskFilters}
-            loading={tasksLoading}
-            onChange={updateTaskFilter}
-            onReset={resetTaskFilters}
-            onTaskSave={saveTask}
-            options={options}
-            producers={producers}
-            summary={taskSummary}
-            tasks={tasks}
-          />
+          <Suspense fallback={<DashboardSkeleton/>}><ActivityOperations key="tasks" api={fetchJson} kind="task"/></Suspense>
         )}
 
         {activeView === "documents" && (

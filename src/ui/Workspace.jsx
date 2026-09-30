@@ -18,7 +18,7 @@ const groups = [
 
 export function WorkspaceNavigation({ items, activeId, onNavigate }) {
   return <nav className="side-nav" aria-label="Navegação">
-    {groups.map(group => <div className="nav-group" key={group.label}>
+    {groups.filter(group => group.ids.some(id => items.some(item => item.id === id))).map(group => <div className="nav-group" key={group.label}>
       <p className="sidebar-section-label">{group.label}</p>
       {group.ids.map(id => {
         const item = items.find(candidate => candidate.id === id);
