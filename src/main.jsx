@@ -56,6 +56,7 @@ import "./access.css";
 import "./ui/system.css";
 import { WorkspaceNavigation, SectionHeading, DashboardSkeleton, DeveloperFooter } from "./ui/Workspace";
 import { AnimatedValue } from "./components/AnimatedValue";
+import { AccessScreen, AccessField, AccessSubmit, AccessLink } from "./components/AccessScreen";
 
 const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.FieldWorkspace })));
 const AccessHub = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.AccessHub })));
@@ -836,26 +837,15 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <main className="paf-access">
-      <div className="paf-access-visual"><img className="paf-access-scene" src="/brand/login-equipe-dende-realista.png" alt="Equipe Vila Nova em uma plantação de palma" fetchPriority="high" /></div>
-      <header className="paf-access-header">
-        <div className="paf-access-identity"><img src={BRAND_ASSETS.pafIcon} alt="PAF Agricultura Familiar" /><div><h1>PAF VNA</h1><span>Programa de Agricultura Familiar</span></div></div>
-        <img className="paf-access-company" src={BRAND_ASSETS.vilaLogo} alt="Vila Nova Agroindustrial" />
-      </header>
-      <div className="paf-access-center">
-        <section className="paf-access-form premium-login-panel" aria-labelledby="paf-access-title">
-          <div className="paf-access-heading"><span className="paf-access-kicker"><span /> PORTAL DE GESTÃO</span><h2 id="paf-access-title">Painel administrativo</h2><p>O campo conectado. As decisões, mais próximas.</p></div>
-          <form onSubmit={submit} aria-busy={loading}>
-            <div className="paf-access-field"><label htmlFor="paf-access-user">Login</label><div className="paf-access-input"><UserRound size={19} /><input id="paf-access-user" value={username} onChange={event => setUsername(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Seu usuário ou e-mail" required disabled={loading} /></div></div>
-            <div className="paf-access-field"><label htmlFor="paf-access-password">Senha</label><div className="paf-access-input"><KeyRound size={19} /><input id="paf-access-password" type={showPassword ? 'text' : 'password'} value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" placeholder="Digite sua senha" required disabled={loading} aria-describedby={error ? 'paf-access-error' : undefined} /><button className="paf-access-reveal" type="button" title={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></div>
-            {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
-            <button className="paf-access-submit primary-button" type="submit" disabled={loading}><span>{loading ? 'Conectando...' : 'Entrar'}</span>{loading ? <Loader2 className="spin" size={20} /> : <ArrowRight size={20} />}</button>
-          </form>
-          <nav className="paf-access-portals paf-access-single" aria-label="Outros acessos"><a href="/produtor"><Sprout size={22} /><span>Sou produtor<small>Acessar meus relatórios</small></span><ArrowRight size={20} /></a></nav>
-        </section>
-      </div>
-      <footer className="paf-access-footer"><span><ShieldCheck size={15} /> Acesso restrito à equipe autorizada</span><span>Vila Nova Agroindustrial <span aria-hidden="true">·</span> Tomé-Açu / PA</span></footer>
-    </main>
+    <AccessScreen portal="PORTAL DE GESTÃO" title="Painel administrativo" description="O campo conectado. As decisões, mais próximas.">
+      <form onSubmit={submit} aria-busy={loading}>
+        <AccessField id="paf-access-user" label="Login" value={username} onChange={event => setUsername(event.target.value)} placeholder="Seu usuário ou e-mail" disabled={loading} />
+        <AccessField id="paf-access-password" label="Senha" password value={password} onChange={event => setPassword(event.target.value)} placeholder="Digite sua senha" show={showPassword} onToggle={() => setShowPassword(value => !value)} disabled={loading} errorId={error ? 'paf-access-error' : undefined} />
+        {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
+        <AccessSubmit busy={loading} />
+      </form>
+      <AccessLink href="/produtor" producer>Sou produtor<small>Acessar meus relatórios</small></AccessLink>
+    </AccessScreen>
   );
 }
 
@@ -7052,6 +7042,7 @@ function TechnicalPortal() {
 function TechnicalLogin({ onLogin }) {
   const [login, setLogin] = useState("");
   const [accessCode, setAccessCode] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -7075,52 +7066,15 @@ function TechnicalLogin({ onLogin }) {
   }
 
   return (
-    <main className="premium-login-screen technical-login-screen">
-      <section className="login-shell" aria-label="Acesso da equipe técnica PAF">
-        <aside className="login-story technical-login-story">
-          <div className="login-story-topline">
-            <img className="login-company-logo" src={BRAND_ASSETS.vilaLogoOnDark} alt="Vila Nova Agroindustrial" />
-            <span>Portal técnico</span>
-          </div>
-          <div className="login-story-copy">
-            <p className="eyebrow">Acompanhamento de campo</p>
-            <h1>PAF Equipe técnica</h1>
-            <p>Consulte os produtores vinculados, registre visitas e mantenha o histórico técnico atualizado.</p>
-          </div>
-          <div className="login-benefit-grid">
-            <span><Users size={16} /> Produtores vinculados</span>
-            <span><MapPin size={16} /> Visitas de campo</span>
-            <span><ShieldCheck size={16} /> Escopo controlado</span>
-          </div>
-        </aside>
-
-        <section className="premium-login-panel">
-          <div className="login-brand">
-            <div className="brand-mark login-brand-mark"><img className="brand-mark-img" src={BRAND_ASSETS.pafIcon} alt="" /></div>
-            <div>
-              <p className="eyebrow">Equipe de campo</p>
-              <h2>Acesso técnico</h2>
-              <p className="login-panel-text">Use o login criado pela gestão do PAF.</p>
-            </div>
-          </div>
-          <form className="login-form" onSubmit={submit}>
-            <Field label="Login">
-              <input value={login} onChange={(event) => setLogin(event.target.value)} autoComplete="username" required />
-            </Field>
-            <Field label="Código de acesso">
-              <input type="password" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} autoComplete="current-password" required />
-            </Field>
-            {error && <p className="form-error">{error}</p>}
-            <button className="primary-button wide" type="submit" disabled={loading}>
-              {loading ? <Loader2 className="spin" size={18} /> : <LogIn size={18} />}
-              Entrar
-            </button>
-            <a className="login-switch" href="/produtor">Acesso do produtor</a>
-            <a className="login-switch" href="/admin">Acesso administrativo</a>
-          </form>
-        </section>
-      </section>
-    </main>
+    <AccessScreen portal="EQUIPE DE CAMPO" title="Acesso técnico" description="Use o acesso fornecido pela gestão do PAF.">
+      <form onSubmit={submit} aria-busy={loading}>
+        <AccessField id="paf-access-user" label="Login" value={login} onChange={event => setLogin(event.target.value)} placeholder="Seu login de técnico" disabled={loading} />
+        <AccessField id="paf-access-password" label="Código de acesso" password toggleLabel="código" value={accessCode} onChange={event => setAccessCode(event.target.value)} placeholder="Digite seu código de acesso" show={showPassword} onToggle={() => setShowPassword(value => !value)} disabled={loading} errorId={error ? 'paf-access-error' : undefined} />
+        {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
+        <AccessSubmit busy={loading} />
+      </form>
+      <AccessLink href="/admin">Acesso administrativo</AccessLink>
+    </AccessScreen>
   );
 }
 
@@ -7677,27 +7631,15 @@ function ProducerLogin({ onLogin }) {
   }
 
   return (
-    <main className="paf-access paf-producer-access">
-      <div className="paf-access-visual"><img className="paf-access-scene" src="/brand/login-equipe-dende-realista.png" alt="Equipe Vila Nova em uma plantação de palma" fetchPriority="high" /></div>
-      <header className="paf-access-header">
-        <div className="paf-access-identity"><img src={BRAND_ASSETS.pafIcon} alt="PAF Agricultura Familiar" /><div><h1>PAF VNA</h1><span>Programa de Agricultura Familiar</span></div></div>
-        <img className="paf-access-company" src={BRAND_ASSETS.vilaLogo} alt="Vila Nova Agroindustrial" />
-      </header>
-      <div className="paf-access-center">
-        <section className="paf-access-form premium-login-panel" aria-labelledby="paf-access-title">
-          <div className="paf-access-heading"><span className="paf-access-kicker"><span /> PORTAL DO PRODUTOR</span><h2 id="paf-access-title">Bem-vindo, produtor</h2><p>Seu trabalho no campo, conectado ao PAF.</p></div>
-          <form onSubmit={submit} aria-busy={loading}>
-            <div className="paf-access-field"><label htmlFor="paf-access-user">Login</label><div className="paf-access-input"><UserRound size={19} /><input id="paf-access-user" value={login} onChange={event => setLogin(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="Login enviado pela equipe PAF" required disabled={loading} /></div></div>
-            <div className="paf-access-field"><label htmlFor="paf-access-password">Código de acesso</label><div className="paf-access-input"><KeyRound size={19} /><input id="paf-access-password" type={showPassword ? 'text' : 'password'} value={accessCode} onChange={event => setAccessCode(event.target.value)} autoComplete="current-password" placeholder="Digite seu código de acesso" required disabled={loading} aria-describedby={error ? 'paf-access-error' : undefined} /><button className="paf-access-reveal" type="button" title={showPassword ? 'Ocultar código' : 'Mostrar código'} aria-label={showPassword ? 'Ocultar código' : 'Mostrar código'} aria-pressed={showPassword} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={19} /> : <Eye size={19} />}</button></div></div>
-            {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
-            <button className="paf-access-submit primary-button" type="submit" disabled={loading}><span>{loading ? 'Conectando...' : 'Acessar meus relatórios'}</span>{loading ? <Loader2 className="spin" size={20} /> : <ArrowRight size={20} />}</button>
-          </form>
-          <p className="paf-producer-help">Ainda não recebeu seu acesso? Solicite à equipe PAF que acompanha sua propriedade.</p>
-          <nav className="paf-access-portals paf-access-single" aria-label="Outros acessos"><a href="/admin"><ArrowRight size={18} /><span>Acesso administrativo</span><ArrowRight size={18} /></a></nav>
-        </section>
-      </div>
-      <footer className="paf-access-footer"><span><ShieldCheck size={15} /> Acesso individual e seguro</span><span>Vila Nova Agroindustrial <span aria-hidden="true">·</span> Tomé-Açu / PA</span></footer>
-    </main>
+    <AccessScreen producer portal="PORTAL DO PRODUTOR" title="Bem-vindo, produtor" description="Seu trabalho no campo, conectado ao PAF." help="Ainda não recebeu seu acesso? Solicite à equipe PAF que acompanha sua propriedade.">
+      <form onSubmit={submit} aria-busy={loading}>
+        <AccessField id="paf-access-user" label="Login" value={login} onChange={event => setLogin(event.target.value)} placeholder="Login enviado pela equipe PAF" disabled={loading} />
+        <AccessField id="paf-access-password" label="Código de acesso" password toggleLabel="código" value={accessCode} onChange={event => setAccessCode(event.target.value)} placeholder="Digite seu código de acesso" show={showPassword} onToggle={() => setShowPassword(value => !value)} disabled={loading} errorId={error ? 'paf-access-error' : undefined} />
+        {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
+        <AccessSubmit busy={loading}>Acessar meus relatórios</AccessSubmit>
+      </form>
+      <AccessLink href="/admin">Acesso administrativo</AccessLink>
+    </AccessScreen>
   );
 }
 

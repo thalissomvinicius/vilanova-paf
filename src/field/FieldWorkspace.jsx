@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ClipboardList, Download, Eye, EyeOff, FileText, Leaf, Loader2, LogOut, MapPin, RefreshCcw, Search, ShieldCheck, Smartphone, X } from 'lucide-react';
 import { AnimatedValue } from '../components/AnimatedValue';
+import { AccessScreen, AccessField, AccessSubmit, AccessLink } from '../components/AccessScreen';
 import { FieldAccesses } from './FieldAccesses';
 import { manageableRoles } from './access-model.mjs';
 import { answerText, canReview, csvCell, mapUrl, REVIEW_LABELS } from './model.mjs';
@@ -23,31 +24,21 @@ function FieldLogin({ onLogin, embedded, error: initialError }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError ?? '');
   async function submit(event) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); if (busy) return; setBusy(true); setError('');
     try { onLogin(await fieldSignIn(email, password)); setPassword(''); }
     catch (reason) { setError(reason.message); }
     finally { setBusy(false); }
   }
-  return <section className={embedded ? 'field-connect' : 'field-login-page'}>
-    <div className="field-connect-copy">
-      <img src="/brand/paf-logo-official.png" alt="Programa de Agricultura Familiar" />
-      <p className="eyebrow">PAF VNA / PAF</p>
-      <h1>O campo, mais perto.</h1>
-      <p>Produtores, comunidades e acompanhamento tecnico.</p>
-      <div className="field-trust"><Leaf size={18} /> Vila Nova Agroindustrial</div>
-    </div>
-    <form onSubmit={submit} className="field-auth-form">
-      <span className="field-auth-icon"><Smartphone size={24} /></span>
-      <h2>Acesso da equipe PAF</h2>
-      <p>Entre com seu e-mail de acesso ao PAF VNA.</p>
-      <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
-      <label>Senha<div className="input-with-button"><input type={show ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /><button type="button" title={show ? 'Ocultar senha' : 'Mostrar senha'} aria-label={show ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShow(!show)}>{show ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
-      {error && <p role="alert" className="form-error">{error}</p>}
-      {!fieldClient && <p role="alert" className="form-error">Conexao de campo nao configurada neste ambiente.</p>}
-      <button type="submit" className="primary-button wide" disabled={busy || !fieldClient}>{busy ? <Loader2 size={18} className="spin" /> : <ArrowRight size={18} />} Entrar na comunidade</button>
-      {!embedded && <a className="login-switch" href="/admin">Gestao administrativa <ArrowRight size={15} /></a>}
+  return <AccessScreen embedded={embedded} portal="EQUIPE PAF VNA" title="Acesso da equipe PAF" description="Entre com seu e-mail de acesso ao PAF VNA.">
+    <form onSubmit={submit} aria-busy={busy}>
+      <AccessField id="paf-field-email" label="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Seu e-mail de acesso" disabled={busy} />
+      <AccessField id="paf-field-password" label="Senha" password value={password} onChange={e => setPassword(e.target.value)} placeholder="Digite sua senha" show={show} onToggle={() => setShow(!show)} disabled={busy} errorId={error ? 'paf-field-error' : undefined} />
+      {error && <p id="paf-field-error" role="alert" className="paf-access-error">{error}</p>}
+      {!fieldClient && <p role="alert" className="paf-access-error">Conexao de campo nao configurada neste ambiente.</p>}
+      <AccessSubmit busy={busy} disabled={!fieldClient}>Entrar na equipe PAF</AccessSubmit>
     </form>
-  </section>;
+    {!embedded && <AccessLink href="/admin">Acesso administrativo</AccessLink>}
+  </AccessScreen>;
 }
 
 function PasswordChange({ onChanged }) {

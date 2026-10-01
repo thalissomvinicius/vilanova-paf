@@ -20,7 +20,7 @@ test('shared app accounts can be created, edited, blocked and reset from mobile 
   await page.goto('/campo/acessos');
   await page.getByLabel('E-mail', { exact: true }).fill(profile.email);
   await page.getByLabel('Senha', { exact: true }).fill('fixture-password');
-  await page.getByRole('button', { name: 'Entrar na comunidade' }).click();
+  await page.getByRole('button', { name: 'Entrar na equipe PAF' }).click();
   await expect(page.getByRole('heading', { name: 'Equipe e aplicativo' })).toBeVisible();
   await page.getByRole('button', { name: 'Cadastrar acesso' }).click();
   let dialog = page.getByRole('dialog');

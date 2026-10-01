@@ -6,7 +6,9 @@ import path from 'node:path';
 const [filename, commit] = process.argv.slice(2);
 if (!filename || !/^[a-f0-9]{40}$/i.test(commit || '')) throw new Error('Informe o APK e o commit verificado do aplicativo.');
 const repo = 'thalissomvinicius/vna-comunidade-paf-dashboard';
-const tag = 'paf-vna-1.10.4-homologacao';
+const version = path.basename(filename).match(/^PAF-VNA-(\d+\.\d+\.\d+)-homologacao\.apk$/)?.[1];
+if (!version) throw new Error('Use o nome PAF-VNA-X.Y.Z-homologacao.apk.');
+const tag = `paf-vna-${version}-homologacao`;
 const bytes = readFileSync(path.resolve(filename));
 const sha256 = createHash('sha256').update(bytes).digest('hex');
 let token = process.env.GITHUB_TOKEN;
@@ -29,8 +31,8 @@ async function api(url, method = 'GET', body) {
 const base = `https://api.github.com/repos/${repo}`;
 let release = await api(`${base}/releases/tags/${tag}`);
 if (!release) release = await api(`${base}/releases`, 'POST', {
-  tag_name:tag, target_commitish:commit, name:'PAF VNA 1.10.4 - Homologacao', draft:true, prerelease:true,
-  body:`Versao para homologacao, nao distribuicao oficial.\n\nDatas completas, preservacao de tarefas, paginacao de sincronizacao e protecao contra sobrescrita de cache ilegivel. Usa o banco PAF compartilhado com o dashboard.\n\nAssinatura Android de testes (debug). Pacote com.vilanova.vnacomunidade.piloto preservado para compatibilidade das versoes de teste. Nao desinstale o app original com dados pendentes. Testes fisicos de GPS, fotos, modo aviao e atualizacao ainda obrigatorios.\n\nCommit: ${commit}\nSHA-256: ${sha256}`,
+  tag_name:tag, target_commitish:commit, name:`PAF VNA ${version} - Homologacao`, draft:true, prerelease:true,
+  body:`Versao para homologacao, nao distribuicao oficial.\n\nLogin redesenhado com identidade PAF VNA, campos acessiveis, navegacao pelo teclado e adaptacao a telas pequenas. Usa o banco PAF compartilhado com o dashboard e preserva os fluxos de autenticacao existentes.\n\nAssinatura Android de testes (debug). Pacote com.vilanova.vnacomunidade.piloto preservado para compatibilidade das versoes de teste. Nao desinstale o app original com dados pendentes. Testes fisicos de GPS, fotos, modo aviao e atualizacao ainda obrigatorios.\n\nCommit: ${commit}\nSHA-256: ${sha256}`,
 });
 const name = path.basename(filename);
 let asset = release.assets.find(item => item.name === name);

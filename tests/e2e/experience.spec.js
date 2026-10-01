@@ -198,7 +198,7 @@ for (const size of sizes) {
       page.getByRole("heading", { name: "Painel administrativo" }),
     ).toBeVisible();
     await assertFits(page);
-    const panel = await page.locator(".premium-login-panel").boundingBox();
+    const panel = await page.locator(".paf-access-form").boundingBox();
     expect(panel.x).toBeGreaterThanOrEqual(0);
     expect(panel.x + panel.width).toBeLessThanOrEqual(size.width + 1);
     await page.screenshot({
@@ -306,7 +306,7 @@ test("field login, filters, evidence and review preserve original author", async
   await page
     .getByLabel("Senha", { exact: true })
     .fill("fixture-password-not-real");
-  await page.getByRole("button", { name: "Entrar na comunidade" }).click();
+  await page.getByRole("button", { name: "Entrar na equipe PAF" }).click();
   await expect(
     page.getByRole("heading", { name: "Coletas de campo" }),
   ).toBeVisible();
@@ -375,13 +375,13 @@ test("invalid field credentials show an error without opening private data", asy
     .getByLabel("E-mail", { exact: true })
     .fill("not-a-real-account@example.test");
   await page.getByLabel("Senha", { exact: true }).fill("not-a-real-password");
-  await page.getByRole("button", { name: "Entrar na comunidade" }).click();
+  await page.getByRole("button", { name: "Entrar na equipe PAF" }).click();
   await expect(page.getByRole("alert")).toContainText(
     "E-mail ou senha invalidos.",
   );
   await expect(page.locator(".field-table")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Entrar na comunidade" }),
+    page.getByRole("button", { name: "Entrar na equipe PAF" }),
   ).toBeEnabled();
 });
 
