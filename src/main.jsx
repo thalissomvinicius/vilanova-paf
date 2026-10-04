@@ -57,7 +57,9 @@ import "./ui/legacy.css";
 import "./ui/design.css";
 import { WorkspaceNavigation, WorkspaceTabs, navGroupLabel, SectionHeading, DashboardSkeleton, DeveloperFooter } from "./ui/Workspace";
 import { AnimatedValue } from "./components/AnimatedValue";
-import { AccessScreen, AccessField, AccessSubmit, AccessLink } from "./components/AccessScreen";
+import { AccessScreen, AccessField, AccessSubmit, AccessLink, useAccessTransition } from "./components/AccessScreen";
+import { RecoveryBoundary } from "./components/RecoveryBoundary";
+import { requestJson } from "./lib/request-json.mjs";
 
 const FieldWorkspace = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.FieldWorkspace })));
 const AccessHub = lazy(() => import("./field/FieldWorkspace").then(module => ({ default: module.AccessHub })));
@@ -776,17 +778,23 @@ function InstitutionalHome() {
 function AdminGate() {
   const [checking, setChecking] = useState(true);
   const [user, setUser] = useState(null);
+  const [checkError, setCheckError] = useState('');
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    fetchJson("/api/auth/me")
+    const controller = new AbortController();
+    setChecking(true); setCheckError('');
+    fetchJson("/api/auth/me", { signal: controller.signal })
       .then((data) => setUser(["admin", "coordinator"].includes(data.user?.role) ? data.user : null))
-      .catch(() => setUser(null))
-      .finally(() => setChecking(false));
-  }, []);
+      .catch(error => { if (controller.signal.aborted) return; if ([401, 403].includes(error.status)) setUser(null); else setCheckError(error.message); })
+      .finally(() => { if (!controller.signal.aborted) setChecking(false); });
+    return () => controller.abort();
+  }, [attempt]);
 
   if (checking) {
     return <LoadingScreen label="Carregando painel" />;
   }
+  if (checkError) return <main className="paf-recovery" role="alert"><img src="/brand/paf-symbol-official.png" alt="PAF VNA" width="64" height="64" /><h1>Vamos restabelecer a conexão</h1><p>{checkError}</p><button className="primary-button" onClick={() => setAttempt(value => value + 1)}><RefreshCcw size={18} />Tentar novamente</button></main>;
 
   if (!user) {
     return <AdminLogin onLogin={setUser} />;
@@ -796,6 +804,7 @@ function AdminGate() {
 }
 
 function AdminLogin({ onLogin }) {
+  const transition = useAccessTransition();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -810,6 +819,7 @@ function AdminLogin({ onLogin }) {
       return;
     }
 
+    if (!transition.begin()) return;
     setLoading(true);
     setError("");
 
@@ -817,14 +827,15 @@ function AdminLogin({ onLogin }) {
       if (username.includes('@')) {
         const { fieldSignIn, fieldSignOut } = await import('./field/client');
         const profile = await fieldSignIn(username, password);
-        if (profile?.deve_trocar_senha) { window.location.assign('/campo'); return; }
+        if (profile?.deve_trocar_senha) { setPassword(''); if (await transition.succeed()) window.location.assign('/campo'); return; }
         if (!['admin', 'super_admin', 'coordenador'].includes(profile?.papel)) {
           await fieldSignOut();
           throw new Error('Este perfil acessa a equipe de campo, nao a administracao.');
         }
         const result = await fetchJson('/api/auth/me');
         if (!result.user) throw new Error('Seu perfil nao esta autorizado neste painel.');
-        onLogin(result.user);
+        setPassword('');
+        if (await transition.succeed()) onLogin(result.user);
         return;
       }
       const data = await fetchJson("/api/auth/admin-login", {
@@ -832,8 +843,11 @@ function AdminLogin({ onLogin }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
       });
-      onLogin(data.user);
+      if (!data.user || !['admin', 'coordinator'].includes(data.user.role)) throw new Error('Seu perfil nao esta autorizado neste painel.');
+      setPassword('');
+      if (await transition.succeed()) onLogin(data.user);
     } catch (requestError) {
+      transition.fail();
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -841,12 +855,12 @@ function AdminLogin({ onLogin }) {
   }
 
   return (
-    <AccessScreen portal="PORTAL DE GESTÃO" title="Painel administrativo" description="O campo conectado. As decisões, mais próximas.">
+    <AccessScreen phase={transition.phase} portal="PORTAL DE GESTÃO" title="Painel administrativo" description="Acesse o painel de gestão da agricultura familiar.">
       <form onSubmit={submit} aria-busy={loading}>
         <AccessField id="paf-access-user" label="Login" value={username} onChange={event => setUsername(event.target.value)} placeholder="Seu usuário ou e-mail" disabled={loading} />
         <AccessField id="paf-access-password" label="Senha" password value={password} onChange={event => setPassword(event.target.value)} placeholder="Digite sua senha" show={showPassword} onToggle={() => setShowPassword(value => !value)} disabled={loading} errorId={error ? 'paf-access-error' : undefined} />
         {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
-        <AccessSubmit busy={loading} />
+        <AccessSubmit busy={loading} success={transition.phase === 'success'} />
       </form>
       <AccessLink href="/produtor" producer>Sou produtor<small>Acessar meus relatórios</small></AccessLink>
     </AccessScreen>
@@ -7046,6 +7060,7 @@ function TechnicalPortal() {
 }
 
 function TechnicalLogin({ onLogin }) {
+  const transition = useAccessTransition();
   const [login, setLogin] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -7054,6 +7069,7 @@ function TechnicalLogin({ onLogin }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (!transition.begin()) return;
     setLoading(true);
     setError("");
 
@@ -7063,8 +7079,10 @@ function TechnicalLogin({ onLogin }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ login, accessCode })
       });
-      await onLogin();
+      setAccessCode('');
+      if (await transition.succeed()) await onLogin();
     } catch (requestError) {
+      transition.fail();
       setError(requestError.message || "Não foi possível entrar.");
     } finally {
       setLoading(false);
@@ -7072,12 +7090,12 @@ function TechnicalLogin({ onLogin }) {
   }
 
   return (
-    <AccessScreen portal="EQUIPE DE CAMPO" title="Acesso técnico" description="Use o acesso fornecido pela gestão do PAF.">
+    <AccessScreen phase={transition.phase} portal="EQUIPE DE CAMPO" title="Acesso técnico" description="Use o acesso fornecido pela gestão do PAF.">
       <form onSubmit={submit} aria-busy={loading}>
         <AccessField id="paf-access-user" label="Login" value={login} onChange={event => setLogin(event.target.value)} placeholder="Seu login de técnico" disabled={loading} />
         <AccessField id="paf-access-password" label="Código de acesso" password toggleLabel="código" value={accessCode} onChange={event => setAccessCode(event.target.value)} placeholder="Digite seu código de acesso" show={showPassword} onToggle={() => setShowPassword(value => !value)} disabled={loading} errorId={error ? 'paf-access-error' : undefined} />
         {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
-        <AccessSubmit busy={loading} />
+        <AccessSubmit busy={loading} success={transition.phase === 'success'} />
       </form>
       <AccessLink href="/admin">Acesso administrativo</AccessLink>
     </AccessScreen>
@@ -7609,6 +7627,7 @@ function ProducerPortal() {
 }
 
 function ProducerLogin({ onLogin }) {
+  const transition = useAccessTransition();
   const params = new URLSearchParams(window.location.search);
   const [login, setLogin] = useState(params.get("login") || "");
   const [accessCode, setAccessCode] = useState("");
@@ -7619,6 +7638,7 @@ function ProducerLogin({ onLogin }) {
   async function submit(event) {
     event.preventDefault();
     if (loading) return;
+    if (!transition.begin()) return;
     setLoading(true);
     setError("");
 
@@ -7628,8 +7648,11 @@ function ProducerLogin({ onLogin }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ login, accessCode })
       });
-      onLogin(data);
+      if (!data.producer) throw new Error('Nao foi possivel validar seu acesso de produtor.');
+      setAccessCode('');
+      if (await transition.succeed()) onLogin(data);
     } catch (requestError) {
+      transition.fail();
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -7637,12 +7660,12 @@ function ProducerLogin({ onLogin }) {
   }
 
   return (
-    <AccessScreen producer portal="PORTAL DO PRODUTOR" title="Bem-vindo, produtor" description="Seu trabalho no campo, conectado ao PAF." help="Ainda não recebeu seu acesso? Solicite à equipe PAF que acompanha sua propriedade.">
+    <AccessScreen phase={transition.phase} producer portal="PORTAL DO PRODUTOR" title="Bem-vindo, produtor" description="Seu trabalho no campo, conectado ao PAF." help="Ainda não recebeu seu acesso? Solicite à equipe PAF que acompanha sua propriedade.">
       <form onSubmit={submit} aria-busy={loading}>
         <AccessField id="paf-access-user" label="Login" value={login} onChange={event => setLogin(event.target.value)} placeholder="Login enviado pela equipe PAF" disabled={loading} />
         <AccessField id="paf-access-password" label="Código de acesso" password toggleLabel="código" value={accessCode} onChange={event => setAccessCode(event.target.value)} placeholder="Digite seu código de acesso" show={showPassword} onToggle={() => setShowPassword(value => !value)} disabled={loading} errorId={error ? 'paf-access-error' : undefined} />
         {error && <p id="paf-access-error" className="paf-access-error" role="alert">{error}</p>}
-        <AccessSubmit busy={loading}>Acessar meus relatórios</AccessSubmit>
+        <AccessSubmit busy={loading} success={transition.phase === 'success'}>Acessar meus relatórios</AccessSubmit>
       </form>
       <AccessLink href="/admin">Acesso administrativo</AccessLink>
     </AccessScreen>
@@ -8397,59 +8420,21 @@ function Field({ label, children }) {
 
 function LoadingScreen({ label }) {
   return (
-    <div className="loading-state">
-      <Loader2 className="spin" size={28} />
+    <div className="loading-state" role="status" aria-live="polite">
+      <Loader2 className="spin" size={28} aria-hidden="true" />
       <span>{label}</span>
     </div>
   );
 }
 
 async function fetchJson(url, options = {}) {
-  const { timeoutMs = 15000, ...requestOptions } = options;
-  const controller = requestOptions.signal ? null : new AbortController();
-  let timedOut = false;
-  let timeout;
-
-  try {
-    const headers = new Headers(requestOptions.headers);
+  return requestJson(url, options, async headers => {
     if (window.sessionStorage.getItem('paf-field-dashboard')) {
       const { fieldClient } = await import('./field/client');
       const { data } = await fieldClient.auth.getSession();
       if (data.session?.access_token) headers.set('Authorization', `Bearer ${data.session.access_token}`);
     }
-    const request = fetch(url, {
-      credentials: "same-origin",
-      ...requestOptions,
-      headers,
-      signal: requestOptions.signal || controller?.signal
-    });
-    const response = controller
-      ? await Promise.race([
-          request,
-          new Promise((_, reject) => {
-            timeout = window.setTimeout(() => {
-              timedOut = true;
-              controller.abort();
-              reject(new Error("A conexão demorou mais que o esperado. Tente novamente."));
-            }, timeoutMs);
-          })
-        ])
-      : await request;
-    const data = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const error = new Error(data.error || "Erro na requisição.");
-      error.status = response.status;
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    if (timedOut) throw new Error("A conexão demorou mais que o esperado. Tente novamente.");
-    throw error;
-  } finally {
-    if (timeout) window.clearTimeout(timeout);
-  }
+  });
 }
 
 function fileToBase64(file) {
@@ -8671,7 +8656,7 @@ function csvCell(value) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
-createRoot(document.getElementById("root")).render(<Suspense fallback={<LoadingScreen label="Abrindo PAF" />}><App /></Suspense>);
+createRoot(document.getElementById("root")).render(<RecoveryBoundary><Suspense fallback={<LoadingScreen label="Abrindo PAF" />}><App /></Suspense></RecoveryBoundary>);
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => null));

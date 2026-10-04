@@ -9,5 +9,6 @@ test('access hierarchy prevents self changes and privilege escalation', () => {
   assert.equal(canManageAccess(admin, { id: 'b', papel: 'admin' }), false);
   assert.equal(canManageAccess(admin, { id: 'b', papel: 'tecnico' }), true);
   assert.deepEqual(manageableRoles({ papel: 'tecnico' }), []);
-  assert.equal(manageableRoles({ papel: 'coordenador' }).includes('admin'), false);
+  assert.deepEqual(manageableRoles({ papel: 'coordenador' }), []);
+  assert.equal(canManageAccess({ id: 'c', papel: 'coordenador' }, { id: 't', papel: 'tecnico' }), false);
 });

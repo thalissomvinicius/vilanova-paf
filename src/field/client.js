@@ -6,7 +6,7 @@ const url = import.meta.env.VITE_PAF_FIELD_URL || FIELD_URL;
 const key = import.meta.env.VITE_PAF_FIELD_PUBLISHABLE_KEY || FIELD_PUBLIC_KEY;
 export const fieldClient = url && key ? createClient(url, key, {
   auth: { storageKey: 'paf-field-dashboard', storage: window.sessionStorage, persistSession: true, detectSessionInUrl: false },
-  global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(20000) }) }
+  global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(20000)]) : AbortSignal.timeout(20000) }) }
 }) : null;
 
 function requireClient() {
@@ -35,7 +35,14 @@ export async function loadFieldProfile() {
 export async function fieldSignIn(email, password) {
   const { error } = await requireClient().auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
   if (error) throw new Error(error.status === 400 ? 'E-mail ou senha invalidos.' : 'Nao foi possivel conectar ao PAF. Verifique sua conexao e tente novamente.');
-  return loadFieldProfile();
+  try {
+    const profile = await loadFieldProfile();
+    if (!profile) throw new Error('Nao foi possivel validar seu perfil PAF. Entre novamente.');
+    return profile;
+  } catch (error) {
+    await fieldSignOut();
+    throw error;
+  }
 }
 
 export async function changeFieldPassword(password) {

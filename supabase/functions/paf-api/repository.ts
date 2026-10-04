@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readPages } from './read-pages.ts';
 import {
   ACCESS_ACCOUNT_TYPES,
   DOCUMENT_CATEGORIES,
@@ -466,12 +467,11 @@ export class PafRepository {
   }
 
   async listReports(filters: Filters = {}, producerIds?: number[]) {
-    const { data, error } = await this.db
+    const data = await readPages<Row>((from, to) => this.db
       .from("paf_reports")
       .select("*, producer:paf_producers(name,cpf,agency,designer)")
       .order("created_at", { ascending: false })
-      .range(0, 9999);
-    assertNoError(error, "Não foi possível carregar os relatórios.");
+      .order('id').range(from, to), "Não foi possível carregar os relatórios.");
     let reports = (data || []).map(mapReport);
     if (producerIds) {
       const allowed = new Set(producerIds);
@@ -565,13 +565,12 @@ export class PafRepository {
   }
 
   async listVisits(filters: Filters = {}, producerIds?: number[]) {
-    const { data, error } = await this.db
+    const data = await readPages<Row>((from, to) => this.db
       .from("paf_technical_visits")
       .select("*, producer:paf_producers(name,cpf,agency,address,area_ha,property_name,community), report:paf_reports(area_status,created_at)")
       .order("scheduled_date", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
-      .range(0, 9999);
-    assertNoError(error, "Não foi possível carregar as visitas.");
+      .order('id').range(from, to), "Não foi possível carregar as visitas.");
     let visits = (data || []).map(mapVisit);
     if (producerIds) {
       const allowed = new Set(producerIds);
@@ -677,12 +676,11 @@ export class PafRepository {
   }
 
   async listTasks(filters: Filters = {}) {
-    const { data, error } = await this.db
+    const data = await readPages<Row>((from, to) => this.db
       .from("paf_operational_tasks")
       .select("*, producer:paf_producers(name,cpf,agency), report:paf_reports(area_status,created_at), visit:paf_technical_visits(status,scheduled_date)")
       .order("created_at", { ascending: false })
-      .range(0, 9999);
-    assertNoError(error, "Não foi possível carregar as pendências.");
+      .order('id').range(from, to), "Não foi possível carregar as pendências.");
     let tasks = (data || []).map(mapTask);
     const search = normalizedSearch(filters.search);
     if (search) tasks = tasks.filter((task) => [task.title, task.producerName, task.producerCpf, task.assignee, task.notes]
@@ -756,12 +754,11 @@ export class PafRepository {
   }
 
   async listDocuments(filters: Filters = {}) {
-    const { data, error } = await this.db
+    const data = await readPages<Row>((from, to) => this.db
       .from("paf_documents")
       .select("*, producer:paf_producers(name,cpf,agency), report:paf_reports(area_status), visit:paf_technical_visits(status), task:paf_operational_tasks(title)")
       .order("created_at", { ascending: false })
-      .range(0, 9999);
-    assertNoError(error, "Não foi possível carregar os documentos.");
+      .order('id').range(from, to), "Não foi possível carregar os documentos.");
     let documents = (data || []).map(mapDocument);
     const search = normalizedSearch(filters.search);
     if (search) documents = documents.filter((document) => [document.title, document.fileName, document.producerName, document.producerCpf, document.notes]
@@ -863,14 +860,11 @@ export class PafRepository {
   }
 
   async listFuel(filters: Filters = {}) {
-    const [{ data: recordRows, error: recordError }, { data: vehicleRows, error: vehicleError }, { data: driverRows, error: driverError }] = await Promise.all([
-      this.db.from("paf_fuel_records").select("*").order("served_date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).range(0, 9999),
-      this.db.from("paf_fuel_vehicles").select("*").order("plate").range(0, 9999),
-      this.db.from("paf_fuel_drivers").select("*").order("active", { ascending: false }).order("name").range(0, 9999)
+    const [recordRows, vehicleRows, driverRows] = await Promise.all([
+      readPages<Row>((from, to) => this.db.from("paf_fuel_records").select("*").order("served_date", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).order('id').range(from, to), "Não foi possível carregar os abastecimentos."),
+      readPages<Row>((from, to) => this.db.from("paf_fuel_vehicles").select("*").order("plate").order('id').range(from, to), "Não foi possível carregar a frota."),
+      readPages<Row>((from, to) => this.db.from("paf_fuel_drivers").select("*").order("active", { ascending: false }).order("name").order('id').range(from, to), "Não foi possível carregar os motoristas.")
     ]);
-    assertNoError(recordError, "Não foi possível carregar os abastecimentos.");
-    assertNoError(vehicleError, "Não foi possível carregar a frota.");
-    assertNoError(driverError, "Não foi possível carregar os motoristas.");
 
     const drivers = (driverRows || []).map(mapFuelDriver);
     const driverNameById = new Map(drivers.map((driver) => [driver.id, driver.name]));
@@ -1072,15 +1066,11 @@ export class PafRepository {
   }
 
   private async listProducerRows() {
-    const { data, error } = await this.db.from("paf_producers").select("*").order("name").range(0, 9999);
-    assertNoError(error, "Não foi possível carregar os produtores.");
-    return data || [];
+    return readPages<Row>((from, to) => this.db.from("paf_producers").select("*").order("name").order('id').range(from, to), "Não foi possível carregar os produtores.");
   }
 
   private async listReportRows() {
-    const { data, error } = await this.db.from("paf_reports").select("*").order("created_at", { ascending: false }).range(0, 9999);
-    assertNoError(error, "Não foi possível carregar os relatórios.");
-    return data || [];
+    return readPages<Row>((from, to) => this.db.from("paf_reports").select("*").order("created_at", { ascending: false }).order('id').range(from, to), "Não foi possível carregar os relatórios.");
   }
 
   private async hydrateAccessAccount(row: Row) {

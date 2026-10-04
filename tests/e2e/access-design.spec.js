@@ -17,7 +17,7 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
   await expect(page.getByLabel('Senha', { exact: true })).toHaveAttribute('type', 'text');
   await page.getByRole('button', { name: 'Ocultar senha', exact: true }).click();
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Conectando...' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Validando acesso...' })).toBeDisabled();
   await expect.poll(() => Boolean(release)).toBe(true); release();
   await expect(page.getByRole('alert')).toHaveText('Login ou senha inválidos.');
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeEnabled();
@@ -33,8 +33,8 @@ test('login controls, error recovery and reduced motion', async ({ page }) => {
       expect(scene.x + scene.width).toBeLessThanOrEqual(panel.x);
     } else {
       // On phones the program panel becomes a short band above the form.
-      expect(scene.height).toBeGreaterThan(0);
-      expect(scene.y + scene.height).toBeLessThanOrEqual(panel.y);
+      await expect(page.locator('.pa-login-identity')).toBeHidden();
+      await expect(page.locator('.pa-login-brand')).toBeVisible();
     }
     expect(panel.x).toBeGreaterThanOrEqual(0); expect(panel.x + panel.width).toBeLessThanOrEqual(width);
     await page.getByRole('button', { name: 'Entrar', exact: true }).scrollIntoViewIfNeeded();

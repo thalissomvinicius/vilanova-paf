@@ -60,12 +60,16 @@ const apiWrite = (api, path, values, method = "POST") =>
 function useResource(api, path, refreshMs = 30000) {
   const [state, setState] = useState({ data: null, error: "", loading: true });
   const sequence = useRef(0);
+  const pending = useRef(null);
   const load = useCallback(
     async (quiet = false) => {
       const id = ++sequence.current;
+      pending.current?.abort();
+      const controller = new AbortController();
+      pending.current = controller;
       if (!quiet) setState((s) => ({ ...s, loading: true }));
       try {
-        const data = await api(path);
+        const data = await api(path, { signal: controller.signal });
         if (id === sequence.current)
           setState({ data, error: "", loading: false });
       } catch (e) {
@@ -84,21 +88,24 @@ function useResource(api, path, refreshMs = 30000) {
       clearTimeout(delay);
       clearInterval(timer);
       sequence.current++;
+      pending.current?.abort();
     };
   }, [load, refreshMs]);
   return { ...state, load };
 }
-function ErrorMessage({ children }) {
+function ErrorMessage({ children, onRetry }) {
   return children ? (
     <div className="ops-error" role="alert">
       {children}
+      {onRetry && <button type="button" className="ops-link" onClick={() => onRetry()}><RefreshCw size={16} />Tentar novamente</button>}
     </div>
   ) : null;
 }
 function Loading() {
   return (
-    <div className="ops-empty" role="status">
-      <Loader2 size={22} className="spin" /> Carregando operação...
+    <div className="ops-loading" role="status" aria-live="polite">
+      <span><Loader2 size={18} className="spin" aria-hidden="true" />Carregando operação...</span>
+      <div className="ops-loading-rows" aria-hidden="true">{[0, 1, 2].map(row => <div key={row}><i /><i /><i /></div>)}</div>
     </div>
   );
 }
@@ -354,10 +361,10 @@ export function ActivityOperations({ api, kind }) {
           </select>
         </label>
       </Toolbar>
-      <ErrorMessage>{resource.error || directories.error}</ErrorMessage>
-      {resource.loading ? (
+      <ErrorMessage onRetry={() => { resource.load(); directories.load(); }}>{resource.error || directories.error}</ErrorMessage>
+      {resource.loading && !resource.data ? (
         <Loading />
-      ) : !resource.data?.records?.length ? (
+      ) : resource.error && !resource.data ? null : !resource.data?.records?.length ? (
         <Empty title="Nenhum registro encontrado" />
       ) : (
         <div className="ops-record-list">
@@ -572,7 +579,7 @@ export function OperationsDashboard({ api, canManageRecords = true }) {
           <RefreshCw size={18} className={resource.loading ? "spin" : ""} />
         </button>
       </div>
-      <ErrorMessage>{resource.error || dirs.error}</ErrorMessage>
+      <ErrorMessage onRetry={() => { resource.load(); dirs.load(); }}>{resource.error || dirs.error}</ErrorMessage>
       {!d && resource.loading ? (
         <Loading />
       ) : (
@@ -952,7 +959,7 @@ export function ProducerOperations({ api, canManageRecords = true }) {
           </select>
         </label>
       </Toolbar>
-      <ErrorMessage>{resource.error || dirs.error}</ErrorMessage>
+      <ErrorMessage onRetry={() => { resource.load(); dirs.load(); }}>{resource.error || dirs.error}</ErrorMessage>
       {!resource.data && resource.loading ? (
         <Loading />
       ) : resource.data?.producers?.length ? (
@@ -1700,7 +1707,7 @@ function IdentityConflicts({ api, onBack }) {
         title="Conferência de identidades"
         detail="Nenhum cadastro foi apagado. Confirme a identidade antes de vincular registros com nomes diferentes."
       />
-      <ErrorMessage>{error || resource.error}</ErrorMessage>
+      <ErrorMessage onRetry={resource.error ? resource.load : undefined}>{error || resource.error}</ErrorMessage>
       {resource.loading && !resource.data ? (
         <Loading />
       ) : !resource.data?.conflicts?.length ? (

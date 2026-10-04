@@ -9,6 +9,7 @@ import { CpfField } from './CpfField';
 import { PARA_MUNICIPALITIES, LAND_CONSENT_VERSION } from '../../supabase/functions/paf-api/land-reference.mjs';
 import './land.layer.css';
 import { CaseWorkspace } from '../operations/OperationsWorkspace';
+import { requestJson } from '../lib/request-json.mjs';
 
 const date = value => new Date(value).toLocaleString('pt-BR');
 const birthday = value => value.split('-').reverse().join('/');
@@ -16,10 +17,7 @@ const settlementLabel = value => value === true ? 'Sim' : value === false ? 'Nã
 const settlementDetails = (isFederal, motherName, settlementName) => [['Assentamento federal (INCRA)', settlementLabel(isFederal)], ...(isFederal === true ? [['Nome do assentamento', settlementName || 'Não informado'], ['Nome completo da mãe', motherName]] : [])];
 const apiRoot = '/api/land';
 async function publicApi(path, body) {
-  const response = await fetch(`${apiRoot}/${path}`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || 'Não foi possível concluir. Tente novamente.');
-  return data;
+  return requestJson(`${apiRoot}/${path}`, { method: 'POST', timeoutMs: 20000, credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 }
 function saveFile(content, name, type = 'text/plain;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([content], { type }));

@@ -1,3 +1,4 @@
+import { readJsonBody } from './read-json-body.mjs';
 import {
   validCpf,
   digits,
@@ -168,32 +169,7 @@ const reply = (data, status = 200) =>
     headers: { "cache-control": "private, no-store" },
   });
 async function bodyOf(request) {
-  if (!request.headers.get("content-type")?.includes("application/json"))
-    throw new Error("Envie JSON.");
-  const reader = request.body?.getReader();
-  if (!reader) throw new Error("Dados inválidos.");
-  const chunks = [];
-  let length = 0;
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    length += value.length;
-    if (length > 16000) {
-      await reader.cancel();
-      throw new Error("Dados excedem o limite.");
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.length;
-  }
-  const value = JSON.parse(new TextDecoder().decode(bytes));
-  if (!value || Array.isArray(value) || typeof value !== "object")
-    throw new Error("Dados inválidos.");
-  return value;
+  return readJsonBody(request, { limit: 16000 });
 }
 export async function operationsRoute({ request, path, store, admin, actor, manageRecords = admin }) {
   if (!path.startsWith("/api/operations")) return null;
@@ -324,7 +300,7 @@ export async function operationsRoute({ request, path, store, admin, actor, mana
             ? "Dados inválidos."
             : error.message || "Não foi possível concluir.",
       },
-      error.database ? 503 : 400,
+      error.database ? 503 : [408, 413].includes(error.status) ? error.status : 400,
     );
   }
 }

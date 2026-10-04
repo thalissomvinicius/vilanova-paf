@@ -1,17 +1,34 @@
-import React from 'react';
-import { ArrowRight, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Sprout, UserRound } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Check, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Sprout, UserRound } from 'lucide-react';
 import { DeveloperSignature } from '../ui/Workspace';
 
-function TeamPhoto() {
-  return <img className="pa-login-art" src="/brand/login-equipe-dende-realista.png" alt="Equipe Vila Nova no campo" width="1448" height="1086" />;
+export function useAccessTransition() {
+  const [phase, setPhase] = useState('idle');
+  const locked = useRef(false);
+  const pending = useRef(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; if (pending.current) { clearTimeout(pending.current.timer); pending.current.resolve(false); } };
+  }, []);
+  function begin() { if (locked.current) return false; locked.current = true; setPhase('authenticating'); return true; }
+  function fail() { locked.current = false; if (mounted.current) setPhase('idle'); }
+  async function succeed() {
+    if (!mounted.current) return false;
+    setPhase('success');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return true;
+    return new Promise(resolve => { pending.current = { resolve, timer: setTimeout(() => { pending.current = null; resolve(mounted.current); }, 650) }; });
+  }
+  return { phase, begin, fail, succeed };
 }
 
-export function AccessScreen({ portal, title, description, children, help, producer = false, embedded = false }) {
+export function AccessScreen({ portal, title, description, children, help, producer = false, embedded = false, phase = 'idle' }) {
   const Tag = embedded ? 'section' : 'main';
-  const form = <section className="paf-access-form" aria-labelledby="paf-access-title">
+  const form = <section className={`paf-access-form${phase === 'success' ? ' paf-access-confirmed' : ''}`} aria-labelledby="paf-access-title">
     <div className="paf-access-heading"><span className="paf-access-kicker"><span aria-hidden="true" />{portal}</span><h2 id="paf-access-title">{title}</h2><p>{description}</p></div>
     {children}
     {help && <p className="paf-producer-help">{help}</p>}
+    {phase === 'success' && <div className="paf-access-success" role="status" aria-live="polite"><span className="paf-access-success-mark"><Check size={32} strokeWidth={2.5} /></span><h3>Acesso confirmado</h3><p>Preparando seu ambiente PAF.</p><span className="paf-access-success-track" aria-hidden="true"><span /></span></div>}
   </section>;
 
   if (embedded) return <Tag className="paf-access paf-access-embedded pa-login">{form}</Tag>;
@@ -22,7 +39,7 @@ export function AccessScreen({ portal, title, description, children, help, produ
         <span className="pa-login-symbol"><img src="/brand/paf-symbol-official.png" alt="" width="44" height="44" /></span>
         <span><strong>PAF VNA</strong><small>Programa de Agricultura Familiar</small></span>
       </a>
-      <TeamPhoto />
+      <div className="pa-login-identity"><span className="pa-login-edition">PAF / VILA NOVA AGROINDUSTRIAL</span><img className="pa-login-art" src="/brand/paf-logo-official.png" alt="PAF Agricultura Familiar" width="1280" height="1280" /><span className="pa-login-identity-caption"><Sprout size={18} />Raízes no campo. Conexões para o futuro.</span></div>
       <div className="pa-login-story">
         <p className="pa-login-statement">Agricultura familiar acompanhada de perto.</p>
       </div>
@@ -48,8 +65,8 @@ export function AccessField({ id, label, value, onChange, placeholder, password 
   </div>;
 }
 
-export function AccessSubmit({ busy, disabled, children = 'Entrar' }) {
-  return <button className="paf-access-submit" type="submit" disabled={busy || disabled}><span>{busy ? 'Conectando...' : children}</span><span className="paf-access-submit-icon" aria-hidden="true">{busy ? <Loader2 className="spin" size={20} /> : <ArrowRight size={20} />}</span></button>;
+export function AccessSubmit({ busy, disabled, success = false, children = 'Entrar' }) {
+  return <button className="paf-access-submit" type="submit" disabled={busy || disabled || success}><span>{success ? 'Acesso confirmado' : busy ? 'Validando acesso...' : children}</span><span className="paf-access-submit-icon" aria-hidden="true">{success ? <Check size={20} /> : busy ? <Loader2 className="spin" size={20} /> : <ArrowRight size={20} />}</span></button>;
 }
 
 export function AccessLink({ href, producer = false, children }) {

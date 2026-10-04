@@ -1,23 +1,10 @@
 import { digest, newProtocol, normalizeProtocol, publicRequest, validateReview, validateSubmission, digits, cleanSearch, LAND_STATUSES } from './land-domain.mjs';
 import { LAND_CONSENT_VERSION } from './land-reference.mjs';
+import { readJsonBody } from './read-json-body.mjs';
 
 const reply = (data, status = 200) => Response.json(data, { status, headers: { 'cache-control': 'private, no-store' } });
 async function bodyOf(request) {
-  if (!request.headers.get('content-type')?.includes('application/json')) throw new Error('Envie os dados em JSON.');
-  const reader = request.body?.getReader();
-  if (!reader) throw new Error('Dados inválidos.');
-  const decoder = new TextDecoder(); let content = ''; let size = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > 12000) { await reader.cancel(); throw new Error('Dados excedem o limite de envio.'); }
-    content += decoder.decode(value, { stream: true });
-  }
-  content += decoder.decode();
-  const body = JSON.parse(content);
-  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Dados inválidos.');
-  return body;
+  return readJsonBody(request);
 }
 
 // The store is server-only. No public database policy exposes these records.
@@ -96,7 +83,7 @@ export async function landRoute({ request, path, store, admin, actor, ip, salt, 
   } catch (error) {
     if (error instanceof SyntaxError) return reply({ error: 'Dados inválidos.' }, 400);
     if (error?.database) return reply({ error: 'Não foi possível acessar as solicitações. Tente novamente.' }, 503);
-    return reply({ error: error instanceof Error ? error.message : 'Não foi possível concluir.' }, 400);
+    return reply({ error: error instanceof Error ? error.message : 'Não foi possível concluir.' }, [408, 413].includes(error?.status) ? error.status : 400);
   }
 }
 

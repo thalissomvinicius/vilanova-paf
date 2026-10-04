@@ -1,4 +1,4 @@
-const CACHE_NAME = "paf-shell-v4";
+const CACHE_NAME = "paf-shell-v5";
 const APP_SHELL = [
   "/",
   "/admin",
@@ -17,9 +17,7 @@ const APP_SHELL = [
   "/brand/paf-icon-card.png",
   "/brand/logo-paf-card.png",
   "/brand/paf-logo-official.png",
-  "/brand/paf-symbol-official.png",
-  "/brand/login-field-team.webp",
-  "/brand/login-equipe-dende-realista.png"
+  "/brand/paf-symbol-official.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -48,6 +46,11 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/admin")))
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === 'navigate') return (await caches.match('/admin')) || Response.error();
+        return Response.error();
+      })
   );
 });

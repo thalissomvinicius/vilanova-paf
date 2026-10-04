@@ -20,6 +20,7 @@ import { PafRepository } from "./repository.ts";
 import { importFuelWorkbook } from "./fuel-import.ts";
 import { landRoute, SupabaseLandStore } from "./land-routes.mjs";
 import { operationsRoute, SupabaseOperationsStore } from './operations-routes.mjs';
+import { readJsonBody } from './read-json-body.mjs';
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -81,7 +82,8 @@ Deno.serve(async (request) => {
   } catch (error) {
     console.error("PAF API error", method, path, error);
     const message = error instanceof Error ? error.message : "Não foi possível concluir a operação.";
-    const response = apiError(message, message.includes("não encontrado") ? 404 : 400);
+    const status = error && typeof error === 'object' && 'status' in error && [408, 413].includes(Number(error.status)) ? Number(error.status) : message.includes("não encontrado") ? 404 : 400;
+    const response = apiError(message, status);
     const headers = new Headers(response.headers);
     for (const [key, value] of Object.entries(corsHeaders)) headers.set(key, value);
     return new Response(response.body, { status: response.status, headers });
@@ -598,13 +600,7 @@ async function requireAccess(
 }
 
 async function readBody(request: Request) {
-  const contentType = request.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) return {};
-  try {
-    return await request.json();
-  } catch {
-    throw new Error("Dados enviados em formato inválido.");
-  }
+  return readJsonBody(request, { limit: 10 * 1024 * 1024 });
 }
 
 async function uploadDocument(db: any, payload: Record<string, any>) {

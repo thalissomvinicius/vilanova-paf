@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ClipboardList, Download, Eye, EyeOff, FileText, Leaf, Loader2, LogOut, MapPin, RefreshCcw, Search, ShieldCheck, Smartphone, X } from 'lucide-react';
 import { AnimatedValue } from '../components/AnimatedValue';
-import { AccessScreen, AccessField, AccessSubmit, AccessLink } from '../components/AccessScreen';
+import { AccessScreen, AccessField, AccessSubmit, AccessLink, useAccessTransition } from '../components/AccessScreen';
 import { FieldAccesses } from './FieldAccesses';
 import { manageableRoles } from './access-model.mjs';
 import { answerText, canReview, csvCell, mapUrl, REVIEW_LABELS } from './model.mjs';
@@ -18,24 +18,25 @@ export function AccessHub({ children }) {
 }
 
 function FieldLogin({ onLogin, embedded, error: initialError }) {
+  const transition = useAccessTransition();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError ?? '');
   async function submit(event) {
-    event.preventDefault(); if (busy) return; setBusy(true); setError('');
-    try { onLogin(await fieldSignIn(email, password)); setPassword(''); }
-    catch (reason) { setError(reason.message); }
+    event.preventDefault(); if (!transition.begin()) return; setBusy(true); setError('');
+    try { const profile = await fieldSignIn(email, password); if (!profile) throw new Error('Nao foi possivel validar seu perfil.'); setPassword(''); if (await transition.succeed()) onLogin(profile); }
+    catch (reason) { transition.fail(); setError(reason.message); }
     finally { setBusy(false); }
   }
-  return <AccessScreen embedded={embedded} portal="EQUIPE PAF VNA" title="Acesso da equipe PAF" description="Entre com seu e-mail de acesso ao PAF VNA.">
+  return <AccessScreen phase={transition.phase} embedded={embedded} portal="EQUIPE PAF VNA" title="Acesso da equipe PAF" description="Entre com seu e-mail de acesso ao PAF VNA.">
     <form onSubmit={submit} aria-busy={busy}>
       <AccessField id="paf-field-email" label="E-mail" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Seu e-mail de acesso" disabled={busy} />
       <AccessField id="paf-field-password" label="Senha" password value={password} onChange={e => setPassword(e.target.value)} placeholder="Digite sua senha" show={show} onToggle={() => setShow(!show)} disabled={busy} errorId={error ? 'paf-field-error' : undefined} />
       {error && <p id="paf-field-error" role="alert" className="paf-access-error">{error}</p>}
       {!fieldClient && <p role="alert" className="paf-access-error">Conexao de campo nao configurada neste ambiente.</p>}
-      <AccessSubmit busy={busy} disabled={!fieldClient}>Entrar na equipe PAF</AccessSubmit>
+      <AccessSubmit busy={busy} success={transition.phase === 'success'} disabled={!fieldClient}>Entrar na equipe PAF</AccessSubmit>
     </form>
     {!embedded && <AccessLink href="/admin">Acesso administrativo</AccessLink>}
   </AccessScreen>;
