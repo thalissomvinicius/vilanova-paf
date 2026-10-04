@@ -26,6 +26,19 @@ export async function landRoute({ request, path, store, admin, actor, ip, salt, 
   const method = request.method;
   try {
     if (path.startsWith('/api/land/admin') && !admin) return reply({ error: 'Acesso administrativo necessário.' }, 401);
+    if (path === '/api/land/admin/settings' && method === 'GET') return reply(await store.settings());
+    const analyst = path.match(/^\/api\/land\/admin\/analysts(?:\/([0-9a-f-]{36}))?$/i);
+    if (analyst && ['POST', 'PATCH'].includes(method)) {
+      if (!canDelete) return reply({ error: 'Somente a administração pode configurar os analistas.' }, 403);
+      if ((method === 'POST') === Boolean(analyst[1])) return reply({ error: 'Rota não encontrada.' }, 404);
+      const body = await bodyOf(request);
+      const name = typeof body.name === 'string' ? body.name.trim().replace(/\s+/g, ' ') : '';
+      if (name.length < 3 || name.length > 160 || /[<>\x00-\x1f]/.test(name)) return reply({ error: 'Informe um nome entre 3 e 160 caracteres.' }, 400);
+      if (method === 'PATCH' && (typeof body.active !== 'boolean' || !Number.isInteger(body.version) || body.version < 1)) return reply({ error: 'Configuração inválida.' }, 400);
+      const saved = await store.saveAnalyst(analyst[1], { name, active: body.active ?? true, version: body.version });
+      if (!saved) return reply({ error: 'Este cadastro foi alterado. Atualize a configuração.' }, 409);
+      return reply({ analyst: saved }, method === 'POST' ? 201 : 200);
+    }
     if (method === 'POST' && ['/api/land/requests', '/api/land/lookup'].includes(path)) {
       const submit = path.endsWith('/requests');
       const key = await digest(`${salt}:${submit ? 'submit' : 'lookup'}:${ip}`);
@@ -56,7 +69,8 @@ export async function landRoute({ request, path, store, admin, actor, ip, salt, 
       const page = Math.max(1, Math.min(100000, Math.floor(Number(params.get('page')) || 1)));
       const archive = params.get('archive') || 'active';
       if (!['active', 'archived', 'all'].includes(archive)) return reply({ error: 'Filtro inválido.' }, 400);
-      return reply(await store.list({ status, search, page, archive }));
+      const result = await store.list({ status, search, page, archive });
+      return reply({ ...result, summary: await store.summary(archive) });
     }
     const match = path.match(/^\/api\/land\/admin\/requests\/([0-9a-f-]{36})$/i);
     if (match && method === 'DELETE') {
@@ -93,6 +107,36 @@ function checked(result) {
 const TABLE = 'paf_land_requests';
 export class SupabaseLandStore {
   constructor(db) { this.db = db; }
+  async organization() { return checked(await this.db.from('paf_dashboard_binding').select('organizacao_id').eq('id', 1).single()).organizacao_id; }
+  async settings() {
+    const org = await this.organization();
+    const analysts = checked(await this.db.from('paf_land_analysts').select('id,name,active,version').eq('organizacao_id', org).order('name'));
+    const team = [];
+    for (let offset = 0; ; offset += 500) {
+      const rows = checked(await this.db.from('paf_perfis').select('id,nome,email,papel').eq('organizacao_id', org).eq('ativo', true).in('papel', ['super_admin', 'admin', 'coordenador', 'tecnico', 'agente']).order('nome').order('id').range(offset, offset + 499));
+      team.push(...rows);
+      if (rows.length < 500) break;
+    }
+    return { analysts, team };
+  }
+  async saveAnalyst(id, values) {
+    const org = await this.organization();
+    const record = { name: values.name, active: values.active, updated_at: new Date().toISOString() };
+    const query = id ? this.db.from('paf_land_analysts').update({ ...record, version: values.version + 1 }).eq('id', id).eq('organizacao_id', org).eq('version', values.version) : this.db.from('paf_land_analysts').insert({ ...record, organizacao_id: org });
+    const result = await query.select('id,name,active,version').maybeSingle();
+    if (result.error?.code === '23505') throw new Error('Este nome já está cadastrado.');
+    return checked(result);
+  }
+  async summary(archive = 'active') {
+    const org = await this.organization(), counts = {};
+    for (const status of Object.keys(LAND_STATUSES)) {
+      let query = this.db.from(TABLE).select('id', { count: 'exact', head: true }).eq('organizacao_id', org).eq('status', status);
+      if (archive === 'active') query = query.is('archived_at', null);
+      if (archive === 'archived') query = query.not('archived_at', 'is', null);
+      const result = await query; checked(result); counts[status] = result.count;
+    }
+    return counts;
+  }
   async remove(id, version, protocol) { return checked(await this.db.rpc('paf_land_delete', { p_id: id, p_version: version, p_protocol: protocol })); }
   async rate(key, limit, seconds) { return checked(await this.db.rpc('paf_land_rate', { p_key: key, p_limit: limit, p_seconds: seconds })); }
   async submit(values) {

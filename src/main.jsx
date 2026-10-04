@@ -22,10 +22,13 @@ import {
   FileText,
   Filter,
   FlaskConical,
+  Fuel,
   Globe2,
   Handshake,
   KeyRound,
+  LayoutDashboard,
   Leaf,
+  ListChecks,
   Loader2,
   LogIn,
   LogOut,
@@ -45,16 +48,14 @@ import {
   Trash2,
   Truck,
   UserCheck,
+  UserPlus,
   UserRound,
   Users,
   X
 } from "lucide-react";
-import "./styles.css";
-import "./redesign.css";
-import "./experience.css";
-import "./access.css";
-import "./ui/system.css";
-import { WorkspaceNavigation, SectionHeading, DashboardSkeleton, DeveloperFooter } from "./ui/Workspace";
+import "./ui/legacy.css";
+import "./ui/design.css";
+import { WorkspaceNavigation, WorkspaceTabs, navGroupLabel, SectionHeading, DashboardSkeleton, DeveloperFooter } from "./ui/Workspace";
 import { AnimatedValue } from "./components/AnimatedValue";
 import { AccessScreen, AccessField, AccessSubmit, AccessLink } from "./components/AccessScreen";
 
@@ -186,16 +187,16 @@ const ACCESS_TYPES = [
 ];
 
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Painel", path: "/admin/dashboard", icon: BarChart3 },
+  { id: "dashboard", label: "Painel", path: "/admin/dashboard", icon: LayoutDashboard },
   { id: "land", label: "Análise de áreas", path: "/admin/analises-areas", icon: Sprout },
   { id: "producers", label: "Produtores", path: "/admin/produtores", icon: Users },
-  { id: "registrations", label: "Cadastros", path: "/admin/cadastros", icon: Plus },
+  { id: "registrations", label: "Cadastros", path: "/admin/cadastros", icon: UserPlus },
   { id: "logins", label: "Acessos", path: "/admin/acessos", icon: KeyRound },
   { id: "reports", label: "Relatórios", path: "/admin/relatorios", icon: ClipboardList },
   { id: "field", label: "Coletas de campo", path: "/admin/coletas", icon: ScanLine },
-  { id: "fuel", label: "Abastecimento", path: "/admin/abastecimento", icon: Droplets },
-  { id: "visits", label: "Visitas", path: "/admin/visitas", icon: UserCheck },
-  { id: "tasks", label: "Pendências", path: "/admin/pendencias", icon: Check },
+  { id: "fuel", label: "Abastecimento", path: "/admin/abastecimento", icon: Fuel },
+  { id: "visits", label: "Visitas", path: "/admin/visitas", icon: MapPin },
+  { id: "tasks", label: "Pendências", path: "/admin/pendencias", icon: ListChecks },
   { id: "documents", label: "Documentos", path: "/admin/documentos", icon: FileText }
 ];
 
@@ -352,6 +353,9 @@ if (manifestLink) {
       ? "/manifest-produtor.webmanifest"
       : "/manifest.webmanifest";
 }
+
+// Every web page shares the PAF design (ui/design.css is scoped to body.pa-ui).
+document.body.classList.add("pa-ui");
 
 function App() {
   const path = window.location.pathname;
@@ -1836,12 +1840,12 @@ function AdminDashboard({ user, onLogout }) {
 
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <img className="sidebar-paf-logo" src="/brand/logo-vilanova.png" alt="Vila Nova Agroindustrial" />
+          <img className="sidebar-paf-logo" src={BRAND_ASSETS.pafIcon} alt="" />
           <div>
-            <p className="eyebrow">Agricultura familiar</p>
             <strong>PAF VNA</strong>
+            <span>Vila Nova Agroindustrial</span>
           </div>
-          <button className="sidebar-close" type="button" title="Fechar menu" onClick={() => setSidebarOpen(false)}>
+          <button className="sidebar-close" type="button" title="Fechar menu" aria-label="Fechar menu" onClick={() => setSidebarOpen(false)}>
             <X size={19} />
           </button>
         </div>
@@ -1849,24 +1853,23 @@ function AdminDashboard({ user, onLogout }) {
         <WorkspaceNavigation items={allowedViews} activeId={activeView} onNavigate={navigateAdmin} />
 
         <div className="sidebar-footer">
+          <span className="pa-avatar" aria-hidden="true">{initials(user.name)}</span>
           <div className="sidebar-user">
-            <span>Usuário conectado</span>
             <strong>{user.name}</strong>
+            <span>{canManageRecords ? "Administração" : "Coordenação"}</span>
           </div>
           <div className="sidebar-footer-actions">
             {canManageRecords && <button
-              className="icon-text-button dark"
+              className="icon-button"
               type="button"
               title="Alterar senha"
               aria-label="Alterar senha"
               onClick={() => setPasswordModalOpen(true)}
             >
               <KeyRound size={17} />
-              Alterar senha
             </button>}
-            <button className="icon-text-button dark" type="button" title="Sair" aria-label="Sair" onClick={logout}>
+            <button className="icon-button" type="button" title="Sair" aria-label="Sair" onClick={logout}>
               <LogOut size={17} />
-              Sair
             </button>
           </div>
         </div>
@@ -1884,8 +1887,9 @@ function AdminDashboard({ user, onLogout }) {
             >
               <Menu size={21} />
             </button>
+            <img className="pa-header-symbol" src={BRAND_ASSETS.pafIcon} alt="" />
             <div>
-              <p className="eyebrow">Vila Nova / Gestão rural</p>
+              {navGroupLabel(activeView) && <p className="eyebrow">{navGroupLabel(activeView)}</p>}
               <h1>{viewTitle}</h1>
             </div>
           </div>
@@ -1896,7 +1900,7 @@ function AdminDashboard({ user, onLogout }) {
               title="Dados atualizados automaticamente a cada 30 segundos"
             >
               <span className="live-dot" />
-              Atualização 30s
+              <span className="live-label">Atualiza a cada 30 s</span>
             </span>
             {activeView === "reports" ? (
               <button className="icon-text-button" type="button" onClick={exportReports}>
@@ -2050,6 +2054,8 @@ function AdminDashboard({ user, onLogout }) {
         )}
         <DeveloperFooter />
       </main>
+
+      <WorkspaceTabs items={allowedViews} activeId={activeView} onNavigate={navigateAdmin} onOpenMenu={() => setSidebarOpen(true)} menuIcon={Menu} />
 
       <ChangePasswordModal
         open={passwordModalOpen}
@@ -8649,6 +8655,10 @@ function buildReportTechnicalSummary(report) {
     `Retorno técnico: ${report.technicalNote || "-"}`,
     `Observações: ${report.notes || "-"}`
   ].join("\n");
+}
+
+function initials(name = "") {
+  return String(name).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "PAF";
 }
 
 function maskCpf(cpf = "") {

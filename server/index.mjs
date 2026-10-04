@@ -85,6 +85,7 @@ app.use(express.json({ limit: "10mb" }));
 
 const landStore = new LocalLandStore();
 const operationsStore = new LocalOperationsStore(landStore);
+landStore.teamProvider = () => operationsStore.directories().team;
 app.use('/api/operations', async (req,res) => {
   try {
     const response=await operationsRoute({request:new Request(`http://localhost${req.originalUrl}`,{method:req.method,headers:{'content-type':'application/json'},...(['GET','HEAD'].includes(req.method)?{}:{body:JSON.stringify(req.body || {})})}),path:req.originalUrl.split('?')[0],store:operationsStore,admin:readAuth(req)?.role==='admin',actor:process.env.PAF_ADMIN_USER || 'Administrador local'});

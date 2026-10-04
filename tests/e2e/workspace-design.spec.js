@@ -107,7 +107,7 @@ test("short desktop sidebar has a branded scrollbar and all links remain reachab
   }));
   expect(scrollbar.overflows).toBe(true);
   expect(scrollbar.width).toBe("6px");
-  expect(scrollbar.track).toBe("rgb(28, 58, 49)");
+  expect(scrollbar.track).toBe("rgb(21, 74, 41)");
   await page.screenshot({
     path: "verification/sidebar-scrollbar.png",
     animations: "disabled",
@@ -168,7 +168,7 @@ for (const width of [390, 768, 1024, 1440]) {
         await page
           .locator("body")
           .evaluate((el) => getComputedStyle(el).fontFamily),
-      ).toContain("Poppins");
+      ).toContain("Instrument Sans");
       await page.screenshot({
         path: `verification/workspace-${path}-${width}.png`,
         fullPage: true,
@@ -198,6 +198,12 @@ for (const width of [390, 768, 1024, 1440]) {
       ).toBeFocused();
     }
     if (width < 981) {
+      if (width <= 760) {
+        await page.getByRole('navigation', { name: 'Atalhos' }).getByRole('button', { name: 'Produtores', exact: true }).click();
+        await expect(page).toHaveURL(/\/admin\/produtores$/);
+        await page.getByRole('navigation', { name: 'Atalhos' }).getByRole('button', { name: 'Campo', exact: true }).click();
+        await expect(page).toHaveURL(/\/admin\/visitas$/);
+      }
       await page
         .getByRole("button", { name: "Abrir menu", exact: true })
         .click();

@@ -178,7 +178,9 @@ for (const size of sizes) {
     if (size.width >= 1024) {
       const logo = await page.locator(".sidebar-paf-logo").boundingBox();
       const name = await page.locator(".sidebar-brand strong").boundingBox();
-      expect(logo.y + logo.height).toBeLessThanOrEqual(name.y);
+      // The PAF symbol sits beside the product name, on the same row.
+      expect(logo.x + logo.width).toBeLessThanOrEqual(name.x);
+      expect(Math.abs((logo.y + logo.height / 2) - (name.y + name.height / 2))).toBeLessThanOrEqual(12);
     }
     await assertFits(page);
     await page.screenshot({

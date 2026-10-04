@@ -16,6 +16,7 @@ async function mock(page) {
       data = { request: { ...row, history } };
     }
     else if (path === '/api/land/admin/requests') data = { requests: !url.searchParams.get('search') || row.full_name.includes(url.searchParams.get('search')) ? [row] : [], total: 1, page: 1, pageSize: 25 };
+    else if (path === '/api/land/admin/settings') data = { analysts: [{ id: '22222222-2222-4222-8222-222222222222', name: 'Ana de Teste', active: true, version: 1 }], team: [] };
     else if (path.startsWith('/api/land/admin/requests/')) {
       if (request.method() === 'PATCH') { const body = request.postDataJSON(); bodies.push(body); row = { ...row, ...body, reviewer_name: body.reviewerName, version: row.version + 1 }; history = [{ ...body, reviewer_name: body.reviewerName, actor: 'Equipe PAF', created_at: row.created_at }]; }
       data = { request: row, history };
@@ -201,7 +202,7 @@ for (const width of [1440, 390, 320]) {
     await page.getByRole('button', { name: 'Editar análise de Pessoa de Teste' }).click();
     await expect(page.locator('.ops-case-workspace')).toBeVisible();
     await page.getByLabel('Resultado da análise').selectOption(width === 320 ? 'DADOS_INCONSISTENTES' : 'POSSIVEL_FINANCIAMENTO');
-    await page.getByLabel('Nome de quem realizou a análise').fill('Ana de Teste');
+    await page.getByLabel('Nome de quem realizou a análise').selectOption('Ana de Teste');
     await page.getByLabel('Parecer para o solicitante').fill('Área apta a seguir para avaliação documental pela instituição financeira.');
     await page.getByRole('button', { name: 'Salvar parecer' }).click();
     await expect(page.getByText('Alteração salva.')).toBeVisible();

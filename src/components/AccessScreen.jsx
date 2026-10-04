@@ -1,27 +1,40 @@
 import React from 'react';
-import { ArrowRight, Eye, EyeOff, KeyRound, Leaf, Loader2, MapPin, ShieldCheck, Sprout, UserRound } from 'lucide-react';
+import { ArrowRight, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Sprout, UserRound } from 'lucide-react';
 import { DeveloperSignature } from '../ui/Workspace';
+
+function TeamPhoto() {
+  return <img className="pa-login-art" src="/brand/login-equipe-dende-realista.png" alt="Equipe Vila Nova no campo" width="1448" height="1086" />;
+}
 
 export function AccessScreen({ portal, title, description, children, help, producer = false, embedded = false }) {
   const Tag = embedded ? 'section' : 'main';
-  return <Tag className={`paf-access${producer ? ' paf-producer-access' : ''}${embedded ? ' paf-access-embedded' : ''}`}>
-    {!embedded && <aside className="paf-access-visual" aria-label="Agricultura familiar Vila Nova">
-      <div className="paf-access-origin"><span><Leaf size={18} /> Agricultura familiar</span><span><MapPin size={14} /> Tomé-Açu, Pará</span></div>
-      <div className="paf-access-photo"><img className="paf-access-scene" src="/brand/login-equipe-dende-realista.png" alt="Equipe Vila Nova em uma plantação de palma" fetchPriority="high" width="1254" height="1254" /></div>
-      <div className="paf-access-caption"><p>O futuro se cultiva<br />em comunidade.</p><span>Vila Nova Agroindustrial</span><Leaf size={32} aria-hidden="true" /></div>
-    </aside>}
-    <header className="paf-access-header">
-      <a className="paf-access-identity" href="/" aria-label="PAF VNA, acesso principal"><img src="/brand/paf-symbol-official.png" alt="" width="48" height="48" /><div><h1>PAF VNA</h1><span>Programa de Agricultura Familiar</span></div></a>
-      <img className="paf-access-company" src="/brand/logo-vilanova.png" alt="Vila Nova Agroindustrial" width="120" height="48" />
-    </header>
-    <div className="paf-access-center">
-      <section className="paf-access-form" aria-labelledby="paf-access-title">
-        <div className="paf-access-heading"><span className="paf-access-kicker"><span aria-hidden="true" />{portal}</span><h2 id="paf-access-title">{title}</h2><p>{description}</p></div>
-        {children}
-        {help && <p className="paf-producer-help">{help}</p>}
-      </section>
+  const form = <section className="paf-access-form" aria-labelledby="paf-access-title">
+    <div className="paf-access-heading"><span className="paf-access-kicker"><span aria-hidden="true" />{portal}</span><h2 id="paf-access-title">{title}</h2><p>{description}</p></div>
+    {children}
+    {help && <p className="paf-producer-help">{help}</p>}
+  </section>;
+
+  if (embedded) return <Tag className="paf-access paf-access-embedded pa-login">{form}</Tag>;
+
+  return <Tag className={`paf-access pa-login${producer ? ' paf-producer-access' : ''}`}>
+    <aside className="paf-access-visual" aria-label="Programa de Agricultura Familiar">
+      <a className="pa-login-brand" href="/" aria-label="PAF VNA, acesso principal">
+        <span className="pa-login-symbol"><img src="/brand/paf-symbol-official.png" alt="" width="44" height="44" /></span>
+        <span><strong>PAF VNA</strong><small>Programa de Agricultura Familiar</small></span>
+      </a>
+      <TeamPhoto />
+      <div className="pa-login-story">
+        <p className="pa-login-statement">Agricultura familiar acompanhada de perto.</p>
+      </div>
+      <p className="pa-login-place">Vila Nova Agroindustrial · Tomé-Açu, Pará</p>
+    </aside>
+    <div className="pa-login-side">
+      <header className="paf-access-header">
+        <img className="paf-access-company" src="/brand/logo-vilanova.png" alt="Vila Nova Agroindustrial" width="120" height="48" />
+      </header>
+      <div className="paf-access-center">{form}</div>
+      <footer className="paf-access-footer"><span><ShieldCheck size={15} /> Acesso individual e protegido</span><DeveloperSignature /></footer>
     </div>
-    <footer className="paf-access-footer"><span><ShieldCheck size={15} /> Acesso individual e protegido</span><DeveloperSignature /></footer>
   </Tag>;
 }
 

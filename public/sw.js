@@ -1,4 +1,4 @@
-const CACHE_NAME = "paf-shell-v3";
+const CACHE_NAME = "paf-shell-v4";
 const APP_SHELL = [
   "/",
   "/admin",
@@ -18,7 +18,8 @@ const APP_SHELL = [
   "/brand/logo-paf-card.png",
   "/brand/paf-logo-official.png",
   "/brand/paf-symbol-official.png",
-  "/brand/login-field-team.webp"
+  "/brand/login-field-team.webp",
+  "/brand/login-equipe-dende-realista.png"
 ];
 
 self.addEventListener("install", (event) => {

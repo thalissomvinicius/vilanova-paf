@@ -10,7 +10,7 @@ test("admin entra e visualiza os indicadores operacionais", async ({ page }) => 
   await page.getByRole("button", { name: "Entrar" }).click();
 
   await expect(page.getByRole("heading", { name: "Visão geral", exact: true })).toBeVisible();
-  await expect(page.locator(".ops-metrics > a")).toHaveCount(4);
+  await expect(page.locator(".pa-kpis > a")).toHaveCount(4);
   await expect(page.getByRole("button", { name: "Coletas de campo", exact: true })).toBeVisible();
   await page.request.post("/api/auth/logout");
 });

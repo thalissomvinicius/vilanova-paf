@@ -1,0 +1,7 @@
+/* Earlier stylesheets, kept for component structure. They live in a cascade
+   layer so the unlayered rules in design.css always win over them. */
+@import "../styles.css" layer(legacy);
+@import "../redesign.css" layer(legacy);
+@import "../experience.css" layer(legacy);
+@import "../access.css" layer(legacy);
+@import "./system.css" layer(legacy);

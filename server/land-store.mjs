@@ -21,6 +21,7 @@ export class LocalLandStore {
         id TEXT PRIMARY KEY, request_id TEXT NOT NULL REFERENCES land_requests(id), status TEXT NOT NULL,
         comment TEXT NOT NULL, actor TEXT NOT NULL, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS land_rates (key TEXT PRIMARY KEY, hits INTEGER NOT NULL, expires INTEGER NOT NULL);`);
+    this.db.exec('CREATE TABLE IF NOT EXISTS land_analysts (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE, active INTEGER NOT NULL DEFAULT 1, version INTEGER NOT NULL DEFAULT 1)');
     const columns = this.db.prepare('PRAGMA table_info(land_requests)').all().map(column => column.name);
     if (!columns.includes('is_federal_settlement')) this.db.exec('ALTER TABLE land_requests ADD COLUMN is_federal_settlement INTEGER');
     if (!columns.includes('mother_name')) this.db.exec('ALTER TABLE land_requests ADD COLUMN mother_name TEXT');
@@ -33,6 +34,23 @@ export class LocalLandStore {
     const now = Date.now(); this.db.prepare('DELETE FROM land_rates WHERE expires < ?').run(now);
     const row = this.db.prepare('INSERT INTO land_rates VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET hits = hits + 1 RETURNING hits').get(key, now + seconds * 1000);
     return row.hits <= limit;
+  }
+  settings() { return { analysts: this.db.prepare('SELECT * FROM land_analysts ORDER BY name').all().map(row => ({ ...row, active: Boolean(row.active) })), team: this.teamProvider?.() || [] }; }
+  saveAnalyst(id, values) {
+    try {
+      if (id) {
+        const row = this.db.prepare('UPDATE land_analysts SET name=?, active=?, version=version+1 WHERE id=? AND version=? RETURNING *').get(values.name, Number(values.active), id, values.version);
+        return row ? { ...row, active: Boolean(row.active) } : null;
+      }
+      const row = this.db.prepare('INSERT INTO land_analysts (id,name) VALUES (?,?) RETURNING *').get(randomUUID(), values.name);
+      return { ...row, active: Boolean(row.active) };
+    } catch (error) { if (error.message.includes('UNIQUE')) throw new Error('Este nome já está cadastrado.'); throw error; }
+  }
+  summary(archive = 'active') {
+    const where = archive === 'archived' ? 'archived_at IS NOT NULL' : archive === 'all' ? '1=1' : 'archived_at IS NULL';
+    const counts = { EM_ANALISE: 0, DADOS_INCONSISTENTES: 0, AREA_REPROVADA: 0, POSSIVEL_FINANCIAMENTO: 0 };
+    for (const row of this.db.prepare(`SELECT status, count(*) total FROM land_requests WHERE ${where} GROUP BY status`).all()) counts[row.status] = row.total;
+    return counts;
   }
   submit(values) {
     const existing = this.db.prepare('SELECT * FROM land_requests WHERE client_id = ?').get(values.client_id);

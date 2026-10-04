@@ -13,7 +13,7 @@ const nameOf = (items, id) => items?.find(item => item.id === id)?.nome ?? 'Nao 
 const formOf = (directories, row) => directories.forms.find(item => item.id === row.formulario_id);
 
 export function AccessHub({ children }) {
-  const [area, setArea] = useState('legacy');
+  const [area, setArea] = useState(() => new URLSearchParams(location.search).get('area') === 'field' ? 'field' : 'legacy');
   return <><nav className="access-tabs" aria-label="Areas de acesso"><button className="icon-text-button" aria-pressed={area === 'legacy'} onClick={() => setArea('legacy')}>Portal de produtores</button><button className="icon-text-button" aria-pressed={area === 'field'} onClick={() => setArea('field')}>Equipe e aplicativo</button></nav>{area === 'field' ? <FieldWorkspace mode="accesses" /> : children}</>;
 }
 

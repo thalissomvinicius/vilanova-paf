@@ -8,6 +8,36 @@ import { LAND_CONSENT_VERSION, PARA_MUNICIPALITIES } from '../supabase/functions
 const payload = () => ({ clientId: crypto.randomUUID(), fullName: 'Pessoa de Teste', cpf: '529.982.247-25', birthDate: '1980-01-10', state: 'PA', consentVersion: LAND_CONSENT_VERSION, municipality: 'Tomé-Açu', community: 'Comunidade de teste', phone: '91999999999', isFederalSettlement: false, consent: true });
 const call = (store, path, method, body, admin = false) => landRoute({ store, path, request: new Request(`https://test.local${path}`, { method, ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) }), admin, actor: 'Analista de teste', ip: 'test', salt: 'test-only' });
 
+test('summary counts all pages and preserves archive scope', async () => {
+  const store = new LocalLandStore(':memory:');
+  try {
+    for (let index = 0; index < 31; index++) store.submit({ ...validateSubmission(payload()), protocol: newProtocol(), fingerprint: `summary-${index}`, consent_version: LAND_CONSENT_VERSION });
+    const response = await call(store, '/api/land/admin/requests', 'GET', undefined, true);
+    const data = await response.json();
+    assert.equal(data.requests.length, 25); assert.equal(data.summary.EM_ANALISE, 31);
+    store.db.prepare('UPDATE land_requests SET archived_at=? WHERE id=?').run(new Date().toISOString(), data.requests[0].id);
+    assert.equal(store.summary().EM_ANALISE, 30); assert.equal(store.summary('archived').EM_ANALISE, 1); assert.equal(store.summary('all').EM_ANALISE, 31);
+  } finally { store.db.close(); }
+});
+
+test('analysts require administration, validate names and reject stale updates', async () => {
+  const store = new LocalLandStore(':memory:');
+  try {
+    assert.equal((await call(store, '/api/land/admin/settings', 'GET')).status, 401);
+    assert.equal((await call(store, '/api/land/admin/analysts', 'POST', { name: '<invalid>' }, true)).status, 400);
+    const created = await call(store, '/api/land/admin/analysts', 'POST', { name: 'Ana de Teste' }, true);
+    assert.equal(created.status, 201); const { analyst } = await created.json();
+    assert.equal((await call(store, '/api/land/admin/analysts', 'POST', { name: 'ana de teste' }, true)).status, 400);
+    const body = { name: analyst.name, active: false, version: 1 };
+    const path = `/api/land/admin/analysts/${analyst.id}`;
+    assert.equal((await call(store, path, 'PATCH', body, true)).status, 200);
+    assert.equal((await call(store, path, 'PATCH', body, true)).status, 409);
+    assert.equal(store.settings().analysts[0].active, false);
+    const response = await landRoute({ store, path, request: new Request(`https://test.local${path}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }), admin: true, canDelete: false });
+    assert.equal(response.status, 403);
+  } finally { store.db.close(); }
+});
+
 test('archived requests leave the active queue but retain public lookup', async () => {
   const store = new LocalLandStore(':memory:');
   try {

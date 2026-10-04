@@ -19,11 +19,14 @@ import {
   ShieldCheck,
   Sprout,
   Users,
+  Settings2,
+  UserRoundCheck,
   X,
 } from "lucide-react";
 import { PARA_MUNICIPALITIES } from "../../supabase/functions/paf-api/land-reference.mjs";
 import { validCpf } from "../../supabase/functions/paf-api/land-domain.mjs";
-import "./operations.css";
+import "./operations.layer.css";
+import { AssignTechnician, LandTeamSettings, ReviewerSelect } from '../land/LandTeam';
 
 const root = "/api/operations";
 const labels = {
@@ -428,6 +431,41 @@ export function ActivityOperations({ api, kind }) {
   );
 }
 
+const PERIODS = [
+  { value: "7", label: "7 dias" },
+  { value: "30", label: "30 dias" },
+  { value: "90", label: "90 dias" },
+];
+const STAGE_ORDER = ["INTERNALIZAR", "INTERNALIZADO", "APROVADO", "PLANTADO"];
+const shortMonth = (value) =>
+  new Date(value)
+    .toLocaleDateString("pt-BR", { month: "short" })
+    .replace(".", "");
+const initialsOf = (name = "") =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join("");
+
+function AttentionItem({ tone, icon: Icon, title, detail, href, action }) {
+  return (
+    <a className={`pa-alert pa-alert-${tone}`} href={href}>
+      <span className="pa-alert-icon">
+        <Icon size={18} />
+      </span>
+      <span className="pa-alert-copy">
+        <strong>{title}</strong>
+        <small>{detail}</small>
+      </span>
+      <span className="pa-alert-action">
+        {action} <ChevronRight size={16} />
+      </span>
+    </a>
+  );
+}
+
 export function OperationsDashboard({ api, canManageRecords = true }) {
   const [filters, setFilters] = useState({
     days: "30",
@@ -446,118 +484,190 @@ export function OperationsDashboard({ api, canManageRecords = true }) {
       title: "Produtores na base",
       value: c.producers,
       detail: `${fmt(c.area)} ha cadastrados`,
-      icon: Users,
-      tone: "green",
       href: "/admin/produtores",
     },
     {
       title: "Análises em andamento",
       value: c.requests,
-      detail: "Solicitações aguardando parecer",
-      icon: Sprout,
-      tone: "orange",
+      detail: "Aguardando parecer",
       href: "/admin/analises-areas",
     },
     {
       title: "Visitas programadas",
       value: c.visits,
       detail: `${fmt(c.completedVisits)} realizadas no período`,
-      icon: CalendarDays,
-      tone: "blue",
-      href: "/admin/produtores",
+      href: "/admin/visitas",
     },
     {
       title: "Prazos vencidos",
       value: c.overdue,
       detail: "Análises e pendências em aberto",
-      icon: Clock3,
-      tone: "amber",
       href: "/admin/analises-areas",
+      alert: Number(c.overdue) > 0,
     },
   ];
-  const maxPipeline = Math.max(
-      1,
-      ...(d?.pipeline || []).map((p) => Number(p.total)),
-    ),
-    maxActivity = Math.max(
-      1,
-      ...(d?.activity || []).map((a) => Number(a.visits) + Number(a.requests)),
-    );
+  const attention = [
+    Number(c.overdue) > 0 && {
+      tone: "crit",
+      icon: Clock3,
+      title: `${fmt(c.overdue)} ${Number(c.overdue) === 1 ? "prazo vencido" : "prazos vencidos"}`,
+      detail: "Análises e pendências em aberto passaram da data combinada.",
+      href: "/admin/analises-areas",
+      action: "Ver prazos",
+    },
+    Number(c.requests) > 0 && {
+      tone: "warn",
+      icon: Sprout,
+      title: `${fmt(c.requests)} ${Number(c.requests) === 1 ? "análise de área aguarda" : "análises de área aguardam"} parecer`,
+      detail: "Solicitações recebidas que ainda não tiveram decisão.",
+      href: "/admin/analises-areas",
+      action: "Dar parecer",
+    },
+    canManageRecords &&
+      d?.conflicts > 0 && {
+        tone: "info",
+        icon: ShieldCheck,
+        title: `${fmt(d.conflicts)} ${d.conflicts === 1 ? "identidade precisa" : "identidades precisam"} de conferência`,
+        detail: "CPF correspondente, mas nomes diferentes entre as bases.",
+        href: "/admin/produtores?view=conflicts",
+        action: "Conferir",
+      },
+  ].filter(Boolean);
+  const pipeline = d?.pipeline || [];
+  const pipelineTotal = pipeline.reduce((sum, p) => sum + Number(p.total), 0);
+  const maxActivity = Math.max(
+    1,
+    ...(d?.activity || []).map((a) => Number(a.visits) + Number(a.requests)),
+  );
   return (
-    <div className="ops-workspace ops-dashboard">
-      <Toolbar loading={resource.loading} onRefresh={resource.load}>
-        <label>
-          Período
-          <select
-            value={filters.days}
-            onChange={(e) => setFilters({ ...filters, days: e.target.value })}
-          >
-            <option value="7">Últimos 7 dias</option>
-            <option value="30">Últimos 30 dias</option>
-            <option value="90">Últimos 90 dias</option>
-          </select>
-        </label>
-        <DirectoryFilters
-          directories={dirs.data}
-          value={filters}
-          onChange={setFilters}
-        />
-        <span className="ops-live">
-          <i /> Banco compartilhado com o app
-        </span>
-      </Toolbar>
+    <div className="ops-workspace ops-dashboard pa-dashboard">
+      <div className="pa-filterbar">
+        <div className="pa-segmented" role="group" aria-label="Período">
+          {PERIODS.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              aria-pressed={filters.days === p.value}
+              onClick={() => setFilters({ ...filters, days: p.value })}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="pa-filter-selects">
+          <DirectoryFilters
+            directories={dirs.data}
+            value={filters}
+            onChange={setFilters}
+          />
+        </div>
+        <button
+          className="ops-icon"
+          type="button"
+          title="Atualizar dados"
+          aria-label="Atualizar dados"
+          disabled={resource.loading}
+          onClick={() => resource.load()}
+        >
+          <RefreshCw size={18} className={resource.loading ? "spin" : ""} />
+        </button>
+      </div>
       <ErrorMessage>{resource.error || dirs.error}</ErrorMessage>
       {!d && resource.loading ? (
         <Loading />
       ) : (
         d && (
           <>
-            <div className="ops-metrics">
+            <section className="pa-section" aria-labelledby="pa-attention">
+              <div className="pa-section-head">
+                <h2 id="pa-attention">Precisa da sua atenção</h2>
+                {attention.length > 0 && (
+                  <span>
+                    {attention.length} {attention.length === 1 ? "item" : "itens"}
+                  </span>
+                )}
+              </div>
+              {attention.length ? (
+                <div className="pa-inbox">
+                  {attention.map((item) => (
+                    <AttentionItem key={item.title} {...item} />
+                  ))}
+                </div>
+              ) : (
+                <p className="pa-all-clear">
+                  <CheckCircle2 size={18} /> Nada pendente agora. Prazos,
+                  análises e conferências estão em dia.
+                </p>
+              )}
+            </section>
+
+            <div className="ops-metrics pa-kpis">
               {metrics.map((m) => (
                 <a
-                  className="executive-kpi ops-metric"
+                  className={`executive-kpi ops-metric ${m.alert ? "is-alert" : ""}`}
                   href={m.href}
                   key={m.title}
                 >
-                  <div className="ops-metric-top">
-                    <span className={`ops-metric-icon ${m.tone}`}>
-                      <m.icon size={21} />
-                    </span>
-                    <ChevronRight size={17} />
-                  </div>
-                  <span>{m.title}</span>
+                  <span className="pa-kpi-label">{m.title}</span>
                   <strong>{fmt(m.value)}</strong>
                   <small>{m.detail}</small>
                 </a>
               ))}
             </div>
-            {canManageRecords && d.conflicts > 0 && (
-              <a
-                href="/admin/produtores?view=conflicts"
-                className="ops-attention"
-              >
-                <ShieldCheck size={20} />
-                <span>
-                  <strong>
-                    {fmt(d.conflicts)} identidades precisam de conferência
-                  </strong>
-                  <small>
-                    CPF correspondente, mas nomes diferentes entre as bases.
-                  </small>
-                </span>
-                <ChevronRight size={19} />
-              </a>
-            )}
-            <section className="ops-band">
-              <Title
-                eyebrow="TRABALHO DA EQUIPE"
-                title="Fila de análise"
-                detail="Responsabilidade, prazo e próxima ação para cada solicitação."
-              >
+
+            <section className="pa-section" aria-labelledby="pa-stages">
+              <div className="pa-section-head">
+                <h2 id="pa-stages">Etapas dos produtores</h2>
+                <span>{fmt(pipelineTotal)} produtores · toque para filtrar</span>
+              </div>
+              {pipelineTotal ? (
+                <div className="pa-pipeline">
+                  <div className="pa-pipeline-bar" aria-hidden="true">
+                    {pipeline.map((p) => (
+                      <i
+                        key={p.status}
+                        className={`pa-stage-${p.status}`}
+                        style={{ flexGrow: Number(p.total) }}
+                      />
+                    ))}
+                  </div>
+                  <div className="pa-pipeline-legend">
+                    {pipeline.map((p) => {
+                      const step = STAGE_ORDER.indexOf(p.status);
+                      return (
+                        <a
+                          key={p.status}
+                          href={
+                            STAGE_ORDER.includes(p.status) || p.status === "CANCELADO"
+                              ? `/admin/produtores?stage=${p.status}`
+                              : "/admin/produtores"
+                          }
+                        >
+                          <span className="pa-legend-key">
+                            <i className={`pa-stage-${p.status}`} />
+                            {labels[p.status] || p.status}
+                          </span>
+                          <strong>{fmt(p.total)}</strong>
+                          <small>
+                            {step >= 0 ? `Etapa ${step + 1} de 4` : "Fora do fluxo"}
+                          </small>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <Empty title="Nenhum produtor nas etapas" icon={Users} />
+              )}
+            </section>
+
+            <section className="pa-section" aria-labelledby="pa-queue">
+              <div className="pa-section-head">
+                <h2 id="pa-queue">Fila de análise</h2>
                 <a className="ops-link" href="/admin/analises-areas">
                   Ver todas <ArrowRight size={16} />
                 </a>
-              </Title>
+              </div>
               {!d.queue?.length ? (
                 <Empty title="Nenhuma solicitação na fila" icon={CheckCircle2}>
                   Novos cadastros e análises em andamento aparecerão aqui.
@@ -615,106 +725,38 @@ export function OperationsDashboard({ api, canManageRecords = true }) {
                 </div>
               )}
             </section>
-            <div className="ops-two-columns">
-              <section className="ops-band">
-                <Title
-                  eyebrow="EVOLUÇÃO DA BASE"
-                  title="Etapas dos produtores"
-                />
-                <div className="ops-bars">
-                  {(d.pipeline || []).map((p, i) => (
-                    <div key={p.status}>
-                      <span>{labels[p.status] || p.status}</span>
-                      <div className="ops-track">
-                        <i
-                          style={{
-                            width: `${(Number(p.total) / maxPipeline) * 100}%`,
-                            background: [
-                              "#3F6B2A",
-                              "#C93D00",
-                              "#547A91",
-                              "#A0A947",
-                              "#A86D5C",
-                              "#8A9388",
-                            ][i % 6],
-                          }}
-                        />
-                      </div>
-                      <strong>{fmt(p.total)}</strong>
-                    </div>
-                  ))}
+
+            <div className="ops-two-columns pa-columns">
+              <section className="pa-section" aria-labelledby="pa-agenda">
+                <div className="pa-section-head">
+                  <h2 id="pa-agenda">Agenda de campo</h2>
+                  <a className="ops-link" href="/admin/visitas">
+                    Ver agenda <ArrowRight size={16} />
+                  </a>
                 </div>
-              </section>
-              <section className="ops-band">
-                <Title
-                  eyebrow="MOVIMENTO NO PERÍODO"
-                  title="Cadastros e visitas"
-                />
-                <div className="ops-chart-legend">
-                  <span>
-                    <i />
-                    Cadastros
-                  </span>
-                  <span>
-                    <i />
-                    Visitas realizadas
-                  </span>
-                </div>
-                {d.activity?.some((a) => a.visits || a.requests) ? (
-                  <div
-                    className="ops-activity-chart"
-                    role="img"
-                    aria-label={`${filters.days} dias de cadastros e visitas realizadas`}
-                  >
-                    {d.activity.map((a) => (
-                      <div
-                        key={a.day}
-                        title={`${a.day.split("-").reverse().join("/")}: ${a.requests} cadastros e ${a.visits} visitas`}
-                      >
-                        <div
-                          className="ops-stack"
-                          style={{
-                            height: `${((Number(a.requests) + Number(a.visits)) / maxActivity) * 100}%`,
-                          }}
-                        >
-                          <i style={{ flex: Number(a.requests) }} />
-                          <i style={{ flex: Number(a.visits) }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <Empty
-                    title="Sem movimento registrado no período"
-                    icon={CalendarDays}
-                  >
-                    Cadastros e visitas concluídas formarão este histórico.
-                  </Empty>
-                )}
-              </section>
-            </div>
-            <div className="ops-two-columns">
-              <section className="ops-band">
-                <Title eyebrow="AGENDA DE CAMPO" title="Próximas visitas" />
                 {!d.agenda?.length ? (
-                  <Empty
-                    title="Nenhuma visita programada"
-                    icon={CalendarDays}
-                  />
+                  <Empty title="Nenhuma visita programada" icon={CalendarDays} />
                 ) : (
-                  <div className="ops-agenda">
+                  <div className="ops-agenda pa-list">
                     {d.agenda.map((v) => (
                       <a
                         key={v.id}
                         href={`/admin/produtores?producer=${v.produtor_id}`}
                       >
                         <span className="ops-date-block">
-                          <CalendarDays size={21} />
+                          {v.inicio_em ? (
+                            <>
+                              <b>{new Date(v.inicio_em).getDate()}</b>
+                              <small>{shortMonth(v.inicio_em)}</small>
+                            </>
+                          ) : (
+                            <CalendarDays size={20} />
+                          )}
                         </span>
                         <div>
-                          <strong>{v.titulo}</strong>
+                          <strong>{v.nome}</strong>
                           <small>
-                            {v.nome} · {datetime(v.inicio_em)}
+                            {v.titulo} · {datetime(v.inicio_em)}
                           </small>
                         </div>
                         <ChevronRight size={17} />
@@ -723,39 +765,81 @@ export function OperationsDashboard({ api, canManageRecords = true }) {
                   </div>
                 )}
               </section>
-              <section className="ops-band">
-                <Title
-                  eyebrow="DISTRIBUIÇÃO DO TRABALHO"
-                  title="Equipe técnica"
-                />
-                {!d.team?.length ? (
-                  <Empty title="Cadastre a equipe em Acessos" icon={Users} />
-                ) : (
-                  <div className="ops-team">
-                    {d.team.map((t) => (
-                      <div key={t.id}>
-                        <span className="ops-avatar">
-                          {t.nome
-                            ?.split(" ")
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((n) => n[0])
-                            .join("")}
-                        </span>
-                        <div>
-                          <strong>{t.nome}</strong>
-                          <small>{t.papel}</small>
-                        </div>
-                        <span>
-                          <b>{fmt(t.requests)}</b> análises ·{" "}
-                          <b>{fmt(t.visits)}</b> visitas
-                        </span>
-                      </div>
-                    ))}
+              <section className="pa-section" aria-labelledby="pa-activity">
+                <div className="pa-section-head">
+                  <h2 id="pa-activity">Cadastros e visitas</h2>
+                  <div className="ops-chart-legend">
+                    <span>
+                      <i />
+                      Cadastros
+                    </span>
+                    <span>
+                      <i />
+                      Visitas realizadas
+                    </span>
                   </div>
+                </div>
+                {d.activity?.some((a) => a.visits || a.requests) ? (
+                  <div className="pa-chart">
+                    <div
+                      className="ops-activity-chart"
+                      role="img"
+                      aria-label={`${filters.days} dias de cadastros e visitas realizadas`}
+                    >
+                      {d.activity.map((a) => (
+                        <div
+                          key={a.day}
+                          title={`${a.day.split("-").reverse().join("/")}: ${a.requests} cadastros e ${a.visits} visitas`}
+                        >
+                          <div
+                            className="ops-stack"
+                            style={{
+                              height: `${((Number(a.requests) + Number(a.visits)) / maxActivity) * 100}%`,
+                            }}
+                          >
+                            <i style={{ flex: Number(a.requests) }} />
+                            <i style={{ flex: Number(a.visits) }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <Empty
+                    title="Sem movimento no período"
+                    icon={CalendarDays}
+                  >
+                    Cadastros e visitas concluídas formarão este histórico.
+                  </Empty>
                 )}
               </section>
             </div>
+
+            <section className="pa-section" aria-labelledby="pa-team">
+              <div className="pa-section-head">
+                <h2 id="pa-team">Equipe técnica</h2>
+                <span>Trabalho no período</span>
+              </div>
+              {!d.team?.length ? (
+                <Empty title="Cadastre a equipe em Acessos" icon={Users} />
+              ) : (
+                <div className="ops-team pa-team">
+                  {d.team.map((t) => (
+                    <div key={t.id}>
+                      <span className="ops-avatar">{initialsOf(t.nome)}</span>
+                      <div>
+                        <strong>{t.nome}</strong>
+                        <small>{t.papel}</small>
+                      </div>
+                      <span>
+                        <b>{fmt(t.requests)}</b> análises ·{" "}
+                        <b>{fmt(t.visits)}</b> visitas
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </>
         )
       )}
@@ -774,7 +858,7 @@ export function ProducerOperations({ api, canManageRecords = true }) {
     search: "",
     page: "1",
     municipality: "",
-    status: "",
+    status: new URLSearchParams(location.search).get("stage") || "",
     responsible: "",
   });
   const [editor, setEditor] = useState(null);
@@ -895,7 +979,7 @@ export function ProducerOperations({ api, canManageRecords = true }) {
                   </td>
                   <td>{p.telefone || "Não informado"}</td>
                   <td>{p.municipality || "A cadastrar"}</td>
-                  <td>{fmt(p.properties)}</td>
+                  <td>{fmt(p.properties)}<span className="pa-cell-unit"> {Number(p.properties) === 1 ? "propriedade" : "propriedades"}</span></td>
                   <td>
                     <State value={p.process_status} />
                   </td>
@@ -1661,6 +1745,8 @@ function IdentityConflicts({ api, onBack }) {
 }
 
 export function CaseWorkspace({ id, api, onBack, onSaved, canManageRecords = true }) {
+  const settings = useResource(api, '/api/land/admin/settings', 120000);
+  const [configuring, setConfiguring] = useState(false), [assigning, setAssigning] = useState(false);
   const resource = useResource(api, `/api/land/admin/requests/${id}`, 120000),
     dirs = useResource(api, `${root}/directories`, 120000);
   const [snapshot, setSnapshot] = useState(null),
@@ -1713,6 +1799,7 @@ export function CaseWorkspace({ id, api, onBack, onSaved, canManageRecords = tru
       resource.load(true);
       onSaved();
       setNotice("Alteração salva.");
+      return true;
     } catch (e) {
       setError(e.message);
     } finally {
@@ -1779,6 +1866,12 @@ export function CaseWorkspace({ id, api, onBack, onSaved, canManageRecords = tru
           </a>
         )}
       </div>
+      <div className="land-case-actions"><span className="land-muted">Técnico: {(dirs.data?.team || []).find(t => t.id === r.assigned_to)?.nome || 'A definir'}</span><button className="icon-text-button" disabled={busy || !dirs.data} onClick={() => {
+        if (JSON.stringify(draft) !== JSON.stringify({ ...r, checklist: typeof r.checklist === 'string' ? JSON.parse(r.checklist) : r.checklist || {} }) && !window.confirm('A atribuição substituirá as alterações ainda não salvas nesta ficha. Continuar?')) return;
+        setAssigning(true);
+      }}><UserRoundCheck size={17} /> Definir técnico</button>{canManageRecords && <button className="icon-text-button" onClick={() => setConfiguring(true)}><Settings2 size={17} /> Configuração</button>}</div>
+      {configuring && <LandTeamSettings api={api} onClose={() => setConfiguring(false)} onSaved={() => settings.load(true)} />}
+      {assigning && <AssignTechnician team={dirs.data?.team || []} current={r.assigned_to} busy={busy} error={error} onClose={() => setAssigning(false)} onSave={assigned_to => action(`${root}/land/${id}/workflow`, { ...r, assigned_to, checklist: typeof r.checklist === 'string' ? JSON.parse(r.checklist) : r.checklist || {} })} />}
       <div className="ops-tabs" role="tablist" aria-label="Análise da área">
         {[
           ["data", "Cadastro"],
@@ -1835,16 +1928,7 @@ export function CaseWorkspace({ id, api, onBack, onSaved, canManageRecords = tru
               title="Parecer para o solicitante"
               detail="O resultado, o nome do analista e o parecer ficam disponíveis na consulta por protocolo."
             />
-            <label>
-              Nome de quem realizou a análise
-              <input
-                required
-                minLength={3}
-                maxLength={160}
-                value={draft.reviewer_name || ""}
-                onChange={(e) => update("reviewer_name", e.target.value)}
-              />
-            </label>
+            <ReviewerSelect settings={settings.data} value={draft.reviewer_name} onChange={value => update('reviewer_name', value)} loading={!settings.data && !settings.error} error={settings.error} />
             <label>
               Resultado da análise
               <select

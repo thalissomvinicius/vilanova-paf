@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, FileSearch, Loader2, RefreshCw, Search, ShieldCheck, Sprout, Trash2, Pencil, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ClipboardList, Copy, Download, ExternalLink, FileSearch, Loader2, RefreshCw, Search, Settings2, ShieldCheck, Sprout, Trash2, Pencil, X } from 'lucide-react';
+import { LandTeamSettings } from './LandTeam';
 import { LAND_STATUSES, validCpf } from '../../supabase/functions/paf-api/land-domain.mjs';
 import { DeveloperSignature } from '../ui/Workspace';
 import { BirthDateField } from './BirthDateField';
 import { LandConsent } from './LandConsent';
 import { CpfField } from './CpfField';
 import { PARA_MUNICIPALITIES, LAND_CONSENT_VERSION } from '../../supabase/functions/paf-api/land-reference.mjs';
-import './land.css';
+import './land.layer.css';
 import { CaseWorkspace } from '../operations/OperationsWorkspace';
 
 const date = value => new Date(value).toLocaleString('pt-BR');
@@ -126,6 +127,7 @@ function Tracking({ active }) {
 }
 
 export function LandAdmin({ api, canManageRecords = true }) {
+  const [configuring, setConfiguring] = useState(false);
   const [search, setSearch] = useState(''); const [status, setStatus] = useState(''); const [page, setPage] = useState(1);
   const [archive, setArchive] = useState('active');
   const [data, setData] = useState({ requests: [], total: 0 }); const [busy, setBusy] = useState(true); const [error, setError] = useState('');
@@ -144,12 +146,23 @@ export function LandAdmin({ api, canManageRecords = true }) {
     const rows = [['Protocolo', 'Nome', 'CPF', 'Nascimento', 'Telefone', 'Município', 'Comunidade', 'Assentamento federal (INCRA)', 'Nome completo da mãe', 'Nome do assentamento', 'Resultado', 'Recebido em'], ...data.requests.map(row => [row.protocol, row.full_name, row.cpf, birthday(row.birth_date), row.phone, row.municipality, row.community, settlementLabel(row.is_federal_settlement), row.mother_name || '', row.settlement_name || '', LAND_STATUSES[row.status], date(row.created_at)])];
     saveFile('\uFEFF' + rows.map(row => row.map(cell).join(';')).join('\r\n'), `analises-pagina-${page}.csv`, 'text/csv;charset=utf-8');
   }
-  return <section className="land-admin land-ui"><div className="land-section-heading"><div><p className="eyebrow">CAPTAÇÃO E VIABILIDADE</p><h2>Solicitações de análise de área</h2><p className="land-muted">{data.total} solicitações {search || status ? 'encontradas' : 'recebidas'}</p></div><div className="land-actions"><button className="icon-text-button" onClick={() => load()} disabled={busy} title="Atualizar solicitações"><RefreshCw size={17} /> Atualizar</button><button className="icon-text-button" onClick={exportPage} disabled={!data.requests.length || busy}><Download size={17} /> Exportar página</button></div></div>
+  const counts = data.summary ? { EM_ANALISE: 0, DADOS_INCONSISTENTES: 0, AREA_REPROVADA: 0, POSSIVEL_FINANCIAMENTO: 0, ...data.summary } : null;
+  const metrics = counts ? [
+    ['Total de solicitações', Object.values(counts).reduce((sum, n) => sum + n, 0), ''],
+    ['Aguardando análise', counts.EM_ANALISE, 'EM_ANALISE'],
+    ['Análises concluídas', counts.AREA_REPROVADA + counts.POSSIVEL_FINANCIAMENTO, ''],
+    ['Dados inconsistentes', counts.DADOS_INCONSISTENTES, 'DADOS_INCONSISTENTES'],
+    ['Possível financiamento', counts.POSSIVEL_FINANCIAMENTO, 'POSSIVEL_FINANCIAMENTO'],
+    ['Áreas reprovadas', counts.AREA_REPROVADA, 'AREA_REPROVADA'],
+  ] : [];
+  return <section className="land-admin land-ui"><div className="land-section-heading"><div><p className="eyebrow">CAPTAÇÃO E VIABILIDADE</p><h2>Solicitações de análise de área</h2><p className="land-muted">{data.total} solicitações {search || status ? 'encontradas' : 'recebidas'}</p></div><div className="land-actions">{canManageRecords && <button className="icon-text-button" onClick={() => setConfiguring(true)}><Settings2 size={17} /> Configuração</button>}<button className="icon-text-button" onClick={() => load()} disabled={busy} title="Atualizar solicitações"><RefreshCw size={17} /> Atualizar</button><button className="icon-text-button" onClick={exportPage} disabled={!data.requests.length || busy}><Download size={17} /> Exportar página</button></div></div>
+    <section aria-label="Resumo das solicitações" className="land-summary"><p className="land-muted">Resumo dos cadastros {archive === 'all' ? 'ativos e arquivados' : archive === 'archived' ? 'arquivados' : 'ativos'}</p><dl>{metrics.map(([label, count, filter]) => <div key={label}><dt>{filter ? <button className="land-text-button" onClick={() => { setStatus(filter); setPage(1); }}>{label}</button> : label}</dt><dd>{count.toLocaleString('pt-BR')}</dd></div>)}</dl>{!counts && <p role="status">{error ? 'Resumo indisponível. Atualize para tentar novamente.' : 'Carregando indicadores...'}</p>}</section>
+    {configuring && <LandTeamSettings api={api} onClose={() => setConfiguring(false)} />}
     <div className="land-share"><div><strong>Formulário público</strong><a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}<ExternalLink size={14} /></a></div><button className="primary-button" onClick={async () => { try { await navigator.clipboard.writeText(publicUrl); setCopied(true); } catch { setError('Não foi possível copiar. Selecione o endereço do formulário.'); } }}>{copied ? <Check size={17} /> : <Copy size={17} />}{copied ? 'Link copiado' : 'Copiar link'}</button></div>
     <div className="land-filters"><label>Buscar solicitações<input type="search" placeholder="Nome, CPF sem pontos, protocolo ou local" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></label><label>Resultado<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">Todos os resultados</option>{Object.entries(LAND_STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
     <Message>{error}</Message>
     <label>Situação do cadastro<select value={archive} onChange={e => {setArchive(e.target.value);setPage(1);}}><option value="active">Ativos</option><option value="archived">Arquivados</option><option value="all">Todos os cadastros</option></select></label>
-    <div className="land-table-wrap" aria-busy={busy}><table className="land-table"><thead><tr><th>Solicitante</th><th>Localização</th><th>Recebimento</th><th>Resultado</th><th><span className="land-muted">Análise</span></th></tr></thead><tbody>{data.requests.map(row => <tr key={row.id}><td><strong>{row.full_name}</strong><span>{row.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}</span><small>{row.protocol}</small></td><td>{row.municipality}<span>{row.community}</span></td><td>{date(row.created_at)}</td><td><Status value={row.status} /></td><td><button className="icon-text-button" onClick={() => setSelected(row.id)} aria-label={`Editar análise de ${row.full_name}`}><Pencil size={17} /> Editar análise</button></td></tr>)}</tbody></table>{!data.requests.length && <div className="land-empty"><ClipboardList size={30} /><h3>{busy ? 'Buscando solicitações...' : error ? 'Não foi possível carregar' : 'Nenhuma solicitação encontrada'}</h3>{!busy && !error && <p>Os cadastros recebidos pelo formulário público aparecerão aqui.</p>}</div>}</div>
+    <div className="land-table-wrap" aria-busy={busy}><table className="land-table"><thead><tr><th>Solicitante</th><th>Localização</th><th>Recebimento</th><th>Resultado</th><th><span className="land-muted">Análise</span></th></tr></thead><tbody>{data.requests.map(row => <tr key={row.id}><td><strong>{row.full_name}</strong><span>{row.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}</span><small>{row.protocol}</small></td><td data-label="Localização">{row.municipality}<span>{row.community}</span></td><td data-label="Recebimento">{date(row.created_at)}</td><td data-label="Resultado"><Status value={row.status} /></td><td><button className="icon-text-button" onClick={() => setSelected(row.id)} aria-label={`Editar análise de ${row.full_name}`}><Pencil size={17} /> Editar análise</button></td></tr>)}</tbody></table>{!data.requests.length && <div className="land-empty"><ClipboardList size={30} /><h3>{busy ? 'Buscando solicitações...' : error ? 'Não foi possível carregar' : 'Nenhuma solicitação encontrada'}</h3>{!busy && !error && <p>Os cadastros recebidos pelo formulário público aparecerão aqui.</p>}</div>}</div>
     <div className="land-pagination"><span>Página {page} de {Math.max(1, Math.ceil(data.total / 25))}</span><div className="land-actions"><button className="icon-text-button" disabled={page <= 1 || busy} onClick={() => setPage(page - 1)} aria-label="Página anterior"><ArrowLeft size={18} /></button><button className="icon-text-button" disabled={page * 25 >= data.total || busy} onClick={() => setPage(page + 1)} aria-label="Próxima página"><ArrowRight size={18} /></button></div></div>
     {selected && <ReviewDialog key={selected} id={selected} api={api} onClose={() => setSelected(null)} onSaved={() => load(true)} />}
   </section>;
