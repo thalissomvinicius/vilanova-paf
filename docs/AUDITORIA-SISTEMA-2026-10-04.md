@@ -92,3 +92,15 @@ não cadastros reais do Supabase.
 Endereço de entrega: https://vilanova-paf.vercel.app.
 A conferência temporária de publicação está agendada para 09:00, com silêncio
 se estiver estável e pausa automática após a conferência bem-sucedida.
+
+## Conferência da publicação
+
+- Código do painel: `3a814ec81fb304856a95f2187fc70fac1356767b`; GitHub confirmou Vercel com status success.
+- Código dos serviços do app: `2b39314a978173be4bded6dde14103511b4ecfaf`; GitHub confirmou Vercel com status success.
+- Página pública servindo `/assets/index-Bin2a_Fa.js` e `/assets/index-BwAQl4si.css`, não o bundle anterior.
+- `/api/health` HTTP 200; `/api/auth/me` HTTP 200 para a consulta sem sessão; configurações administrativas HTTP 401 sem login.
+- `/sw.js` HTTP 200, cache v5 e `max-age=0, must-revalidate`.
+- 16 testes de acesso/sucesso/produtor/layout executados contra os arquivos publicados, com APIs simuladas para não alterar dados reais: todos aprovados.
+- Duas aberturas reais do login, sem interceptar APIs, em 390 e 1440 px: sem foto, campos vazios, imagens carregadas, nenhum erro de página e nenhum overflow horizontal.
+- Contagem final preservada: 8 solicitações, zero pareceres e 7 perfis. RLS continua ativo e o coordenador continua sem gestão de identidades.
+- Evidências da abertura real: `verification/production-login-real-390.png` e `verification/production-login-real-1440.png`.
