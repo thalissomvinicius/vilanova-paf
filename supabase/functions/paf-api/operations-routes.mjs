@@ -190,6 +190,7 @@ export async function operationsRoute({ request, path, store, admin, actor, mana
       municipality: text(params.get("municipality"), 160),
       status: text(params.get("status"), 40),
       responsible: optionalId(params.get("responsible")),
+      importedTechnician: text(params.get('importedTechnician'), 100),
     };
     if (method === "GET" && path === "/api/operations/overview")
       return reply(
@@ -363,8 +364,11 @@ export class SupabaseOperationsStore {
         .is("deleted_at", null)
         .order("id"),
     );
+    const imported = await allRows(() => this.db.from('paf_produtores').select('tecnico_responsavel').eq('organizacao_id',org).is('deleted_at',null).order('id'));
+    const profileNames = new Set(team.filter(person => ['tecnico','agente','coordenador'].includes(person.papel)).map(person => person.nome.trim().split(/\s+/)[0].toLocaleUpperCase('pt-BR')));
     return {
       team,
+      importedTechnicians: [...new Set(imported.flatMap(person => (person.tecnico_responsavel || '').split(/[|;,]/).map(name => name.trim()).filter(name => name && !profileNames.has(name.toLocaleUpperCase('pt-BR')))))].sort(),
       municipalities: [
         ...new Set(properties.map((p) => p.municipio).filter(Boolean)),
       ].sort(),
@@ -381,12 +385,13 @@ export class SupabaseOperationsStore {
   }
   async producers(f) {
     return checked(
-      await this.db.rpc("paf_operations_producers", {
+      await this.db.rpc("paf_operations_producer_directory", {
         p_search: f.search,
         p_page: f.page,
         p_municipality: f.municipality,
         p_status: f.status,
         p_responsible: f.responsible,
+        p_imported_technician: f.importedTechnician || '',
       }),
     );
   }

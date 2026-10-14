@@ -141,7 +141,7 @@ function Toolbar({ children, loading, onRefresh }) {
     </div>
   );
 }
-function DirectoryFilters({ directories, value, onChange }) {
+function DirectoryFilters({ directories, value, onChange, includeImported = false }) {
   return (
     <>
       <label>
@@ -159,8 +159,8 @@ function DirectoryFilters({ directories, value, onChange }) {
       <label>
         Responsável
         <select
-          value={value.responsible || ""}
-          onChange={(e) => onChange({ ...value, responsible: e.target.value })}
+          value={value.importedTechnician ? `imported:${value.importedTechnician}` : value.responsible || ""}
+          onChange={(e) => onChange({ ...value, responsible: e.target.value.startsWith('imported:') ? '' : e.target.value, importedTechnician: e.target.value.startsWith('imported:') ? e.target.value.slice(9) : '' })}
         >
           <option value="">Toda a equipe</option>
           {(directories?.team || []).map((t) => (
@@ -168,6 +168,7 @@ function DirectoryFilters({ directories, value, onChange }) {
               {t.nome}
             </option>
           ))}
+          {includeImported && [...new Set([...(directories?.importedTechnicians || []), value.importedTechnician].filter(Boolean))].map(name => <option key={`imported:${name}`} value={`imported:${name}`}>{name} · carteira importada</option>)}
         </select>
       </label>
     </>
@@ -935,6 +936,7 @@ export function ProducerOperations({ api, canManageRecords = true }) {
           directories={dirs.data}
           value={filters}
           onChange={(f) => setFilters({ ...f, page: "1" })}
+          includeImported
         />
         <label>
           Etapa
@@ -970,6 +972,7 @@ export function ProducerOperations({ api, canManageRecords = true }) {
                 <th>Produtor</th>
                 <th>Telefone</th>
                 <th>Município</th>
+                <th>Técnico</th>
                 <th>Propriedades</th>
                 <th>Etapa</th>
                 <th>
@@ -984,8 +987,9 @@ export function ProducerOperations({ api, canManageRecords = true }) {
                     <strong>{p.nome}</strong>
                     <small>{p.cpf || "Documento não informado"}</small>
                   </td>
-                  <td>{p.telefone || "Não informado"}</td>
-                  <td>{p.municipality || "A cadastrar"}</td>
+                  <td data-label="Telefone">{p.telefone || "Não informado"}</td>
+                  <td data-label="Município">{p.municipality || "A cadastrar"}</td>
+                  <td data-label="Técnico">{p.technician_names || p.tecnico_responsavel || 'A definir'}</td>
                   <td>{fmt(p.properties)}<span className="pa-cell-unit"> {Number(p.properties) === 1 ? "propriedade" : "propriedades"}</span></td>
                   <td>
                     <State value={p.process_status} />

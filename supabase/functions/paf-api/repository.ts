@@ -105,7 +105,7 @@ export class PafRepository {
   }
 
   async getProducerById(id: number) {
-    const { data, error } = await this.db.from("paf_producers").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await this.db.from("paf_producers").select("*").eq("id", id).is('archived_at', null).maybeSingle();
     assertNoError(error, "Não foi possível consultar o produtor.");
     if (!data) return null;
     const { data: report, error: reportError } = await this.db
@@ -120,7 +120,7 @@ export class PafRepository {
   }
 
   async getProducerByToken(token: string) {
-    const { data, error } = await this.db.from("paf_producers").select("id").eq("token", normalizeText(token)).maybeSingle();
+    const { data, error } = await this.db.from("paf_producers").select("id").eq("token", normalizeText(token)).is('archived_at', null).maybeSingle();
     assertNoError(error, "Não foi possível consultar o produtor.");
     return data ? this.getProducerById(data.id) : null;
   }
@@ -353,7 +353,7 @@ export class PafRepository {
     assertNoError(error, "Não foi possível consultar o escopo do acesso.");
     const ids = (scopes || []).map((scope) => scope.producer_id);
     if (!ids.length) return [];
-    const { data, error: producerError } = await this.db.from("paf_producers").select("*").in("id", ids).order("name");
+    const { data, error: producerError } = await this.db.from("paf_producers").select("*").in("id", ids).is('archived_at', null).order("name");
     assertNoError(producerError, "Não foi possível carregar os produtores vinculados.");
     return (data || []).map((row) => mapProducer(row, null));
   }
@@ -1066,7 +1066,7 @@ export class PafRepository {
   }
 
   private async listProducerRows() {
-    return readPages<Row>((from, to) => this.db.from("paf_producers").select("*").order("name").order('id').range(from, to), "Não foi possível carregar os produtores.");
+    return readPages<Row>((from, to) => this.db.from("paf_producers").select("*").is('archived_at', null).order("name").order('id').range(from, to), "Não foi possível carregar os produtores.");
   }
 
   private async listReportRows() {
@@ -1085,7 +1085,7 @@ export class PafRepository {
     const ids = (scopes || []).map((scope: Row) => scope.producer_id);
     let producers: Row[] = [];
     if (ids.length) {
-      const { data, error } = await this.db.from("paf_producers").select("id,name,cpf,agency").in("id", ids).order("name");
+      const { data, error } = await this.db.from("paf_producers").select("id,name,cpf,agency").in("id", ids).is('archived_at', null).order("name");
       assertNoError(error, "Não foi possível carregar os produtores vinculados.");
       producers = data || [];
     }

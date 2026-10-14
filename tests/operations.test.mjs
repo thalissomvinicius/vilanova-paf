@@ -56,6 +56,17 @@ test('directory pagination preserves more than one thousand records',async()=>{
   const result=await allRows(()=>({range:async(start,end)=>({data:records.slice(start,end+1),error:null})}));
   assert.equal(result.length,1201);assert.equal(result[1200].id,1200);
 });
+test('producer directory forwards imported wallets without treating names as profile IDs',async()=>{
+  const path='/api/operations/producers';
+  const response=await operationsRoute({request:request(`${path}?importedTechnician=MARCELO&page=2`),path,admin:true,store:{producers(filters){
+    assert.equal(filters.importedTechnician,'MARCELO');
+    assert.equal(filters.responsible,null);
+    assert.equal(filters.page,2);
+    return {producers:[],total:73,page:2,pageSize:25};
+  }}});
+  assert.equal(response.status,200);
+  assert.equal((await response.json()).total,73);
+});
 test('visit and task lists use the canonical store with bounded search and pagination', async()=>{
   for (const [endpoint,kind] of [['visits','visit'],['tasks','task']]) {
     const path=`/api/operations/${endpoint}`;
