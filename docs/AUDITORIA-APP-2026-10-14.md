@@ -99,7 +99,11 @@ solicitacoes ou contas para desfazer a importacao.
 
 Dashboard: https://vilanova-paf.vercel.app.
 
-APK: https://github.com/thalissomvinicius/vna-comunidade-paf-dashboard/releases/download/paf-vna-1.10.6-homologacao/PAF-VNA-1.10.6-homologacao.apk.
+APK direto, sem login GitHub:
+https://eeivxgbbslnojbbpzweb.supabase.co/storage/v1/object/public/paf-releases/1.10.6/PAF-VNA-1.10.6-homologacao.apk?download=PAF-VNA-1.10.6-homologacao.apk.
+
+Release adicional no GitHub privado:
+https://github.com/thalissomvinicius/vna-comunidade-paf-dashboard/releases/tag/paf-vna-1.10.6-homologacao.
 
 SHA-256 do APK:
 `ae17c179c52442697b5359095ed6cb19cd12246a6c6d50e8abdf224db17b470b`.
@@ -107,6 +111,22 @@ Instalar sobre a homologacao 1.10.5, sem desinstalar ou limpar armazenamento.
 Entrar com o acesso existente e sincronizar online para receber a nova carteira.
 Rascunhos antigos que apontem para produtor arquivado precisam ter seu vinculo
 conferido; nao sao reenviados para um produtor escolhido automaticamente.
+
+O bucket publico `paf-releases` contem somente o instalador, nao os dados da
+equipe. Escrita administrativa apenas; bucket privado `paf-anexos` e suas
+policies nao foram alterados. Limite de 50 MB por arquivo e MIME de APK.
+Download publico verificado integralmente com tamanho e SHA-256 iguais ao
+arquivo assinado local. Downloads consomem a franquia de trafego existente;
+nenhum plano pago foi contratado.
+
+Conferencia publicada: commits `8a39e78f693ebef0b76158da303ee8a02e1a08d1`
+(dashboard) e `8721ead3cc3543f6284d3631eed46fdf3dcea3f9` (app), ambos READY
+na Vercel. API HTTP 200; diretorio sem sessao HTTP 401. Dois testes do filtro de
+Marcelo repetidos no site publicado, em 390/1440 px, com API simulada e sem
+escritas reais. Suite visual administrativa do app repetida no dominio publicado,
+sem erros e com limites de acesso preservados. Bundle publicado contem o novo
+wizard/RPC e nao contem as fixtures de teste. APK corresponde ao commit do app
+acima; commits posteriores de documentacao nao alteram esse binario.
 
 ## Pendencias para liberacao em campo
 
