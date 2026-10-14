@@ -113,6 +113,7 @@
 .field-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .field-photos figure { margin: 0; border: 1px solid var(--app-line); border-radius: 6px; overflow: hidden; }
 .field-photos img { width: 100%; height: 220px; object-fit: contain; background: #f8faf5; }
+.field-signatures img { height: 120px; background: #fff; }
 .field-photos figcaption { font-size: 11px; color: #6a7c60; padding: 12px; overflow-wrap: anywhere; }
 .field-photos figcaption small { display: block; margin-top: 4px; }
 .field-review-history { display: flex; align-items: flex-start; gap: 10px; padding: 16px 0; margin: 16px 0; border-block: 1px solid var(--app-line); font-size: 12px; color: #5c7750; }

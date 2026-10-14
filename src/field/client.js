@@ -112,13 +112,14 @@ export async function loadFieldEvidence(collection) {
   const { data: gps, error: gpsError } = await client.from('mobile_gps').select('*').eq('resposta_id', collection.id).eq('organizacao_id', collection.organizacao_id);
   const { data: attachments, error } = await client.from('mobile_anexos').select('*').eq('resposta_id', collection.id).eq('organizacao_id', collection.organizacao_id);
   if (error || gpsError) throw new Error('Nao foi possivel carregar as evidencias.');
-  const photos = [];
+  const photos = [], signatures = [];
   for (const attachment of attachments.filter(item => item.metadados_json?.removido !== true)) {
     const { data, error: signedError } = await client.storage.from(attachment.bucket).createSignedUrl(attachment.storage_path, 300);
     if (signedError) throw new Error('Nao foi possivel liberar a visualizacao de uma evidencia.');
-    photos.push({ ...attachment, url: data.signedUrl });
+    const image = { ...attachment, url: data.signedUrl };
+    if (attachment.tipo === 'assinatura') signatures.push(image); else photos.push(image);
   }
-  return { gps: gps.filter(item => item.metadados_json?.removido !== true), photos };
+  return { gps: gps.filter(item => item.metadados_json?.removido !== true), photos, signatures };
 }
 
 export async function reviewFieldCollection(collection, profile, status, note) {
