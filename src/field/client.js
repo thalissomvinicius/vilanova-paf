@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { normalizeSearch, reviewPatch } from './model.mjs';
+import { deletionArguments, normalizeSearch, reviewPatch } from './model.mjs';
 import { FIELD_URL, FIELD_PUBLIC_KEY } from './public-config';
 
 const url = import.meta.env.VITE_PAF_FIELD_URL || FIELD_URL;
@@ -67,7 +67,7 @@ async function allRows(table, columns, organizationId) {
 
 export async function loadFieldDirectories(profile) {
   const organization = profile.organizacao_id;
-  const producers = await allRows('paf_produtores', 'id,nome', organization);
+  const producers = await allRows('paf_produtores', 'id,nome,tipo_produtor', organization);
   const communities = await allRows('paf_comunidades', 'id,nome', organization);
   const properties = await allRows('paf_propriedades', 'id,nome', organization);
   const forms = await allRows('mobile_formularios', 'id,titulo,versao,definicao_json', organization);
@@ -120,6 +120,18 @@ export async function loadFieldEvidence(collection) {
     if (attachment.tipo === 'assinatura') signatures.push(image); else photos.push(image);
   }
   return { gps: gps.filter(item => item.metadados_json?.removido !== true), photos, signatures };
+}
+
+export async function loadCollectionProperty(collection) {
+  if (!collection.propriedade_id) return null;
+  const { data, error } = await requireClient().from('paf_propriedades').select('id,nome,shape_geojson').eq('id', collection.propriedade_id).eq('organizacao_id', collection.organizacao_id).maybeSingle();
+  if (error) throw new Error('Não foi possível carregar a área cadastrada.');
+  return data;
+}
+
+export async function deleteFieldCollection(collection, profile, reason) {
+  const { error } = await requireClient().rpc('paf_delete_field_collection', deletionArguments(collection, profile, reason));
+  if (error) throw new Error(error.message || 'Não foi possível excluir a visita.');
 }
 
 export async function reviewFieldCollection(collection, profile, status, note) {

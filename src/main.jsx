@@ -68,6 +68,7 @@ const LandAdmin = lazy(() => import('./land/LandApplications').then(module => ({
 const OperationsDashboard = lazy(() => import('./operations/OperationsWorkspace').then(module => ({default:module.OperationsDashboard})));
 const ProducerOperations = lazy(() => import('./operations/OperationsWorkspace').then(module => ({default:module.ProducerOperations})));
 const ActivityOperations = lazy(() => import('./operations/OperationsWorkspace').then(module => ({default:module.ActivityOperations})));
+const VisitsHub = lazy(() => import('./operations/VisitsHub').then(module => ({default:module.VisitsHub})));
 
 const AREA_STATUSES = [
   "Sem alteração",
@@ -195,7 +196,6 @@ const NAV_ITEMS = [
   { id: "registrations", label: "Cadastros", path: "/admin/cadastros", icon: UserPlus },
   { id: "logins", label: "Acessos", path: "/admin/acessos", icon: KeyRound },
   { id: "reports", label: "Relatórios", path: "/admin/relatorios", icon: ClipboardList },
-  { id: "field", label: "Coletas de campo", path: "/admin/coletas", icon: ScanLine },
   { id: "fuel", label: "Abastecimento", path: "/admin/abastecimento", icon: Fuel },
   { id: "visits", label: "Visitas", path: "/admin/visitas", icon: MapPin },
   { id: "tasks", label: "Pendências", path: "/admin/pendencias", icon: ListChecks },
@@ -211,7 +211,7 @@ const ADMIN_ROUTE_BY_PATH = {
   "/admin/acessos": "logins",
   "/admin/logins": "logins",
   "/admin/relatorios": "reports",
-  "/admin/coletas": "field",
+  "/admin/coletas": "visits",
   "/admin/abastecimento": "fuel",
   "/admin/visitas": "visits",
   "/admin/pendencias": "tasks",
@@ -2045,7 +2045,7 @@ function AdminDashboard({ user, onLogout }) {
         )}
 
         {activeView === "visits" && (
-          <Suspense fallback={<DashboardSkeleton/>}><ActivityOperations key="visits" api={fetchJson} kind="visit"/></Suspense>
+          <Suspense fallback={<DashboardSkeleton/>}><VisitsHub api={fetchJson}/></Suspense>
         )}
 
         {activeView === "tasks" && (

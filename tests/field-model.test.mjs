@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answerText, canReview, csvCell, mapUrl, normalizeSearch, reviewPatch } from '../src/field/model.mjs';
+import { answerText, canDeleteCollection, canReview, csvCell, deletionArguments, mapUrl, normalizeSearch, photoStamp, programLabel, reviewPatch } from '../src/field/model.mjs';
 
 const profile = { id: 'reviewer', papel: 'admin', ativo: true, organizacao_id: 'paf' };
 const collection = { organizacao_id: 'paf', tecnico_id: 'original-author', status_validacao: 'pendente', dados_json: { text: 'original' } };
@@ -37,4 +37,23 @@ test('search and answer formatters handle accents, arrays and booleans', () => {
 test('map links reject invalid coordinates but allow equator and meridian', () => {
   assert.equal(mapUrl({ latitude: 0, longitude: 0 }), 'https://www.google.com/maps?q=0,0');
   for (const point of [null, {}, { latitude: 91, longitude: 1 }, { latitude: 1, longitude: -181 }, { latitude: 'bad', longitude: 1 }]) assert.equal(mapUrl(point), null);
+});
+test('deletion is admin-only, scoped, reasoned and optimistic', () => {
+  const row = { ...collection, id: 'visit', updated_at: '2026-10-15T12:00:00Z' };
+  assert.deepEqual(deletionArguments(row, profile, '  Registro de teste  '), { p_response: 'visit', p_expected_updated_at: row.updated_at, p_reason: 'Registro de teste' });
+  for (const update of [{ papel: 'tecnico' }, { papel: 'coordenador' }, { ativo: false }, { deve_trocar_senha: true }]) {
+    assert.equal(canDeleteCollection({ ...profile, ...update }), false);
+    assert.throws(() => deletionArguments(row, { ...profile, ...update }, 'Teste excluído'));
+  }
+  assert.throws(() => deletionArguments({ ...row, organizacao_id: 'other' }, profile, 'Teste excluído'));
+  assert.throws(() => deletionArguments(row, profile, 'x'));
+  assert.throws(() => deletionArguments({ ...row, deleted_at: row.updated_at }, profile, 'Teste excluído'));
+});
+test('photo labels use matching photo GPS, preserve zero and registered modalities', () => {
+  const lines = photoStamp({ client_id: 'photo-1', capturado_em: '2026-10-15T15:00:00Z' }, [{ latitude: 0, longitude: -48, metadados_json: { evidence_client_id: 'photo-1' } }], 'Produtor', 'Técnico');
+  assert.match(lines.join(' '), /12:00/);
+  assert.match(lines.join(' '), /0.000000, -48.000000/);
+  assert.equal(programLabel('PRONAF | PARCERIA'), 'Pronaf · Parceria');
+  assert.equal(programLabel('PRODUTIVO'), 'Produtivo');
+  assert.match(photoStamp({}, [], 'Produtor', 'Técnico').join(' '), /não registrado/);
 });

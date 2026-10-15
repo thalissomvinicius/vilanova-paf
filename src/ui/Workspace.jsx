@@ -15,7 +15,7 @@ export function DeveloperFooter() {
 export const NAV_GROUPS = [
   { label: "", ids: ["dashboard"] },
   { label: "Produtores", ids: ["producers", "land", "documents"] },
-  { label: "Campo", ids: ["visits", "reports", "field", "tasks"] },
+  { label: "Campo", ids: ["visits", "reports", "tasks"] },
   { label: "Frota", ids: ["fuel"] },
   { label: "Equipe", ids: ["registrations", "logins"] }
 ];
@@ -45,7 +45,7 @@ export function WorkspaceNavigation({ items, activeId, onNavigate }) {
 const TAB_AREAS = [
   { label: "Painel", ids: ["dashboard"] },
   { label: "Produtores", ids: ["producers", "land", "documents"] },
-  { label: "Campo", ids: ["visits", "reports", "field", "tasks"] },
+  { label: "Campo", ids: ["visits", "reports", "tasks"] },
   { label: "Frota", ids: ["fuel"] }
 ];
 

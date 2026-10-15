@@ -8,6 +8,7 @@ export default defineConfig({
   testMatch: [
     "premium-workspace.spec.js",
     "experience.spec.js",
+    "field-evidence.spec.js",
     "land-team.spec.js",
     "operations-flow.spec.js",
     "access-design.spec.js",

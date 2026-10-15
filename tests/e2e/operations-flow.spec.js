@@ -27,7 +27,7 @@ for (const width of [390,1440]) test(`canonical visits and tasks can be created 
     return respond({statuses:[],agencies:[],communities:[],designers:[],years:[],technicians:[],producers:[],reports:[],visits:[],tasks:[],documents:[],summary:{},accesses:[]});
   });
   for (const [kind,path,button,title,completed] of [['visit','visitas','Programar visita','Assunto da visita','realizado'],['task','pendencias','Cadastrar pendência','Assunto da pendência','concluida']]) {
-    await page.goto(`/admin/${path}`);
+    await page.goto(`/admin/${path}${kind === 'visit' ? '?tab=agenda' : ''}`);
     await page.getByRole('button',{name:button,exact:true}).click();
     await page.getByLabel('Buscar produtor por nome ou CPF').fill('Produtor');
     await page.getByRole('button',{name:/Produtor de Teste/}).click();

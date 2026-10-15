@@ -173,7 +173,7 @@ export function ActivityChart({ activity, days }) {
         </span>
         <span>
           <i />
-          <strong>{number(visits)}</strong> visitas realizadas
+          <strong>{number(visits)}</strong> visitas recebidas do app
         </span>
       </div>
       <div className="pa-activity-plot">
@@ -266,8 +266,8 @@ export function DashboardOverview({
     {
       title: "Visitas programadas",
       value: counts.visits,
-      detail: `${number(counts.completedVisits)} realizadas no período`,
-      href: "/admin/visitas",
+      detail: `${number(counts.completedVisits)} recebidas pelo app no período`,
+      href: "/admin/visitas?tab=agenda",
       icon: CalendarDays,
       tone: "green",
     },
@@ -458,7 +458,7 @@ export function DashboardOverview({
             eyebrow="EM CAMPO"
             title="Próximas visitas"
           >
-            <a className="ops-link" href="/admin/visitas">
+            <a className="ops-link" href="/admin/visitas?tab=agenda">
               Ver agenda
               <ArrowRight size={15} />
             </a>
@@ -467,7 +467,7 @@ export function DashboardOverview({
             <Empty
               icon={CalendarDays}
               title="Nenhuma visita programada"
-              href="/admin/visitas"
+              href="/admin/visitas?tab=agenda"
               action="Abrir agenda"
             />
           ) : (

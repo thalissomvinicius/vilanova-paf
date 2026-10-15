@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, ClipboardList, Download, Eye, EyeOff, FileText, Leaf, Loader2, LogOut, MapPin, RefreshCcw, Search, ShieldCheck, Smartphone, X } from 'lucide-react';
+import { ArrowRight, Check, ClipboardList, Download, Eye, EyeOff, FileText, Leaf, Loader2, LogOut, MapPin, RefreshCcw, Search, ShieldCheck, Smartphone, Trash2, X } from 'lucide-react';
 import { AnimatedValue } from '../components/AnimatedValue';
 import { AccessScreen, AccessField, AccessSubmit, AccessLink, useAccessTransition } from '../components/AccessScreen';
 import { FieldAccesses } from './FieldAccesses';
 import { manageableRoles } from './access-model.mjs';
-import { answerText, canReview, csvCell, mapUrl, REVIEW_LABELS } from './model.mjs';
-import { changeFieldPassword, fieldClient, fieldSignIn, fieldSignOut, loadFieldCollections, loadFieldCounts, loadFieldDirectories, loadFieldEvidence, loadFieldProfile, reviewFieldCollection } from './client';
+import { answerText, canDeleteCollection, canReview, csvCell, mapUrl, programLabel, REVIEW_LABELS } from './model.mjs';
+import { VisitMap, VisitPhotos } from './VisitEvidence';
+import { changeFieldPassword, deleteFieldCollection, fieldClient, fieldSignIn, fieldSignOut, loadCollectionProperty, loadFieldCollections, loadFieldCounts, loadFieldDirectories, loadFieldEvidence, loadFieldProfile, reviewFieldCollection } from './client';
 
 const EMPTY_FILTERS = { search: '', status: '', form: '', technician: '', from: '', to: '' };
 const date = value => value ? new Date(value).toLocaleString('pt-BR') : '-';
@@ -126,16 +127,26 @@ function CollectionDetails({ row, directories, profile, onClose, onSaved }) {
   const dialog = useRef(null), close = useRef(onClose);
   close.current = onClose;
   const [evidence, setEvidence] = useState(null), [error, setError] = useState(''), [note, setNote] = useState(row.nota_revisao ?? ''), [busy, setBusy] = useState(false);
+  const [property, setProperty] = useState(null), [propertyError, setPropertyError] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false), [deleteReason, setDeleteReason] = useState('');
   useEffect(() => {
     let alive = true;
     dialog.current.showModal();
     loadFieldEvidence(row).then(data => { if (alive) setEvidence(data); }).catch(reason => { if (alive) setError(reason.message); });
+    loadCollectionProperty(row).then(data => { if (alive) setProperty(data); }).catch(reason => { if (alive) setPropertyError(reason.message); });
     const previous = document.body.style.overflow; document.body.style.overflow = 'hidden';
     return () => { alive = false; document.body.style.overflow = previous; };
   }, [row]);
   async function review(status) {
     setBusy(true); setError('');
     try { await reviewFieldCollection(row, profile, status, note); onSaved(); }
+    catch (reason) { setError(reason.message); }
+    finally { setBusy(false); }
+  }
+  async function remove() {
+    if (busy) return;
+    setBusy(true); setError('');
+    try { await deleteFieldCollection(row, profile, deleteReason); onSaved(); }
     catch (reason) { setError(reason.message); }
     finally { setBusy(false); }
   }
@@ -146,10 +157,17 @@ function CollectionDetails({ row, directories, profile, onClose, onSaved }) {
     <header><div><p className="eyebrow">Registro de campo / v{row.formulario_versao}</p><h2 id="field-detail-title">{form?.titulo ?? 'Detalhes da coleta'}</h2></div><button className="field-open" title="Fechar coleta" aria-label="Fechar coleta" disabled={busy} onClick={onClose}><X size={20} /></button></header>
     <div className="field-dialog-body"><div className="field-detail-meta"><span>Produtor<strong>{nameOf(directories.producers, row.produtor_id)}</strong></span><span>Comunidade<strong>{nameOf(directories.communities, row.comunidade_id)}</strong></span><span>Tecnico autor<strong>{nameOf(directories.users, row.tecnico_id)}</strong></span><span>Recebido em<strong>{date(row.recebido_em)}</strong></span></div><h3>Respostas da coleta</h3><dl className="field-answers">{Object.entries(row.dados_json ?? {}).filter(([id]) => !id.startsWith('_')).map(([id, value]) => <div key={id}><dt>{fields.find(field => field.id === id)?.label ?? id}</dt><dd>{answerText(value)}</dd></div>)}</dl>{row.observacoes && <p className="field-note">{row.observacoes}</p>}
       {row.dados_json?._areaVerification && <section><h3>Conferência da área</h3><dl className="field-answers">{row.dados_json._areaVerification.points?.map((point, index) => <div key={index}><dt>{point.label}</dt><dd>{Math.round(point.distanceMeters)} m do polígono</dd></div>)}</dl>{row.dados_json._areaVerification.displacement && <p className="field-note"><strong>Deslocamento de área: conferir o polígono</strong><br />{row.dados_json._areaVerification.justification}</p>}</section>}
-      <h3>Localizacao e evidencias</h3>{evidence ? <><div className="field-gps">{evidence.gps.map(point => <div key={point.id}><MapPin size={18} /><span>{point.latitude}, {point.longitude}<small>{date(point.capturado_em)} / Precisao: {point.precisao_metros ?? '-'} m</small></span>{mapUrl(point) && <a href={mapUrl(point)} target="_blank" rel="noopener noreferrer">Abrir mapa <ArrowRight size={15} /></a>}</div>)}{!evidence.gps.length && <p>Sem coordenadas registradas.</p>}</div><div className="field-photos">{evidence.photos.map(photo => <figure key={photo.id}>{photo.mime_type?.startsWith('image/') ? <img src={photo.url} alt={photo.nome_arquivo ?? 'Evidencia da coleta'} /> : <a href={photo.url} target="_blank" rel="noopener noreferrer">Abrir anexo</a>}<figcaption>{photo.nome_arquivo ?? 'Evidencia'}<small>{date(photo.capturado_em)}</small></figcaption></figure>)}</div>{!evidence.photos.length && <p>Sem anexos registrados.</p>}</> : <p role="status">Carregando evidencias...</p>}
+      <p className="field-note"><strong>Modalidade:</strong> <span>{programLabel(directories.producers.find(item => item.id === row.produtor_id)?.tipo_produtor)}</span></p>
+      <h3>Localização e evidências</h3>{evidence ? <>
+        {propertyError ? <p role="alert">{propertyError}</p> : <VisitMap property={property} gps={evidence.gps} />}
+        <div className="field-gps">{evidence.gps.map(point => <div key={point.id}><MapPin size={18} /><span>{point.latitude}, {point.longitude}<small>{date(point.capturado_em)} / Precisão: {point.precisao_metros ?? '-'} m</small></span>{mapUrl(point) && <a href={mapUrl(point)} target="_blank" rel="noopener noreferrer">Ver ponto no Google Maps <ArrowRight size={15} /></a>}</div>)}{!evidence.gps.length && <p>Sem coordenadas registradas.</p>}</div>
+        <VisitPhotos photos={evidence.photos} gps={evidence.gps} producer={nameOf(directories.producers, row.produtor_id)} technician={nameOf(directories.users, row.tecnico_id)} />
+        {!evidence.photos.length && <p>Sem anexos registrados.</p>}
+      </> : <p role="status">Carregando evidências...</p>}
       {row.revisado_em && <div className="field-review-history"><ShieldCheck size={18} /><div><strong>{REVIEW_LABELS[row.status_validacao]}</strong><p>{nameOf(directories.users, row.revisado_por)} / {date(row.revisado_em)}</p>{row.nota_revisao && <p>{row.nota_revisao}</p>}</div></div>}
       {evidence?.signatures?.length > 0 && <section><h3>Assinaturas da visita</h3><div className="field-photos field-signatures">{evidence.signatures.map(signature => <figure key={signature.id}><img src={signature.url} alt={`Assinatura de ${signature.metadados_json?.signerName ?? 'participante'}`} /><figcaption><strong>{signature.metadados_json?.role === 'technician' ? 'Técnico responsável' : 'Pessoa que acompanhou a visita'}</strong><br />{signature.metadados_json?.signerName}{signature.metadados_json?.relationship && ` · ${signature.metadados_json.relationship}`}<small>{date(signature.capturado_em)}</small></figcaption></figure>)}</div></section>}
       {canReview(profile) && <label className="field-review-note">Observacao da revisao<textarea value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={4000} placeholder="Descreva o ajuste ou a observacao..." /></label>}{error && <p role="alert" className="form-error">{error}</p>}
-    </div><footer><button className="icon-text-button" onClick={onClose} disabled={busy}>Fechar</button>{canReview(profile) && <><button className="icon-text-button" onClick={() => review('rejeitado')} disabled={busy}>Solicitar ajuste</button><button className="primary-button" onClick={() => review('aprovado')} disabled={busy}>{busy ? <Loader2 className="spin" size={17} /> : <Check size={17} />}Aprovar coleta</button></>}</footer>
+      {confirmDelete && canDeleteCollection(profile) && <section className="visit-delete-confirm" aria-label="Confirmar exclusão"><h3>Excluir esta visita?</h3><p>Ela deixará de aparecer no dashboard e será removida do aplicativo na próxima sincronização. O histórico de auditoria e as evidências serão preservados.</p><label>Motivo da exclusão<textarea autoFocus value={deleteReason} onChange={event => setDeleteReason(event.target.value)} maxLength={1000} rows={3} disabled={busy} /></label><div className="visit-delete-actions"><button className="icon-text-button" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancelar exclusão</button><button className="visit-delete-submit" disabled={busy || deleteReason.trim().length < 5} onClick={remove}>{busy ? <Loader2 className="spin" size={17} /> : <Trash2 size={17} />}Confirmar exclusão</button></div></section>}
+    </div><footer><button className="icon-text-button" onClick={onClose} disabled={busy}>Fechar</button>{canDeleteCollection(profile) && <button className="icon-text-button visit-delete-button" onClick={() => setConfirmDelete(true)} disabled={busy || confirmDelete}><Trash2 size={17} />Excluir visita</button>}{canReview(profile) && <><button className="icon-text-button" onClick={() => review('rejeitado')} disabled={busy || confirmDelete}>Solicitar ajuste</button><button className="primary-button" onClick={() => review('aprovado')} disabled={busy || confirmDelete}>{busy ? <Loader2 className="spin" size={17} /> : <Check size={17} />}Aprovar coleta</button></>}</footer>
   </dialog>;
 }
