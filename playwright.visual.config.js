@@ -12,6 +12,7 @@ export default defineConfig({
     "land-team.spec.js",
     "operations-flow.spec.js",
     "access-design.spec.js",
+    "access-logo-motion.spec.js",
     "access-resilience.spec.js",
     "imported-technician.spec.js",
   ],

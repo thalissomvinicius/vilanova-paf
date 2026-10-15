@@ -33,6 +33,7 @@ test('successful login confirms only after server authentication and blocks dupl
   expect(attempts).toBe(1);
   release();
   await expect(page.getByRole('heading', { name: 'Acesso confirmado' })).toBeVisible();
+  await expect(page.locator('.pa-login-mark')).toHaveAttribute('data-phase', 'success');
   await expect(page.locator('.paf-access-success')).toHaveCSS('opacity', '1');
   await expect(page.getByLabel('Senha', { exact: true })).toHaveValue('');
   await page.screenshot({ path: 'verification/login-success.png' });

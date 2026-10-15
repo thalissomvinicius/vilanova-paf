@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, Eye, EyeOff, KeyRound, Loader2, ShieldCheck, Sprout, UserRound } from 'lucide-react';
 import { DeveloperSignature } from '../ui/Workspace';
+import { PafLogoMotion } from './PafLogoMotion';
 
 export function useAccessTransition() {
   const [phase, setPhase] = useState('idle');
@@ -36,10 +37,10 @@ export function AccessScreen({ portal, title, description, children, help, produ
   return <Tag className={`paf-access pa-login${producer ? ' paf-producer-access' : ''}`}>
     <aside className="paf-access-visual" aria-label="Programa de Agricultura Familiar">
       <a className="pa-login-brand" href="/" aria-label="PAF VNA, acesso principal">
-        <span className="pa-login-symbol"><img src="/brand/paf-symbol-official.png" alt="" width="44" height="44" /></span>
+        <PafLogoMotion compact phase={phase} />
         <span><strong>PAF VNA</strong><small>Programa de Agricultura Familiar</small></span>
       </a>
-      <div className="pa-login-identity"><span className="pa-login-edition">PAF / VILA NOVA AGROINDUSTRIAL</span><img className="pa-login-art" src="/brand/paf-logo-official.png" alt="PAF Agricultura Familiar" width="1280" height="1280" /><span className="pa-login-identity-caption"><Sprout size={18} />Raízes no campo. Conexões para o futuro.</span></div>
+      <div className="pa-login-identity"><span className="pa-login-edition">PAF / VILA NOVA AGROINDUSTRIAL</span><PafLogoMotion phase={phase} /><span className="pa-login-identity-caption"><Sprout size={18} />Raízes no campo. Conexões para o futuro.</span></div>
       <div className="pa-login-story">
         <p className="pa-login-statement">Agricultura familiar acompanhada de perto.</p>
       </div>
