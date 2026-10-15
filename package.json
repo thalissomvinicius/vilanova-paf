@@ -15,6 +15,7 @@
     "test:local-db": "node --test tests/local-db.test.mjs",
     "test:deployment": "node --test tests/deployment-config.test.mjs",
     "test:e2e": "playwright test",
+    "test:ui": "playwright test --config playwright.visual.config.js",
     "test:pwa": "playwright test --config playwright.pwa.config.js",
     "typecheck:edge": "npx -y deno-bin check --config supabase/functions/paf-api/deno.json supabase/functions/paf-api/index.ts",
     "check": "npm run test && npm run typecheck:edge && npm run build",

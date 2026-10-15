@@ -1903,7 +1903,7 @@ function AdminDashboard({ user, onLogout }) {
             </button>
             <img className="pa-header-symbol" src={BRAND_ASSETS.pafIcon} alt="" />
             <div>
-              {navGroupLabel(activeView) && <p className="eyebrow">{navGroupLabel(activeView)}</p>}
+              <p className="eyebrow">PAF VNA / {navGroupLabel(activeView) || "Operação"}</p>
               <h1>{viewTitle}</h1>
             </div>
           </div>
@@ -2889,10 +2889,7 @@ function RegistrationsWorkspace({
       <div className="registration-hero">
         <div>
           <p className="eyebrow">Base operacional PAF</p>
-          <h2>Cadastros centralizados para campo, técnica e gestão.</h2>
-          <p>
-            Inclua produtores e mantenha a equipe técnica organizada para visitas, relatórios e acompanhamento.
-          </p>
+          <h2>Produtores e equipe</h2>
         </div>
         <div className="registration-hero-actions">
           <button className="primary-button" type="button" onClick={() => setProducerModalOpen(true)}>
@@ -3007,11 +3004,7 @@ function RegistrationsWorkspace({
       <section className="registration-aux-panel" aria-label="Cadastros auxiliares">
         <div>
           <p className="eyebrow">Cadastros auxiliares</p>
-          <h3>Dados que já alimentam filtros do sistema</h3>
-          <p>
-            Agências, projetistas e técnicos ativos ficam disponíveis em toda a operação e mantêm os registros
-            padronizados no banco central.
-          </p>
+          <h3>Referências da operação</h3>
         </div>
         <div className="registration-chip-grid">
           <RegistrationChipGroup title="Agências" values={options.agencies} empty="Sem agências" />
@@ -3512,8 +3505,7 @@ function LoginWorkspace({ accesses, createAccess, deleteAccess, loading, produce
       <div className="access-hero">
         <div>
           <p className="eyebrow">Identidade e permissões</p>
-          <h2>Acessos controlados por perfil e produtores vinculados.</h2>
-          <p>Cadastre produtores, técnicos ou organizações e defina exatamente quais dados cada acesso pode utilizar.</p>
+          <h2>Acessos ao portal de produtores</h2>
         </div>
         <button className="primary-button" type="button" onClick={openCreate}>
           <Plus size={18} />
@@ -5859,7 +5851,7 @@ function FuelWorkspace({
       <section className="fuel-cockpit">
         <div className="fuel-cockpit-copy">
           <p className="eyebrow">Gestão de abastecimento</p>
-          <h2>Consumo, frota e eficiência em uma visão de controle.</h2>
+          <h2>Abastecimento e frota</h2>
           <div className="fuel-cockpit-strip">
             <span><strong>{formatDecimal(summary?.totalSuppliedLiters)} L</strong> atendidos</span>
             <span><strong>{summary?.drivers ?? 0}</strong> condutores</span>
