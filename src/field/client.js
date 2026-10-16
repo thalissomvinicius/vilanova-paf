@@ -70,7 +70,7 @@ export async function loadFieldDirectories(profile) {
   const producers = await allRows('paf_produtores', 'id,nome,tipo_produtor', organization);
   const communities = await allRows('paf_comunidades', 'id,nome', organization);
   const properties = await allRows('paf_propriedades', 'id,nome', organization);
-  const forms = await allRows('mobile_formularios', 'id,titulo,versao,definicao_json', organization);
+  const forms = await allRows('mobile_formularios', 'id,codigo,titulo,versao,definicao_json', organization);
   const users = await allRows('paf_perfis', 'id,nome', organization);
   return { producers, communities, properties, forms, users };
 }
@@ -119,7 +119,8 @@ export async function loadFieldEvidence(collection) {
   const { data: attachments, error } = await client.from('mobile_anexos').select('*').eq('resposta_id', collection.id).eq('organizacao_id', collection.organizacao_id);
   if (error || gpsError) throw new Error('Nao foi possivel carregar as evidencias.');
   const photos = [], signatures = [];
-  for (const attachment of attachments.filter(item => item.metadados_json?.removido !== true)) {
+  const signatureIds = Array.isArray(collection.dados_json?._visitSignatures) ? new Set(collection.dados_json._visitSignatures.map(item => item?.clientId)) : null;
+  for (const attachment of attachments.filter(item => item.metadados_json?.removido !== true && (item.tipo !== 'assinatura' || !signatureIds || signatureIds.has(item.client_id)))) {
     const { data, error: signedError } = await client.storage.from(attachment.bucket).createSignedUrl(attachment.storage_path, 300);
     if (signedError) throw new Error('Nao foi possivel liberar a visualizacao de uma evidencia.');
     const image = { ...attachment, url: data.signedUrl };
@@ -130,7 +131,7 @@ export async function loadFieldEvidence(collection) {
 
 export async function loadCollectionProperty(collection) {
   if (!collection.propriedade_id) return null;
-  const { data, error } = await requireClient().from('paf_propriedades').select('id,nome,shape_geojson').eq('id', collection.propriedade_id).eq('organizacao_id', collection.organizacao_id).maybeSingle();
+  const { data, error } = await requireClient().from('paf_propriedades').select('id,nome,municipio,shape_geojson').eq('id', collection.propriedade_id).eq('organizacao_id', collection.organizacao_id).maybeSingle();
   if (error) throw new Error('Não foi possível carregar a área cadastrada.');
   return data;
 }

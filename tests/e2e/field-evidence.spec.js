@@ -4,10 +4,11 @@ for (const width of [390, 1366]) test(`visit evidence separates signatures and f
   const org = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', id = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
   const profile = { id, nome: 'Gestora de Auditoria', email: 'auditoria@example.invalid', papel: 'admin', ativo: true, organizacao_id: org, deve_trocar_senha: false };
   const row = { id: 'visit', organizacao_id: org, formulario_id: 'form', formulario_versao: 3, produtor_id: 'producer', propriedade_id: 'property', tecnico_id: id, status_validacao: 'pendente', coletado_em: '2026-10-14T15:00:00Z', recebido_em: '2026-10-14T15:01:00Z', dados_json: { nomeConfirmacaoProdutor: 'Pessoa acompanhante', vinculoParticipante: 'Amigo(a)', _visitSignatures: [], _areaVerification: { displacement: true, justification: 'Polígono precisa de conferência pela equipe.', points: [{ label: 'GPS da visita', distanceMeters: 150 }] } } };
+  row.dados_json._visitSignatures = [{ clientId: 'signature-0' }, { clientId: 'signature-1' }];
   const token = `${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({ sub: id, exp: Math.floor(Date.now()/1000)+3600 })).toString('base64url')}.fixture`;
   const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4AAAAABJRU5ErkJggg==';
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  let deleted = false, deletionCalls = 0;
+  let deleted = false, deletionCalls = 0, failReportImage = false;
   row.updated_at = '2026-10-15T12:00:00Z';
   const shape = { type: 'Polygon', coordinates: [[[-48.151,-2.411],[-48.149,-2.411],[-48.149,-2.409],[-48.151,-2.409],[-48.151,-2.411]]] };
   await page.route('https://eeivxgbbslnojbbpzweb.supabase.co/**', async route => {
@@ -22,8 +23,12 @@ for (const width of [390, 1366]) test(`visit evidence separates signatures and f
     else if (url.pathname.endsWith('/rpc/paf_delete_field_collection')) { const payload = route.request().postDataJSON(); expect(payload).toEqual({ p_response: 'visit', p_expected_updated_at: row.updated_at, p_reason: 'Teste de homologação' }); deletionCalls++; deleted = true; data = 'visit'; }
     else if (url.pathname.endsWith('/mobile_gps')) data = [{ id: 'gps', latitude: -2.410, longitude: -48.150, capturado_em: row.coletado_em, metadados_json: { evidence_client_id: 'photo' } }];
     else if (url.pathname.endsWith('/mobile_anexos')) data = ['technician','attendee'].map((role, index) => ({ id: String(index), tipo: 'assinatura', bucket: 'paf-anexos', storage_path: `${org}/${id}/${index}.png`, mime_type: 'image/png', capturado_em: row.coletado_em, metadados_json: { role, signerName: role === 'technician' ? profile.nome : 'Pessoa acompanhante', relationship: role === 'attendee' ? 'Amigo(a)' : null } }));
-    else if (url.pathname.includes('/storage/v1/object/sign/')) return route.request().method() === 'POST' ? route.fulfill({ json: { signedURL: '/object/sign/paf-anexos/fixture.png?token=fixture' } }) : route.fulfill({ contentType: 'image/png', body: Buffer.from(png.split(',')[1], 'base64') });
-    if (url.pathname.endsWith('/mobile_anexos')) data.push({ id: 'photo', client_id: 'photo', tipo: 'foto', bucket: 'paf-anexos', storage_path: `${org}/${id}/photo.png`, mime_type: 'image/png', capturado_em: row.coletado_em });
+    else if (url.pathname.includes('/storage/v1/object/sign/')) return route.request().method() === 'POST' ? route.fulfill({ json: { signedURL: '/object/sign/paf-anexos/fixture.png?token=fixture' } }) : failReportImage ? route.fulfill({ status: 503, body: 'Temporary failure' }) : route.fulfill({ contentType: 'image/png', body: Buffer.from(png.split(',')[1], 'base64') });
+    if (url.pathname.endsWith('/mobile_anexos')) {
+      data.forEach(item => { item.client_id = `signature-${item.id}`; });
+      data.push({ ...data[0], id: 'old', client_id: 'superseded', metadados_json: { role: 'attendee', signerName: 'Assinatura substituída' } });
+      data.push({ id: 'photo', client_id: 'photo', tipo: 'foto', bucket: 'paf-anexos', storage_path: `${org}/${id}/photo.png`, mime_type: 'image/png', capturado_em: row.coletado_em });
+    }
     await route.fulfill({ json: data, headers: { 'content-range': deleted ? '*/0' : '0-0/1' } });
   });
   await page.goto('/campo/coletas');
@@ -55,6 +60,36 @@ for (const width of [390, 1366]) test(`visit evidence separates signatures and f
   await expect(dialog.getByText('Pronaf · Parceria', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('link', { name: 'Ver ponto no Google Maps' })).toHaveAttribute('href', 'https://www.google.com/maps?q=-2.41,-48.15');
   await expect(dialog.locator('.visit-map .leaflet-overlay-pane path')).toHaveCount(2);
+  failReportImage = true;
+  await dialog.getByRole('button', { name: 'Baixar relatório PDF', exact: true }).click();
+  const report = page.getByRole('dialog', { name: 'Relatório da visita', exact: true });
+  await expect(report.getByRole('alert')).toContainText('Não foi possível carregar uma imagem');
+  await expect(report.getByRole('button', { name: 'Salvar PDF / imprimir', exact: true })).toBeDisabled();
+  failReportImage = false;
+  await report.getByRole('button', { name: 'Tentar novamente', exact: true }).click();
+  await expect(report.getByRole('button', { name: 'Salvar PDF / imprimir', exact: true })).toBeEnabled();
+  const reportFrame = page.frameLocator('iframe[title="Prévia do relatório da visita"]');
+  await expect(reportFrame.getByAltText('Vila Nova Agroindustrial')).toBeVisible();
+  await expect(reportFrame.getByAltText('Evidência 1')).toHaveJSProperty('naturalWidth', 1);
+  await expect(reportFrame.getByAltText('Assinatura registrada na visita')).toHaveCount(2);
+  await expect(reportFrame.getByText('Assinatura substituída')).toHaveCount(0);
+  await expect(reportFrame.getByText('Pronaf · Parceria', { exact: true })).toBeVisible();
+  const iframe = await page.locator('iframe[title="Prévia do relatório da visita"]').elementHandle();
+  const frame = await iframe.contentFrame();
+  await frame.evaluate(() => { window.print = () => { window.__printed = true; }; });
+  await report.getByRole('button', { name: 'Salvar PDF / imprimir', exact: true }).click();
+  expect(await frame.evaluate(() => window.__printed)).toBe(true);
+  await page.screenshot({ path: `verification/visit-report-${width}.png` });
+  if (width === 1366) {
+    const printable = await page.context().newPage();
+    await printable.setContent(await frame.content());
+    await printable.evaluate(() => document.fonts.ready);
+    await printable.pdf({ path: 'verification/visit-dashboard.pdf', format: 'A4', printBackground: true, preferCSSPageSize: true });
+    await printable.close();
+  }
+  await page.keyboard.press('Escape');
+  await expect(report).toHaveCount(0);
+  await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Ampliar foto 1', exact: true }).click();
   const viewer = page.getByRole('dialog', { name: 'Foto completa da visita' });
   await expect(viewer).toBeVisible();

@@ -6,6 +6,7 @@ import { FieldAccesses } from './FieldAccesses';
 import { manageableRoles } from './access-model.mjs';
 import { answerText, canDeleteCollection, canReview, collectionExportRows, csvCell, mapUrl, programLabel, REVIEW_LABELS } from './model.mjs';
 import { VisitMap, VisitPhotos } from './VisitEvidence';
+import { VisitReport } from './VisitReport';
 import { changeFieldPassword, deleteFieldCollection, fieldClient, fieldSignIn, fieldSignOut, loadCollectionProperty, loadFieldCollections, loadFieldCounts, loadFieldDirectories, loadFieldEvidence, loadFieldProfile, reviewFieldCollection } from './client';
 
 const EMPTY_FILTERS = { search: '', status: '', form: '', technician: '', producer: '', program: '', from: '', to: '' };
@@ -128,6 +129,7 @@ function FieldCollections({ profile, onLogout, embedded }) {
 }
 
 function CollectionDetails({ row, directories, profile, onClose, onSaved }) {
+  const [reportOpen, setReportOpen] = useState(false);
   const dialog = useRef(null), close = useRef(onClose);
   close.current = onClose;
   const [evidence, setEvidence] = useState(null), [error, setError] = useState(''), [note, setNote] = useState(row.nota_revisao ?? ''), [busy, setBusy] = useState(false);
@@ -159,7 +161,7 @@ function CollectionDetails({ row, directories, profile, onClose, onSaved }) {
   const fields = Array.isArray(definition) ? definition : definition?.fields ?? [];
   return <dialog className="field-dialog" ref={dialog} onCancel={event => { event.preventDefault(); if (!busy) close.current(); }} aria-labelledby="field-detail-title">
     <header><div><p className="eyebrow">Registro de campo / v{row.formulario_versao}</p><h2 id="field-detail-title">{form?.titulo ?? 'Detalhes da coleta'}</h2></div><button className="field-open" title="Fechar coleta" aria-label="Fechar coleta" disabled={busy} onClick={onClose}><X size={20} /></button></header>
-    <div className="field-dialog-body"><div className="field-detail-meta"><span>Produtor<strong>{nameOf(directories.producers, row.produtor_id)}</strong></span><span>Comunidade<strong>{nameOf(directories.communities, row.comunidade_id)}</strong></span><span>Tecnico autor<strong>{nameOf(directories.users, row.tecnico_id)}</strong></span><span>Recebido em<strong>{date(row.recebido_em)}</strong></span></div><h3>Respostas da coleta</h3><dl className="field-answers">{Object.entries(row.dados_json ?? {}).filter(([id]) => !id.startsWith('_')).map(([id, value]) => <div key={id}><dt>{fields.find(field => field.id === id)?.label ?? id}</dt><dd>{answerText(value)}</dd></div>)}</dl>{row.observacoes && <p className="field-note">{row.observacoes}</p>}
+    <div className="field-dialog-body"><div className="field-report-action"><button className="icon-text-button" onClick={() => setReportOpen(true)} disabled={busy}><Download size={18} />Baixar relatório PDF</button></div><div className="field-detail-meta"><span>Produtor<strong>{nameOf(directories.producers, row.produtor_id)}</strong></span><span>Comunidade<strong>{nameOf(directories.communities, row.comunidade_id)}</strong></span><span>Tecnico autor<strong>{nameOf(directories.users, row.tecnico_id)}</strong></span><span>Recebido em<strong>{date(row.recebido_em)}</strong></span></div><h3>Respostas da coleta</h3><dl className="field-answers">{Object.entries(row.dados_json ?? {}).filter(([id]) => !id.startsWith('_')).map(([id, value]) => <div key={id}><dt>{fields.find(field => field.id === id)?.label ?? id}</dt><dd>{answerText(value)}</dd></div>)}</dl>{row.observacoes && <p className="field-note">{row.observacoes}</p>}
       {row.dados_json?._areaVerification && <section><h3>Conferência da área</h3><dl className="field-answers">{row.dados_json._areaVerification.points?.map((point, index) => <div key={index}><dt>{point.label}</dt><dd>{Math.round(point.distanceMeters)} m do polígono</dd></div>)}</dl>{row.dados_json._areaVerification.displacement && <p className="field-note"><strong>Deslocamento de área: conferir o polígono</strong><br />{row.dados_json._areaVerification.justification}</p>}</section>}
       <p className="field-note"><strong>Modalidade:</strong> <span>{programLabel(directories.producers.find(item => item.id === row.produtor_id)?.tipo_produtor)}</span></p>
       <h3>Localização e evidências</h3>{evidence ? <>
@@ -173,5 +175,6 @@ function CollectionDetails({ row, directories, profile, onClose, onSaved }) {
       {canReview(profile) && <label className="field-review-note">Observacao da revisao<textarea value={note} onChange={e => setNote(e.target.value)} rows={3} maxLength={4000} placeholder="Descreva o ajuste ou a observacao..." /></label>}{error && <p role="alert" className="form-error">{error}</p>}
       {confirmDelete && canDeleteCollection(profile) && <section className="visit-delete-confirm" aria-label="Confirmar exclusão"><h3>Excluir esta visita?</h3><p>Ela deixará de aparecer no dashboard e será removida do aplicativo na próxima sincronização. O histórico de auditoria e as evidências serão preservados.</p><label>Motivo da exclusão<textarea autoFocus value={deleteReason} onChange={event => setDeleteReason(event.target.value)} maxLength={1000} rows={3} disabled={busy} /></label><div className="visit-delete-actions"><button className="icon-text-button" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancelar exclusão</button><button className="visit-delete-submit" disabled={busy || deleteReason.trim().length < 5} onClick={remove}>{busy ? <Loader2 className="spin" size={17} /> : <Trash2 size={17} />}Confirmar exclusão</button></div></section>}
     </div><footer><button className="icon-text-button" onClick={onClose} disabled={busy}>Fechar</button>{canDeleteCollection(profile) && <button className="icon-text-button visit-delete-button" onClick={() => setConfirmDelete(true)} disabled={busy || confirmDelete}><Trash2 size={17} />Excluir visita</button>}{canReview(profile) && <><button className="icon-text-button" onClick={() => review('rejeitado')} disabled={busy || confirmDelete}>Solicitar ajuste</button><button className="primary-button" onClick={() => review('aprovado')} disabled={busy || confirmDelete}>{busy ? <Loader2 className="spin" size={17} /> : <Check size={17} />}Aprovar coleta</button></>}</footer>
+    {reportOpen && <VisitReport row={row} directories={directories} profile={profile} onClose={() => setReportOpen(false)} />}
   </dialog>;
 }
