@@ -719,7 +719,7 @@ function ProducerDossier({ id, api, directories, onBack, canManageRecords = true
             {[
               ["overview", "Resumo"],
               ["properties", "Propriedades"],
-              ["visits", "Visitas"],
+              ["visits", "Agendamentos"],
               ["tasks", "Pendências"],
               ["documents", "Documentos"],
             ].map(([key, title]) => (
@@ -795,6 +795,9 @@ function ProducerDossier({ id, api, directories, onBack, canManageRecords = true
                   </div>
                   <div>
                     <Title title="Análises e acompanhamento" />
+                    <a className="ops-case-row" href={`/admin/visitas?producer=${encodeURIComponent(id)}`}>
+                      <div><strong>Visitas realizadas no aplicativo</strong><p>Respostas, fotos, assinaturas e pareceres deste produtor.</p></div><ChevronRight size={18} />
+                    </a>
                     {!d.requests?.length ? (
                       <Empty title="Nenhuma análise vinculada" icon={Sprout} />
                     ) : (

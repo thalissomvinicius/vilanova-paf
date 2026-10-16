@@ -1,6 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answerText, canDeleteCollection, canReview, csvCell, deletionArguments, mapUrl, normalizeSearch, photoStamp, programLabel, reviewPatch } from '../src/field/model.mjs';
+import { answerText, canDeleteCollection, canReview, collectionExportRows, csvCell, deletionArguments, mapUrl, matchesProgram, normalizeSearch, photoStamp, programLabel, reviewPatch } from '../src/field/model.mjs';
+
+test('program filter includes mixed portfolios without matching partial labels', () => {
+  assert.equal(matchesProgram('PRONAF | PARCERIA', 'PARCERIA'), true);
+  assert.equal(matchesProgram('PRONAF', 'PARCERIA'), false);
+  assert.equal(matchesProgram(null, 'PRONAF'), false);
+  assert.equal(matchesProgram('NAO PRONAF', 'PRONAF'), false);
+  assert.equal(matchesProgram(null, ''), true);
+});
+test('field export includes answers, modality, review and displacement without signature payloads', () => {
+  const directories = { producers: [{ id: 'p', nome: 'Teste', tipo_produtor: 'PRONAF' }], users: [], properties: [], communities: [], forms: [{ id: 'f', titulo: 'Visita', definicao_json: { fields: [{ id: 'goal', label: 'Objetivo' }] } }] };
+  const rows = collectionExportRows([{ id: 'v', produtor_id: 'p', formulario_id: 'f', status_validacao: 'rejeitado', nota_revisao: 'Revisar', dados_json: { goal: '=CMD()', _visitSignatures: ['private'], _areaVerification: { displacement: true, justification: 'Conferir' } } }], directories);
+  assert.equal(rows[0].length, rows[1].length);
+  assert.ok(rows[0].includes('Objetivo [goal]'));
+  assert.ok(rows[1].includes('Pronaf'));
+  assert.ok(rows[1].includes('Revisar'));
+  assert.ok(rows[1].includes('Conferir'));
+  assert.ok(!JSON.stringify(rows).includes('private'));
+  assert.ok(rows[1].map(csvCell).join(';').includes("'=CMD()"));
+});
 
 const profile = { id: 'reviewer', papel: 'admin', ativo: true, organizacao_id: 'paf' };
 const collection = { organizacao_id: 'paf', tecnico_id: 'original-author', status_validacao: 'pendente', dados_json: { text: 'original' } };

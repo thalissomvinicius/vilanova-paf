@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { deletionArguments, normalizeSearch, reviewPatch } from './model.mjs';
+import { deletionArguments, matchesProgram, normalizeSearch, reviewPatch } from './model.mjs';
 import { FIELD_URL, FIELD_PUBLIC_KEY } from './public-config';
 
 const url = import.meta.env.VITE_PAF_FIELD_URL || FIELD_URL;
@@ -80,6 +80,12 @@ export async function loadFieldCollections(profile, directories, filters, page =
   if (filters.status) query = query.eq('status_validacao', filters.status);
   if (filters.form) query = query.eq('formulario_id', filters.form);
   if (filters.technician) query = query.eq('tecnico_id', filters.technician);
+  if (filters.producer) query = query.eq('produtor_id', filters.producer);
+  if (filters.program) {
+    const ids = directories.producers.filter(item => matchesProgram(item.tipo_produtor, filters.program)).map(item => item.id);
+    if (!ids.length) return { rows: [], total: 0 };
+    query = query.in('produtor_id', ids);
+  }
   if (filters.from) query = query.gte('coletado_em', `${filters.from}T00:00:00-03:00`);
   if (filters.to) query = query.lt('coletado_em', new Date(Date.parse(`${filters.to}T00:00:00-03:00`) + 86400000).toISOString());
   const search = normalizeSearch(filters.search);

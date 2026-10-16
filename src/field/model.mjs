@@ -22,6 +22,20 @@ export function programLabel(value) {
   return String(value || '').split(/[|,;]/).map(item => item.trim()).filter(Boolean).map(item => labels[item.toUpperCase()] || item).join(' · ') || 'Modalidade não informada';
 }
 
+export function matchesProgram(value, program) {
+  return !program || String(value || '').split(/[|,;]/).some(item => item.trim().toUpperCase() === program.toUpperCase());
+}
+
+export function collectionExportRows(rows, directories) {
+  const name = (items, id) => items.find(item => item.id === id)?.nome || '';
+  const answerIds = [...new Set(rows.flatMap(row => Object.keys(row.dados_json || {}).filter(id => !id.startsWith('_'))))];
+  const definitions = directories.forms.flatMap(form => Array.isArray(form.definicao_json) ? form.definicao_json : form.definicao_json?.fields || []);
+  return [
+    ['ID', 'Formulario', 'Versao', 'Produtor', 'Modalidade', 'Propriedade', 'Comunidade', 'Tecnico', 'Coletado em', 'Recebido em', 'Situacao', 'Parecer', 'Revisor', 'Revisado em', 'Observacoes', 'Deslocamento de area', 'Justificativa', ...answerIds.map(id => `${definitions.find(field => field.id === id)?.label || id} [${id}]`)],
+    ...rows.map(row => [row.id, directories.forms.find(form => form.id === row.formulario_id)?.titulo, row.formulario_versao, name(directories.producers, row.produtor_id), programLabel(directories.producers.find(item => item.id === row.produtor_id)?.tipo_produtor), name(directories.properties, row.propriedade_id), name(directories.communities, row.comunidade_id), name(directories.users, row.tecnico_id), row.coletado_em, row.recebido_em, REVIEW_LABELS[row.status_validacao], row.nota_revisao, name(directories.users, row.revisado_por), row.revisado_em, row.observacoes, row.dados_json?._areaVerification ? (row.dados_json._areaVerification.displacement ? 'Sim' : 'Nao') : 'Nao verificado', row.dados_json?._areaVerification?.justification, ...answerIds.map(id => answerText(row.dados_json?.[id]))]),
+  ];
+}
+
 export function photoStamp(photo, gps, producer, technician) {
   const photoClientId = photo.metadados_json?.evidence_client_id || photo.client_id;
   const point = photoClientId ? gps.find(item => item.metadados_json?.evidence_client_id === photoClientId) : undefined;
