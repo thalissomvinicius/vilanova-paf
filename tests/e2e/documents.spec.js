@@ -12,6 +12,14 @@ for (const width of [390, 1366]) for (const formId of ['paf-liberacao-ater', 'pa
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4AAAAABJRU5ErkJggg==', 'base64');
   let saved = null, attachments = [], failUpload = true, finalizeCalls = 0;
   const errors = []; page.on('pageerror', error => errors.push(error.message));
+  await page.addInitScript(() => {
+    window.__cspViolations = [];
+    document.addEventListener('securitypolicyviolation', event => window.__cspViolations.push({ directive: event.effectiveDirective, uri: event.blockedURI.slice(0, 50) }));
+  });
+  if (!process.env.PAF_VISUAL_BASE_URL) await page.route('**/campo/coletas', async route => {
+    const response = await route.fetch();
+    await route.fulfill({ response, headers: { ...response.headers(), 'content-security-policy': "connect-src 'self' https://eeivxgbbslnojbbpzweb.supabase.co" } });
+  });
   await page.route('https://eeivxgbbslnojbbpzweb.supabase.co/**', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname, method = request.method();
     let data = [];
@@ -78,5 +86,6 @@ for (const width of [390, 1366]) for (const formId of ['paf-liberacao-ater', 'pa
   await expect(frame.getByText('Área após manutenção', { exact: false })).toBeVisible();
   if (width === 1366) { const iframe = await page.locator('iframe').elementHandle(), reportFrame = await iframe.contentFrame(), printable = await page.context().newPage(); await printable.setContent(await reportFrame.content()); await printable.evaluate(() => document.fonts.ready); await printable.pdf({ path: `verification/${formId}-document.pdf`, format: 'A4', printBackground: true, preferCSSPageSize: true }); await printable.close(); }
   expect(errors).toEqual([]);
+  expect(await page.evaluate(() => window.__cspViolations)).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

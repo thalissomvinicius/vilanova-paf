@@ -1,4 +1,5 @@
 import { fieldClient } from './client';
+import { signatureImageBlob } from './signature-image.mjs';
 import { documentSignatureRoles, isPafDocument, normalizeFormAnswers, signatureContentHash, validateFormAnswers, RELEASE_FORM_ID } from './visit-report.generated.mjs';
 
 export function canWriteDocument(profile, row) {
@@ -50,8 +51,7 @@ export async function saveDocument({ profile, form, remoteForm, producerId, prop
     uploaded.push(photo.id);
   }
   for (const item of descriptors) {
-    const blob = await (await fetch(item.image)).blob();
-    if (blob.type !== 'image/png' || blob.size > 1800000) throw new Error('Confira o formato e tamanho da assinatura.');
+    const blob = signatureImageBlob(item.image);
     const path = `${profile.organizacao_id}/${profile.id}/${item.clientId}.png`;
     check(await client.storage.from('paf-anexos').upload(path, blob, { upsert: true, contentType: 'image/png' }));
     const { image, ...meta } = item;
