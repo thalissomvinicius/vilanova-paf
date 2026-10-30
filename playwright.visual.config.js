@@ -9,6 +9,7 @@ export default defineConfig({
     "premium-workspace.spec.js",
     "experience.spec.js",
     "field-evidence.spec.js",
+    "documents.spec.js",
     "land-team.spec.js",
     "operations-flow.spec.js",
     "access-design.spec.js",

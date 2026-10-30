@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = new URL('../', import.meta.url);
 const output = new URL('src/field/visit-report.generated.mjs', root);
 const result = await build({
-  entryPoints: [fileURLToPath(new URL('../paf-app/src/reports/visitReport.ts', root))],
+  entryPoints: [fileURLToPath(new URL('../paf-app/src/reports/documentBridge.ts', root))],
   bundle: true, platform: 'browser', format: 'esm', write: false,
   banner: { js: '// Generated from paf-app by scripts/sync-visit-report.mjs. Do not edit.' },
 });

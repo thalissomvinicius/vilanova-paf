@@ -4,6 +4,7 @@ import { loadCollectionProperty, loadFieldEvidence } from './client';
 import { photoStamp } from './model.mjs';
 import { dashboardVisitReport } from './visit-report-model.mjs';
 import { FIELD_URL } from './public-config';
+import { isPafDocument } from './visit-report.generated.mjs';
 
 async function embeddedAsset(url, mime, signal) {
   const parsed = new URL(url, location.href);
@@ -23,6 +24,7 @@ async function embeddedAsset(url, mime, signal) {
 }
 
 export function VisitReport({ row, directories, profile, onClose }) {
+  const documentForm = isPafDocument(directories.forms.find(item => item.id === row.formulario_id)?.codigo);
   const dialog = useRef(null), frame = useRef(null);
   const [html, setHtml] = useState(''), [ready, setReady] = useState(false), [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
   useEffect(() => { dialog.current.showModal(); }, []);
@@ -42,7 +44,7 @@ export function VisitReport({ row, directories, profile, onClose }) {
       const technician = directories.users.find(item => item.id === row.tecnico_id)?.nome || String(row.dados_json?.tecnicoResponsavel || 'Técnico não informado');
       const photos = [], evidenceSignatures = [];
       for (const [index, photo] of evidence.photos.entries()) {
-        photos.push({ dataUrl: await embeddedAsset(photo.url, undefined, signal), caption: `Foto ${index + 1} · ${photo.capturado_em ? new Date(photo.capturado_em).toLocaleString('pt-BR', { timeZone: 'America/Belem' }) : 'Horário não registrado'}`, stamp: photoStamp(photo, evidence.gps, producer, technician) });
+        photos.push({ dataUrl: await embeddedAsset(photo.url, undefined, signal), caption: photo.metadados_json?.legenda || `Foto ${index + 1} · ${photo.capturado_em ? new Date(photo.capturado_em).toLocaleString('pt-BR', { timeZone: 'America/Belem' }) : 'Horário não registrado'}`, stamp: photoStamp(photo, evidence.gps, producer, technician) });
       }
       for (const signature of evidence.signatures) {
         const meta = signature.metadados_json || {};
@@ -73,7 +75,7 @@ export function VisitReport({ row, directories, profile, onClose }) {
     catch { setError('Não foi possível abrir a impressão neste navegador. Tente pelo Chrome.'); }
   }
   return <dialog className="visit-report-dialog" ref={dialog} aria-labelledby="visit-report-title" onCancel={event => { event.preventDefault(); event.stopPropagation(); onClose(); }}>
-    <header><h2 id="visit-report-title">Relatório da visita</h2><div><button className="primary-button" disabled={!ready || !!error} onClick={print}><Printer size={18} />Salvar PDF / imprimir</button><button className="icon-text-button" title="Fechar relatório" aria-label="Fechar relatório" onClick={onClose}><X size={20} /></button></div></header>
+    <header><h2 id="visit-report-title">{documentForm ? 'Documento PAF' : 'Relatório da visita'}</h2><div><button className="primary-button" disabled={!ready || !!error} onClick={print}><Printer size={18} />Salvar PDF / imprimir</button><button className="icon-text-button" title="Fechar relatório" aria-label="Fechar relatório" onClick={onClose}><X size={20} /></button></div></header>
     {error ? <div className="field-error" role="alert"><p>{error}</p><button className="icon-text-button" onClick={() => setAttempt(value => value + 1)}>Tentar novamente</button></div> : !ready && <p className="field-loading" role="status"><Loader2 className="spin" />Preparando fotos, assinaturas e relatório...</p>}
     {html && <iframe ref={frame} title="Prévia do relatório da visita" sandbox="allow-same-origin allow-modals" srcDoc={html} onLoad={loaded} />}
   </dialog>;

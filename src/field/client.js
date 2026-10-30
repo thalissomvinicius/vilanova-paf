@@ -67,16 +67,17 @@ async function allRows(table, columns, organizationId) {
 
 export async function loadFieldDirectories(profile) {
   const organization = profile.organizacao_id;
-  const producers = await allRows('paf_produtores', 'id,nome,tipo_produtor', organization);
+  const producers = await allRows('paf_produtores', 'id,nome,cpf,endereco,tipo_produtor', organization);
   const communities = await allRows('paf_comunidades', 'id,nome', organization);
-  const properties = await allRows('paf_propriedades', 'id,nome', organization);
-  const forms = await allRows('mobile_formularios', 'id,codigo,titulo,versao,definicao_json', organization);
+  const properties = await allRows('paf_propriedades', 'id,nome,produtor_id,municipio,endereco_rural,nome_provisorio,latitude,longitude', organization);
+  const forms = await allRows('mobile_formularios', 'id,codigo,titulo,versao,modulo_id,definicao_json', organization);
   const users = await allRows('paf_perfis', 'id,nome', organization);
   return { producers, communities, properties, forms, users };
 }
 
 export async function loadFieldCollections(profile, directories, filters, page = 0) {
-  let query = requireClient().from('mobile_respostas').select('*', { count: 'exact' }).eq('organizacao_id', profile.organizacao_id).is('deleted_at', null).neq('status_validacao', 'rascunho');
+  let query = requireClient().from('mobile_respostas').select('*', { count: 'exact' }).eq('organizacao_id', profile.organizacao_id).is('deleted_at', null);
+  if (filters.status !== 'rascunho') query = query.neq('status_validacao', 'rascunho');
   if (filters.status) query = query.eq('status_validacao', filters.status);
   if (filters.form) query = query.eq('formulario_id', filters.form);
   if (filters.technician) query = query.eq('tecnico_id', filters.technician);
