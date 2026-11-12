@@ -65,12 +65,13 @@ for (const width of [390, 1366]) test(`visit evidence separates signatures and f
   await expect(dialog.getByAltText('Assinatura de Pessoa acompanhante')).toHaveJSProperty('naturalWidth', 1);
   await expect(dialog.getByText('Pronaf · Parceria', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('link', { name: 'Ver ponto no Google Maps' })).toHaveAttribute('href', 'https://www.google.com/maps?q=-2.41,-48.15');
-  await dialog.getByRole('button', { name: 'Corrigir textos' }).click();
+  await dialog.getByRole('button', { name: 'Corrigir Recomendações técnicas', exact: true }).click();
   await dialog.getByRole('textbox', { name: 'Recomendações técnicas', exact: true }).fill('Fazer adubação da área');
   await dialog.getByRole('button', { name: 'Salvar correção' }).click();
   await expect(dialog.getByText('Fazer adubação da área', { exact: true })).toBeVisible();
   expect(row.dados_json.recomendacoesTecnicas).toBe('Fazer adubaçao da area');
-  await expect(dialog.getByText(/Revisão por Gestora de Auditoria/)).toBeVisible();
+  await expect(dialog.getByRole('textbox', { name: 'Recomendações técnicas' })).toHaveCount(0);
+  await expect(dialog.locator('.field-answers dd').filter({ hasText: 'Fazer adubação da área' })).toHaveCount(1);
   await expect(dialog.locator('.visit-map .leaflet-overlay-pane path')).toHaveCount(2);
   failReportImage = true;
   await dialog.getByRole('button', { name: 'Baixar relatório PDF', exact: true }).click();
