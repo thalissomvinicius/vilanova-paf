@@ -5,6 +5,7 @@ import { photoStamp } from './model.mjs';
 import { dashboardVisitReport } from './visit-report-model.mjs';
 import { FIELD_URL } from './public-config';
 import { isPafDocument } from './visit-report.generated.mjs';
+import { appendCorrectionAnnex } from './text-corrections.mjs';
 
 async function embeddedAsset(url, mime, signal) {
   const parsed = new URL(url, location.href);
@@ -23,7 +24,7 @@ async function embeddedAsset(url, mime, signal) {
   });
 }
 
-export function VisitReport({ row, directories, profile, onClose }) {
+export function VisitReport({ row, directories, profile, corrections, fields, onClose }) {
   const documentForm = isPafDocument(directories.forms.find(item => item.id === row.formulario_id)?.codigo);
   const dialog = useRef(null), frame = useRef(null);
   const [html, setHtml] = useState(''), [ready, setReady] = useState(false), [error, setError] = useState(''), [attempt, setAttempt] = useState(0);
@@ -50,11 +51,11 @@ export function VisitReport({ row, directories, profile, onClose }) {
         const meta = signature.metadados_json || {};
         evidenceSignatures.push({ role: meta.role, signerName: meta.signerName || 'Nome não informado', relationship: meta.relationship, capturedAt: signature.capturado_em || row.coletado_em, dataUrl: await embeddedAsset(signature.url, 'image/png', signal) });
       }
-      if (!signal.aborted) setHtml(dashboardVisitReport(row, directories, property, evidence, { logo, companyLogo, fontRegular, fontSemibold, photos, evidenceSignatures, signerName: profile.nome }));
+      if (!signal.aborted) setHtml(appendCorrectionAnnex(dashboardVisitReport(row, directories, property, evidence, { logo, companyLogo, fontRegular, fontSemibold, photos, evidenceSignatures, signerName: profile.nome }), row, fields, corrections?.[0]));
     }
     prepare().catch(reason => { if (!signal.aborted) setError(reason.message); });
     return () => controller.abort();
-  }, [row, directories, profile.nome, attempt]);
+  }, [row, directories, profile.nome, corrections, fields, attempt]);
   async function loaded() {
     const doc = frame.current?.contentDocument;
     if (!doc || !html) return;

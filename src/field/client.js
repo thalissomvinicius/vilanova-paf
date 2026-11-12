@@ -137,6 +137,17 @@ export async function loadCollectionProperty(collection) {
   return data;
 }
 
+export async function loadTextCorrections(collection) {
+  const { data, error } = await requireClient().from('paf_text_corrections').select('*').eq('organizacao_id', collection.organizacao_id).eq('resposta_id', collection.id).order('created_at', { ascending: false }).order('id', { ascending: false });
+  if (error) throw new Error('Não foi possível carregar o histórico de correções. Tente novamente.');
+  return data;
+}
+
+export async function saveTextCorrection(collection, previous, corrections) {
+  const { error } = await requireClient().from('paf_text_corrections').insert({ organizacao_id: collection.organizacao_id, resposta_id: collection.id, expected_updated_at: collection.updated_at, expected_previous_id: previous?.id || null, corrections });
+  if (error) throw new Error(error.message || 'Não foi possível salvar a correção.');
+}
+
 export async function deleteFieldCollection(collection, profile, reason) {
   const { error } = await requireClient().rpc('paf_delete_field_collection', deletionArguments(collection, profile, reason));
   if (error) throw new Error(error.message || 'Não foi possível excluir a visita.');

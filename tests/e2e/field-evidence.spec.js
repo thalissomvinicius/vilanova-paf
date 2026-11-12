@@ -1,14 +1,16 @@
 import { test, expect } from '@playwright/test';
 for (const width of [390, 1366]) test(`visit evidence separates signatures and flags area displacement at ${width}px`, async ({ page }) => {
+  test.setTimeout(90000);
   await page.setViewportSize({ width, height: 900 });
   const org = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa', id = 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb';
   const profile = { id, nome: 'Gestora de Auditoria', email: 'auditoria@example.invalid', papel: 'admin', ativo: true, organizacao_id: org, deve_trocar_senha: false };
   const row = { id: 'visit', organizacao_id: org, formulario_id: 'form', formulario_versao: 3, produtor_id: 'producer', propriedade_id: 'property', tecnico_id: id, status_validacao: 'pendente', coletado_em: '2026-10-14T15:00:00Z', recebido_em: '2026-10-14T15:01:00Z', dados_json: { nomeConfirmacaoProdutor: 'Pessoa acompanhante', vinculoParticipante: 'Amigo(a)', _visitSignatures: [], _areaVerification: { displacement: true, justification: 'Polígono precisa de conferência pela equipe.', points: [{ label: 'GPS da visita', distanceMeters: 150 }] } } };
   row.dados_json._visitSignatures = [{ clientId: 'signature-0' }, { clientId: 'signature-1' }];
+  row.dados_json.recomendacoesTecnicas = 'Fazer adubaçao da area';
   const token = `${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify({ sub: id, exp: Math.floor(Date.now()/1000)+3600 })).toString('base64url')}.fixture`;
   const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4AAAAABJRU5ErkJggg==';
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  let deleted = false, deletionCalls = 0, failReportImage = false;
+  let deleted = false, deletionCalls = 0, failReportImage = false, revisions = [];
   row.updated_at = '2026-10-15T12:00:00Z';
   const shape = { type: 'Polygon', coordinates: [[[-48.151,-2.411],[-48.149,-2.411],[-48.149,-2.409],[-48.151,-2.409],[-48.151,-2.411]]] };
   await page.route('https://eeivxgbbslnojbbpzweb.supabase.co/**', async route => {
@@ -18,8 +20,12 @@ for (const width of [390, 1366]) test(`visit evidence separates signatures and f
     else if (url.pathname.endsWith('/paf_perfis')) data = url.searchParams.has('id') ? profile : [profile];
     else if (url.pathname.endsWith('/paf_produtores')) data = [{ id: 'producer', nome: 'Produtor de Auditoria', tipo_produtor: 'PRONAF | PARCERIA' }];
     else if (url.pathname.endsWith('/paf_propriedades')) { const property = { id: 'property', nome: 'Área de Auditoria', shape_geojson: shape }; data = url.searchParams.has('id') ? property : [property]; }
-    else if (url.pathname.endsWith('/mobile_formularios')) data = [{ id: 'form', titulo: 'Visita técnica', versao: 3, definicao_json: { fields: [{ id: 'nomeConfirmacaoProdutor', label: 'Nome de quem acompanhou a visita' }, { id: 'vinculoParticipante', label: 'Vínculo com o produtor' }] } }];
+    else if (url.pathname.endsWith('/mobile_formularios')) data = [{ id: 'form', titulo: 'Visita técnica', versao: 3, definicao_json: { fields: [{ id: 'nomeConfirmacaoProdutor', label: 'Nome de quem acompanhou a visita' }, { id: 'vinculoParticipante', label: 'Vínculo com o produtor' }, { id: 'recomendacoesTecnicas', label: 'Recomendações técnicas', type: 'multiline' }] } }];
     else if (url.pathname.endsWith('/mobile_respostas')) data = deleted ? [] : [row];
+    else if (url.pathname.endsWith('/paf_text_corrections')) {
+      if (route.request().method() === 'POST') { const payload = route.request().postDataJSON(); expect(payload.expected_updated_at).toBe(row.updated_at); revisions.unshift({ ...payload, id: 'revision-1', original_json: { recomendacoesTecnicas: row.dados_json.recomendacoesTecnicas }, author_name: profile.nome, created_at: '2026-11-12T12:00:00Z' }); }
+      data = revisions;
+    }
     else if (url.pathname.endsWith('/rpc/paf_delete_field_collection')) { const payload = route.request().postDataJSON(); expect(payload).toEqual({ p_response: 'visit', p_expected_updated_at: row.updated_at, p_reason: 'Teste de homologação' }); deletionCalls++; deleted = true; data = 'visit'; }
     else if (url.pathname.endsWith('/mobile_gps')) data = [{ id: 'gps', latitude: -2.410, longitude: -48.150, capturado_em: row.coletado_em, metadados_json: { evidence_client_id: 'photo' } }];
     else if (url.pathname.endsWith('/mobile_anexos')) data = ['technician','attendee'].map((role, index) => ({ id: String(index), tipo: 'assinatura', bucket: 'paf-anexos', storage_path: `${org}/${id}/${index}.png`, mime_type: 'image/png', capturado_em: row.coletado_em, metadados_json: { role, signerName: role === 'technician' ? profile.nome : 'Pessoa acompanhante', relationship: role === 'attendee' ? 'Amigo(a)' : null } }));
@@ -59,6 +65,12 @@ for (const width of [390, 1366]) test(`visit evidence separates signatures and f
   await expect(dialog.getByAltText('Assinatura de Pessoa acompanhante')).toHaveJSProperty('naturalWidth', 1);
   await expect(dialog.getByText('Pronaf · Parceria', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('link', { name: 'Ver ponto no Google Maps' })).toHaveAttribute('href', 'https://www.google.com/maps?q=-2.41,-48.15');
+  await dialog.getByRole('button', { name: 'Corrigir textos' }).click();
+  await dialog.getByRole('textbox', { name: 'Recomendações técnicas', exact: true }).fill('Fazer adubação da área');
+  await dialog.getByRole('button', { name: 'Salvar correção' }).click();
+  await expect(dialog.getByText('Fazer adubação da área', { exact: true })).toBeVisible();
+  expect(row.dados_json.recomendacoesTecnicas).toBe('Fazer adubaçao da area');
+  await expect(dialog.getByText(/Revisão por Gestora de Auditoria/)).toBeVisible();
   await expect(dialog.locator('.visit-map .leaflet-overlay-pane path')).toHaveCount(2);
   failReportImage = true;
   await dialog.getByRole('button', { name: 'Baixar relatório PDF', exact: true }).click();
@@ -74,6 +86,9 @@ for (const width of [390, 1366]) test(`visit evidence separates signatures and f
   await expect(reportFrame.getByAltText('Assinatura registrada na visita')).toHaveCount(2);
   await expect(reportFrame.getByText('Assinatura substituída')).toHaveCount(0);
   await expect(reportFrame.getByText('Pronaf · Parceria', { exact: true })).toBeVisible();
+  await expect(reportFrame.getByRole('heading', { name: 'Revisão textual' })).toBeVisible();
+  await expect(reportFrame.getByText('Fazer adubação da área', { exact: true })).toBeVisible();
+  await expect(reportFrame.getByText(/As assinaturas do documento referem-se exclusivamente ao conteúdo original/)).toBeVisible();
   const iframe = await page.locator('iframe[title="Prévia do relatório da visita"]').elementHandle();
   const frame = await iframe.contentFrame();
   await frame.evaluate(() => { window.print = () => { window.__printed = true; }; });
